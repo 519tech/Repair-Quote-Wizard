@@ -12,6 +12,24 @@ import {
   insertBrandDeviceTypeSchema,
 } from "@shared/schema";
 import { z } from "zod";
+import multer from "multer";
+import * as XLSX from "xlsx";
+
+const upload = multer({ 
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedTypes = [
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-excel'
+    ];
+    if (allowedTypes.includes(file.mimetype) || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.xls')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only Excel files (.xlsx, .xls) are allowed'));
+    }
+  }
+});
 
 export async function registerRoutes(
   httpServer: Server,
@@ -263,6 +281,85 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete part" });
+    }
+  });
+
+  app.post("/api/parts/upload", upload.single('file'), async (req, res) => {
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: "No file uploaded" });
+      }
+
+      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
+      const sheetName = workbook.SheetNames[0];
+      if (!sheetName) {
+        return res.status(400).json({ error: "Excel file has no sheets" });
+      }
+
+      const sheet = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+
+      if (rows.length < 2) {
+        return res.status(400).json({ error: "Excel file must have a header row and at least one data row" });
+      }
+
+      const partsToUpsert: { sku: string; name: string; price: string }[] = [];
+      const errors: string[] = [];
+
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length < 3) continue;
+
+        const sku = String(row[0] || '').trim();
+        const name = String(row[1] || '').trim();
+        const priceRaw = row[2];
+
+        if (!sku) {
+          errors.push(`Row ${i + 1}: Missing SKU`);
+          continue;
+        }
+        if (!name) {
+          errors.push(`Row ${i + 1}: Missing name`);
+          continue;
+        }
+
+        let price: string;
+        if (typeof priceRaw === 'number') {
+          price = priceRaw.toFixed(2);
+        } else if (typeof priceRaw === 'string') {
+          const parsed = parseFloat(priceRaw.replace(/[^0-9.-]/g, ''));
+          if (isNaN(parsed)) {
+            errors.push(`Row ${i + 1}: Invalid price "${priceRaw}"`);
+            continue;
+          }
+          price = parsed.toFixed(2);
+        } else {
+          errors.push(`Row ${i + 1}: Missing or invalid price`);
+          continue;
+        }
+
+        partsToUpsert.push({ sku, name, price });
+      }
+
+      if (partsToUpsert.length === 0) {
+        return res.status(400).json({ 
+          error: "No valid parts found in file", 
+          details: errors.length > 0 ? errors : undefined 
+        });
+      }
+
+      const result = await storage.bulkUpsertParts(partsToUpsert);
+
+      res.json({
+        success: true,
+        inserted: result.inserted,
+        updated: result.updated,
+        total: partsToUpsert.length,
+        errors: errors.length > 0 ? errors : undefined
+      });
+    } catch (error: any) {
+      console.error("Parts upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to process file" });
     }
   });
 
