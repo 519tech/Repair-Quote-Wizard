@@ -14,7 +14,7 @@ import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations } from "@shared/schema";
+import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand, BrandDeviceType } from "@shared/schema";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -39,16 +39,26 @@ export default function Admin() {
 
       <main className="container mx-auto px-4 py-8">
         <Tabs defaultValue="device-types" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
+          <TabsList className="flex flex-wrap gap-1 h-auto">
             <TabsTrigger value="device-types" data-testid="tab-device-types">Types</TabsTrigger>
+            <TabsTrigger value="brands" data-testid="tab-brands">Brands</TabsTrigger>
+            <TabsTrigger value="brand-links" data-testid="tab-brand-links">Brand Links</TabsTrigger>
             <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
             <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
-            <TabsTrigger value="links" data-testid="tab-links">Links</TabsTrigger>
+            <TabsTrigger value="links" data-testid="tab-links">Service Links</TabsTrigger>
           </TabsList>
 
           <TabsContent value="device-types">
             <DeviceTypesTab toast={toast} />
+          </TabsContent>
+
+          <TabsContent value="brands">
+            <BrandsTab toast={toast} />
+          </TabsContent>
+
+          <TabsContent value="brand-links">
+            <BrandDeviceTypeLinksTab toast={toast} />
           </TabsContent>
 
           <TabsContent value="devices">
@@ -269,18 +279,297 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
   );
 }
 
+function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState<Brand | null>(null);
+  const [name, setName] = useState("");
+
+  const { data: brands = [], isLoading } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string }) => {
+      const res = await apiRequest("POST", "/api/brands", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      setOpen(false);
+      setName("");
+      toast({ title: "Brand created" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string } }) => {
+      const res = await apiRequest("PATCH", `/api/brands/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      setEditOpen(false);
+      setEditItem(null);
+      toast({ title: "Brand updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/brands/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      toast({ title: "Brand deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate({ name });
+  };
+
+  const handleEdit = (brand: Brand) => {
+    setEditItem(brand);
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editItem) return;
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name } });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+        <div>
+          <CardTitle>Brands</CardTitle>
+          <CardDescription>Manage device brands like Apple, Samsung, Dell</CardDescription>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-brand"><Plus className="h-4 w-4 mr-2" />Add Brand</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Add Brand</DialogTitle>
+                <DialogDescription>Create a new device brand</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Apple" required data-testid="input-brand-name" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-brand">
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <form onSubmit={handleEditSubmit}>
+              <DialogHeader>
+                <DialogTitle>Edit Brand</DialogTitle>
+                <DialogDescription>Update brand name</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={editItem?.name || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, name: e.target.value} : null)} required data-testid="input-edit-brand-name" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-brand">
+                  {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        ) : brands.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">No brands yet. Add your first one!</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead className="w-[120px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {brands.map((brand) => (
+                <TableRow key={brand.id}>
+                  <TableCell className="font-medium">{brand.name}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(brand)} data-testid={`button-edit-brand-${brand.id}`}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(brand.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-${brand.id}`}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function BrandDeviceTypeLinksTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [open, setOpen] = useState(false);
+  const [brandId, setBrandId] = useState("");
+  const [deviceTypeId, setDeviceTypeId] = useState("");
+
+  const { data: links = [], isLoading } = useQuery<BrandDeviceType[]>({ queryKey: ["/api/brand-device-types"] });
+  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { brandId: string; deviceTypeId: string }) => {
+      const res = await apiRequest("POST", "/api/brand-device-types", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-device-types"] });
+      setOpen(false);
+      setBrandId("");
+      setDeviceTypeId("");
+      toast({ title: "Brand-Type link created" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/brand-device-types/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-device-types"] });
+      toast({ title: "Brand-Type link deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate({ brandId, deviceTypeId });
+  };
+
+  const getBrandName = (id: string) => brands.find((b) => b.id === id)?.name || "Unknown";
+  const getTypeName = (id: string) => deviceTypes.find((t) => t.id === id)?.name || "Unknown";
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+        <div>
+          <CardTitle>Brand-Type Links</CardTitle>
+          <CardDescription>Link brands to device types (e.g., Apple makes Smartphones and Laptops)</CardDescription>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-brand-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Add Brand-Type Link</DialogTitle>
+                <DialogDescription>Link a brand to a device type</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Brand</Label>
+                  <Select value={brandId} onValueChange={setBrandId} required>
+                    <SelectTrigger data-testid="select-brand"><SelectValue placeholder="Select brand" /></SelectTrigger>
+                    <SelectContent>
+                      {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Device Type</Label>
+                  <Select value={deviceTypeId} onValueChange={setDeviceTypeId} required>
+                    <SelectTrigger data-testid="select-type-for-brand"><SelectValue placeholder="Select type" /></SelectTrigger>
+                    <SelectContent>
+                      {deviceTypes.map((type) => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={createMutation.isPending || !brandId || !deviceTypeId} data-testid="button-save-brand-link">
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        ) : links.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">No brand-type links yet. Create one to enable brand selection!</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Brand</TableHead>
+                <TableHead>Device Type</TableHead>
+                <TableHead className="w-[80px]">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {links.map((link) => (
+                <TableRow key={link.id}>
+                  <TableCell className="font-medium">{getBrandName(link.brandId)}</TableCell>
+                  <TableCell><Badge variant="secondary">{getTypeName(link.deviceTypeId)}</Badge></TableCell>
+                  <TableCell>
+                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(link.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Device | null>(null);
   const [name, setName] = useState("");
   const [deviceTypeId, setDeviceTypeId] = useState("");
+  const [brandId, setBrandId] = useState("");
 
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
+  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; deviceTypeId: string }) => {
+    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string }) => {
       const res = await apiRequest("POST", "/api/devices", data);
       return res.json();
     },
@@ -289,6 +578,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       setOpen(false);
       setName("");
       setDeviceTypeId("");
+      setBrandId("");
       toast({ title: "Device created" });
     },
     onError: (error: Error) => {
@@ -297,7 +587,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string; brandId?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/devices/${id}`, data);
       return res.json();
     },
@@ -325,7 +615,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name, deviceTypeId });
+    createMutation.mutate({ name, deviceTypeId, brandId: brandId && brandId !== "none" ? brandId : undefined });
   };
 
   const handleEdit = (device: Device) => {
@@ -336,10 +626,11 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, deviceTypeId: editItem.deviceTypeId } });
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, deviceTypeId: editItem.deviceTypeId, brandId: editItem.brandId } });
   };
 
   const getTypeName = (typeId: string) => deviceTypes.find((t) => t.id === typeId)?.name || "Unknown";
+  const getBrandName = (brandId: string | null) => brandId ? (brands.find((b) => b.id === brandId)?.name || "Unknown") : "-";
 
   return (
     <Card>
@@ -369,6 +660,16 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                     <SelectTrigger data-testid="select-device-type"><SelectValue placeholder="Select type" /></SelectTrigger>
                     <SelectContent>
                       {deviceTypes.map((type) => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Brand</Label>
+                  <Select value={brandId} onValueChange={setBrandId}>
+                    <SelectTrigger data-testid="select-device-brand"><SelectValue placeholder="Select brand (optional)" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No brand</SelectItem>
+                      {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -403,6 +704,16 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label>Brand</Label>
+                  <Select value={editItem?.brandId || "none"} onValueChange={(v) => setEditItem(prev => prev ? {...prev, brandId: v === "none" ? null : v} : null)}>
+                    <SelectTrigger><SelectValue placeholder="Select brand" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No brand</SelectItem>
+                      {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-device">
@@ -424,6 +735,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
+                <TableHead>Brand</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -432,6 +744,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 <TableRow key={device.id}>
                   <TableCell className="font-medium">{device.name}</TableCell>
                   <TableCell><Badge variant="secondary">{getTypeName(device.deviceTypeId)}</Badge></TableCell>
+                  <TableCell>{getBrandName(device.brandId)}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(device)} data-testid={`button-edit-device-${device.id}`}><Pencil className="h-4 w-4" /></Button>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,34 +35,21 @@ export default function Home() {
     queryKey: ["/api/device-types"],
   });
 
-  const { data: brands = [], isLoading: brandsLoading } = useQuery<Brand[]>({
-    queryKey: ["/api/brands/by-type", selectedTypeId],
+  const { data: brands = [], isLoading: brandsLoading, isFetched: brandsFetched } = useQuery<Brand[]>({
+    queryKey: [`/api/brands/by-type/${selectedTypeId}`],
     enabled: !!selectedTypeId,
-    queryFn: async () => {
-      const res = await fetch(`/api/brands/by-type/${selectedTypeId}`);
-      if (!res.ok) throw new Error("Failed to fetch brands");
-      return res.json();
-    },
   });
 
   const { data: devices = [], isLoading: devicesLoading } = useQuery<Device[]>({
-    queryKey: ["/api/devices", selectedTypeId, selectedBrandId],
-    enabled: !!selectedTypeId && !!selectedBrandId,
-    queryFn: async () => {
-      const res = await fetch(`/api/devices?typeId=${selectedTypeId}&brandId=${selectedBrandId}`);
-      if (!res.ok) throw new Error("Failed to fetch devices");
-      return res.json();
-    },
+    queryKey: selectedBrandId 
+      ? [`/api/devices?typeId=${selectedTypeId}&brandId=${selectedBrandId}`]
+      : [`/api/devices?typeId=${selectedTypeId}`],
+    enabled: !!selectedTypeId && (brandsFetched && brands.length === 0 ? true : !!selectedBrandId),
   });
 
   const { data: deviceServices = [], isLoading: servicesLoading } = useQuery<DeviceServiceWithRelations[]>({
-    queryKey: ["/api/device-services", selectedDeviceId],
+    queryKey: [`/api/device-services/by-device/${selectedDeviceId}`],
     enabled: !!selectedDeviceId,
-    queryFn: async () => {
-      const res = await fetch(`/api/device-services/by-device/${selectedDeviceId}`);
-      if (!res.ok) throw new Error("Failed to fetch services");
-      return res.json();
-    },
   });
 
   const submitQuoteMutation = useMutation({
@@ -92,18 +79,37 @@ export default function Home() {
     },
   });
 
+  const [skippedBrandStep, setSkippedBrandStep] = useState(false);
+
+  useEffect(() => {
+    if (step === 2 && brandsFetched && !brandsLoading && brands.length === 0) {
+      setSkippedBrandStep(true);
+      setStep(3);
+    }
+  }, [step, brandsFetched, brandsLoading, brands.length]);
+
   const handleTypeSelect = (typeId: string) => {
     setSelectedTypeId(typeId);
     setSelectedBrandId(null);
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
+    setSkippedBrandStep(false);
     setStep(2);
+  };
+
+  const handleSkipBrand = () => {
+    setSelectedBrandId(null);
+    setSelectedDeviceId(null);
+    setSelectedServiceId(null);
+    setSkippedBrandStep(true);
+    setStep(3);
   };
 
   const handleBrandSelect = (brandId: string) => {
     setSelectedBrandId(brandId);
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
+    setSkippedBrandStep(false);
     setStep(3);
   };
 
@@ -162,6 +168,7 @@ export default function Home() {
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
     setQuoteResult(null);
+    setSkippedBrandStep(false);
   };
 
   return (
@@ -250,7 +257,12 @@ export default function Home() {
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : brands.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No brands available for this device type. Please contact admin.</p>
+                <div className="text-center py-8 space-y-4">
+                  <p className="text-muted-foreground">No specific brands configured. Proceed to select your device.</p>
+                  <Button onClick={handleSkipBrand} data-testid="button-skip-brand">
+                    Continue to Devices
+                  </Button>
+                </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                   {brands.map((brand) => (
@@ -277,15 +289,15 @@ export default function Home() {
               <CardDescription>Choose your specific model</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => setStep(2)} data-testid="button-back-step2">
-                Back to brands
+              <Button variant="ghost" className="mb-4" onClick={() => setStep(skippedBrandStep ? 1 : 2)} data-testid="button-back-step2">
+                {skippedBrandStep ? "Back to device types" : "Back to brands"}
               </Button>
               {devicesLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : devices.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No devices available for this brand.</p>
+                <p className="text-center py-8 text-muted-foreground">No devices available for this selection.</p>
               ) : (
                 <div className="space-y-2">
                   {devices.map((device) => (
