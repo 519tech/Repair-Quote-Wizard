@@ -163,6 +163,17 @@ export const insertQuoteRequestSchema = createInsertSchema(quoteRequests).omit({
 export type InsertQuoteRequest = z.infer<typeof insertQuoteRequestSchema>;
 export type QuoteRequest = typeof quoteRequests.$inferSelect;
 
+// Message templates for email/SMS
+export const messageTemplates = pgTable("message_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  type: text("type").notNull().unique(), // 'email_body', 'email_subject', 'sms'
+  content: text("content").notNull(),
+});
+
+export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).omit({ id: true });
+export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
+export type MessageTemplate = typeof messageTemplates.$inferSelect;
+
 // Extended types for frontend with relations
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
 export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };

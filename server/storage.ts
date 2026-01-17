@@ -7,6 +7,7 @@ import {
   quoteRequests,
   brands,
   brandDeviceTypes,
+  messageTemplates,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -25,6 +26,8 @@ import {
   type BrandDeviceType,
   type InsertBrandDeviceType,
   type BrandDeviceTypeWithRelations,
+  type MessageTemplate,
+  type InsertMessageTemplate,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and } from "drizzle-orm";
@@ -87,6 +90,11 @@ export interface IStorage {
   // Quote Requests
   getQuoteRequests(): Promise<QuoteRequest[]>;
   createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest>;
+
+  // Message Templates
+  getMessageTemplates(): Promise<MessageTemplate[]>;
+  getMessageTemplate(type: string): Promise<MessageTemplate | undefined>;
+  upsertMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -336,6 +344,26 @@ export class DatabaseStorage implements IStorage {
   async createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest> {
     const [quote] = await db.insert(quoteRequests).values(data).returning();
     return quote;
+  }
+
+  // Message Templates
+  async getMessageTemplates(): Promise<MessageTemplate[]> {
+    return db.select().from(messageTemplates);
+  }
+
+  async getMessageTemplate(type: string): Promise<MessageTemplate | undefined> {
+    const [template] = await db.select().from(messageTemplates).where(eq(messageTemplates.type, type));
+    return template || undefined;
+  }
+
+  async upsertMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate> {
+    const existing = await this.getMessageTemplate(data.type);
+    if (existing) {
+      const [updated] = await db.update(messageTemplates).set({ content: data.content }).where(eq(messageTemplates.type, data.type)).returning();
+      return updated;
+    }
+    const [template] = await db.insert(messageTemplates).values(data).returning();
+    return template;
   }
 }
 
