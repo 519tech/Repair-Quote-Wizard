@@ -6,6 +6,7 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added embeddable quote widget at /embed - can be embedded via iframe on external websites
 - **Jan 2026**: Added password protection to admin panel - requires ADMIN_PASSWORD to access
 - **Jan 2026**: Added Settings tab in admin panel to customize email and SMS message templates with macros
 - **Jan 2026**: Quote widget rearranged - contact info collected before showing quote
