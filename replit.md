@@ -6,6 +6,9 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added Excel (.xlsx) file upload for bulk parts import - columns: Product SKU, Product Name, Original Price
+- **Jan 2026**: Added search functionality to Parts tab - filter by SKU or name
+- **Jan 2026**: Added brand selection step to quote wizard (Type → Brand → Device → Service → Contact → Success)
 - **Jan 2026**: Enhanced admin panel with full CRUD operations (Create, Read, Update, Delete) for all entities
 - **Jan 2026**: Added SKU-based part lookup in device-service link creation - enter SKU to auto-find part
 - **Jan 2026**: Server-side quote calculation - all pricing computed on server via `/api/calculate-quote/:deviceServiceId`
