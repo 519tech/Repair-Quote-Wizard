@@ -66,6 +66,7 @@ export interface IStorage {
   createPart(data: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
+  bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
 
   // Services
   getServices(): Promise<Service[]>;
@@ -228,6 +229,24 @@ export class DatabaseStorage implements IStorage {
 
   async deletePart(id: string): Promise<void> {
     await db.delete(parts).where(eq(parts.id, id));
+  }
+
+  async bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }> {
+    let inserted = 0;
+    let updated = 0;
+    
+    for (const partData of partsData) {
+      const existing = await this.getPartBySku(partData.sku);
+      if (existing) {
+        await db.update(parts).set({ name: partData.name, price: partData.price }).where(eq(parts.sku, partData.sku));
+        updated++;
+      } else {
+        await db.insert(parts).values(partData);
+        inserted++;
+      }
+    }
+    
+    return { inserted, updated };
   }
 
   // Services
