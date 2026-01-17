@@ -800,12 +800,16 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [editItem, setEditItem] = useState<Service | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [basePrice, setBasePrice] = useState("");
+  const [warranty, setWarranty] = useState("");
+  const [repairTime, setRepairTime] = useState("");
+  const [laborPrice, setLaborPrice] = useState("");
+  const [partsMarkup, setPartsMarkup] = useState("1.0");
+  const [notes, setNotes] = useState("");
 
   const { data: services = [], isLoading } = useQuery<Service[]>({ queryKey: ["/api/services"] });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string; basePrice: string }) => {
+    mutationFn: async (data: { name: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -814,7 +818,11 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setOpen(false);
       setName("");
       setDescription("");
-      setBasePrice("");
+      setWarranty("");
+      setRepairTime("");
+      setLaborPrice("");
+      setPartsMarkup("1.0");
+      setNotes("");
       toast({ title: "Service created" });
     },
     onError: (error: Error) => {
@@ -823,7 +831,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; description?: string; basePrice?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Service> }) => {
       const res = await apiRequest("PATCH", `/api/services/${id}`, data);
       return res.json();
     },
@@ -851,7 +859,15 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name, description: description || undefined, basePrice });
+    createMutation.mutate({ 
+      name, 
+      description: description || undefined, 
+      warranty: warranty || undefined,
+      repairTime: repairTime || undefined,
+      laborPrice, 
+      partsMarkup,
+      notes: notes || undefined
+    });
   };
 
   const handleEdit = (service: Service) => {
@@ -862,7 +878,18 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, description: editItem.description || undefined, basePrice: editItem.basePrice } });
+    updateMutation.mutate({ 
+      id: editItem.id, 
+      data: { 
+        name: editItem.name, 
+        description: editItem.description || undefined, 
+        warranty: editItem.warranty || undefined,
+        repairTime: editItem.repairTime || undefined,
+        laborPrice: editItem.laborPrice,
+        partsMarkup: editItem.partsMarkup,
+        notes: editItem.notes || undefined
+      } 
+    });
   };
 
   return (
@@ -870,17 +897,17 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
         <div>
           <CardTitle>Services</CardTitle>
-          <CardDescription>Manage repair service types</CardDescription>
+          <CardDescription>Manage repair service types with pricing</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-service"><Plus className="h-4 w-4 mr-2" />Add Service</Button>
           </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>Add Service</DialogTitle>
-                <DialogDescription>Create a new repair service</DialogDescription>
+                <DialogDescription>Create a new repair service with pricing</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -891,9 +918,29 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Description (optional)</Label>
                   <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description" data-testid="input-service-description" />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Labor Price ($)</Label>
+                    <Input type="number" step="0.01" min="0" value={laborPrice} onChange={(e) => setLaborPrice(e.target.value)} placeholder="0.00" required data-testid="input-service-labor-price" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Parts Markup (multiplier)</Label>
+                    <Input type="number" step="0.01" min="1" value={partsMarkup} onChange={(e) => setPartsMarkup(e.target.value)} placeholder="1.0" required data-testid="input-service-parts-markup" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Warranty (optional)</Label>
+                    <Input value={warranty} onChange={(e) => setWarranty(e.target.value)} placeholder="e.g., 90 days" data-testid="input-service-warranty" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Repair Time (optional)</Label>
+                    <Input value={repairTime} onChange={(e) => setRepairTime(e.target.value)} placeholder="e.g., 1-2 hours" data-testid="input-service-repair-time" />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label>Base Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={basePrice} onChange={(e) => setBasePrice(e.target.value)} placeholder="0.00" required data-testid="input-service-price" />
+                  <Label>Notes (optional)</Label>
+                  <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes about this service" data-testid="input-service-notes" />
                 </div>
               </div>
               <DialogFooter>
@@ -906,11 +953,11 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         </Dialog>
 
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent>
+          <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleEditSubmit}>
               <DialogHeader>
                 <DialogTitle>Edit Service</DialogTitle>
-                <DialogDescription>Update repair service</DialogDescription>
+                <DialogDescription>Update repair service details</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
@@ -921,9 +968,29 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Description (optional)</Label>
                   <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, description: e.target.value} : null)} data-testid="input-edit-service-description" />
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Labor Price ($)</Label>
+                    <Input type="number" step="0.01" min="0" value={editItem?.laborPrice || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, laborPrice: e.target.value} : null)} required data-testid="input-edit-service-labor-price" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Parts Markup (multiplier)</Label>
+                    <Input type="number" step="0.01" min="1" value={editItem?.partsMarkup || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, partsMarkup: e.target.value} : null)} required data-testid="input-edit-service-parts-markup" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Warranty (optional)</Label>
+                    <Input value={editItem?.warranty || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, warranty: e.target.value} : null)} data-testid="input-edit-service-warranty" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Repair Time (optional)</Label>
+                    <Input value={editItem?.repairTime || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, repairTime: e.target.value} : null)} data-testid="input-edit-service-repair-time" />
+                  </div>
+                </div>
                 <div className="space-y-2">
-                  <Label>Base Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={editItem?.basePrice || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, basePrice: e.target.value} : null)} required data-testid="input-edit-service-price" />
+                  <Label>Notes (optional)</Label>
+                  <Textarea value={editItem?.notes || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, notes: e.target.value} : null)} data-testid="input-edit-service-notes" />
                 </div>
               </div>
               <DialogFooter>
@@ -945,8 +1012,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Base Price</TableHead>
+                <TableHead>Labor</TableHead>
+                <TableHead>Markup</TableHead>
+                <TableHead>Warranty</TableHead>
+                <TableHead>Repair Time</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -954,8 +1023,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
               {services.map((service) => (
                 <TableRow key={service.id}>
                   <TableCell className="font-medium">{service.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{service.description || "-"}</TableCell>
-                  <TableCell>${service.basePrice}</TableCell>
+                  <TableCell>${service.laborPrice}</TableCell>
+                  <TableCell>{service.partsMarkup}x</TableCell>
+                  <TableCell>{service.warranty || "-"}</TableCell>
+                  <TableCell>{service.repairTime || "-"}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} data-testid={`button-edit-service-${service.id}`}><Pencil className="h-4 w-4" /></Button>
@@ -1228,8 +1299,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editItem, setEditItem] = useState<DeviceServiceWithRelations | null>(null);
   const [deviceId, setDeviceId] = useState("");
   const [serviceId, setServiceId] = useState("");
-  const [laborPrice, setLaborPrice] = useState("");
   const [partSku, setPartSku] = useState("");
+  const [partSearch, setPartSearch] = useState("");
   const [partId, setPartId] = useState<string | undefined>();
 
   const { data: deviceServices = [], isLoading } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
@@ -1237,8 +1308,13 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: parts = [] } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
 
+  const filteredParts = parts.filter(p => 
+    p.sku.toLowerCase().includes(partSearch.toLowerCase()) ||
+    p.name.toLowerCase().includes(partSearch.toLowerCase())
+  );
+
   const createMutation = useMutation({
-    mutationFn: async (data: { deviceId: string; serviceId: string; laborPrice: string; partSku?: string; partId?: string }) => {
+    mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
       const res = await apiRequest("POST", "/api/device-services", data);
       return res.json();
     },
@@ -1247,8 +1323,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setOpen(false);
       setDeviceId("");
       setServiceId("");
-      setLaborPrice("");
       setPartSku("");
+      setPartSearch("");
       setPartId(undefined);
       toast({ title: "Device-service link created" });
     },
@@ -1258,7 +1334,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; laborPrice?: string; partSku?: string; partId?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -1289,7 +1365,6 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     createMutation.mutate({
       deviceId,
       serviceId,
-      laborPrice,
       partSku: partSku || undefined,
       partId: partId === "none" ? undefined : partId,
     });
@@ -1308,7 +1383,6 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       data: {
         deviceId: editItem.deviceId,
         serviceId: editItem.serviceId,
-        laborPrice: editItem.laborPrice,
         partId: editItem.partId || undefined,
       },
     });
@@ -1322,7 +1396,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
         <div>
           <CardTitle>Device-Service Links</CardTitle>
-          <CardDescription>Link services to devices with pricing and optional parts</CardDescription>
+          <CardDescription>Link devices to services with optional parts. Labor and markup come from the Service.</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
@@ -1332,13 +1406,13 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>Add Device-Service Link</DialogTitle>
-                <DialogDescription>Connect a service to a device with custom pricing</DialogDescription>
+                <DialogDescription>Select model, service, and optionally a part</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Device</Label>
+                  <Label>Model (Device)</Label>
                   <Select value={deviceId} onValueChange={setDeviceId} required>
-                    <SelectTrigger data-testid="select-link-device"><SelectValue placeholder="Select device" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-link-device"><SelectValue placeholder="Select device model" /></SelectTrigger>
                     <SelectContent>
                       {devices.map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
                     </SelectContent>
@@ -1349,34 +1423,31 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   <Select value={serviceId} onValueChange={setServiceId} required>
                     <SelectTrigger data-testid="select-link-service"><SelectValue placeholder="Select service" /></SelectTrigger>
                     <SelectContent>
-                      {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>))}
+                      {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice} + {service.partsMarkup}x markup)</SelectItem>))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Labor Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={laborPrice} onChange={(e) => setLaborPrice(e.target.value)} placeholder="0.00" required data-testid="input-labor-price" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Part SKU (optional - enter SKU to auto-lookup)</Label>
-                  <Input value={partSku} onChange={(e) => { setPartSku(e.target.value); setPartId(undefined); }} placeholder="e.g., SCR-IP15-BLK" data-testid="input-part-sku-link" />
+                  <Label>Part SKU (optional)</Label>
+                  <Input value={partSku} onChange={(e) => { setPartSku(e.target.value); setPartId(undefined); }} placeholder="Enter SKU to auto-lookup" data-testid="input-part-sku-link" />
                   {partSku && skuPart && (
                     <p className="text-sm text-green-600">Found: {skuPart.name} (${skuPart.price})</p>
                   )}
-                  {partSku && !skuPart && (
+                  {partSku && !skuPart && partSku.length > 0 && (
                     <p className="text-sm text-destructive">SKU not found</p>
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Or Select Part from List</Label>
+                  <Label>Or Search Part by Name</Label>
+                  <Input value={partSearch} onChange={(e) => setPartSearch(e.target.value)} placeholder="Search parts..." data-testid="input-part-search-link" />
                   <Select value={partId} onValueChange={(v) => { setPartId(v); setPartSku(""); }}>
-                    <SelectTrigger data-testid="select-link-part"><SelectValue placeholder="No part required" /></SelectTrigger>
+                    <SelectTrigger data-testid="select-link-part"><SelectValue placeholder="Select part (optional)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No part required</SelectItem>
-                      {parts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                      {filteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
                     </SelectContent>
                   </Select>
-                  {selectedPart && <p className="text-sm text-muted-foreground">Part price ${selectedPart.price} will be added to quote</p>}
+                  {selectedPart && <p className="text-sm text-muted-foreground">Part cost ${selectedPart.price} will be marked up per service settings</p>}
                 </div>
               </div>
               <DialogFooter>
@@ -1397,7 +1468,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
-                  <Label>Device</Label>
+                  <Label>Model (Device)</Label>
                   <Select value={editItem?.deviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, deviceId: v} : null)}>
                     <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
                     <SelectContent>
@@ -1410,13 +1481,9 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   <Select value={editItem?.serviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, serviceId: v} : null)}>
                     <SelectTrigger><SelectValue placeholder="Select service" /></SelectTrigger>
                     <SelectContent>
-                      {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name}</SelectItem>))}
+                      {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice} + {service.partsMarkup}x markup)</SelectItem>))}
                     </SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Labor Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={editItem?.laborPrice || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, laborPrice: e.target.value} : null)} required data-testid="input-edit-labor-price" />
                 </div>
                 <div className="space-y-2">
                   <Label>Part</Label>
@@ -1449,35 +1516,26 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               <TableRow>
                 <TableHead>Device</TableHead>
                 <TableHead>Service</TableHead>
-                <TableHead>Labor</TableHead>
                 <TableHead>Part</TableHead>
-                <TableHead>Total</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deviceServices.map((ds) => {
-                const partPrice = ds.part ? parseFloat(ds.part.price) : 0;
-                const laborPriceNum = parseFloat(ds.laborPrice);
-                const total = (partPrice + laborPriceNum).toFixed(2);
-                return (
-                  <TableRow key={ds.id}>
-                    <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
-                    <TableCell>{ds.service?.name || "Unknown"}</TableCell>
-                    <TableCell>${ds.laborPrice}</TableCell>
-                    <TableCell>
-                      {ds.part ? (<Badge variant="outline">{ds.part.sku} (${ds.part.price})</Badge>) : (<span className="text-muted-foreground">-</span>)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-primary">${total}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
+              {deviceServices.map((ds) => (
+                <TableRow key={ds.id}>
+                  <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
+                  <TableCell>{ds.service?.name || "Unknown"}</TableCell>
+                  <TableCell>
+                    {ds.part ? (<Badge variant="outline">{ds.part.sku} (${ds.part.price})</Badge>) : (<span className="text-muted-foreground">-</span>)}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         )}
