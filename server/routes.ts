@@ -17,6 +17,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { sendQuoteEmail } from "./gmail";
 import { sendQuoteSms } from "./sms";
+import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 // Admin authentication middleware
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
@@ -46,6 +47,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Register Object Storage routes for file uploads
+  registerObjectStorageRoutes(app);
+
   // Admin authentication endpoints
   app.post("/api/admin/login", async (req, res) => {
     try {

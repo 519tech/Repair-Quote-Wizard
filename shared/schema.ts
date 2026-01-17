@@ -63,6 +63,7 @@ export const devices = pgTable("devices", {
   name: text("name").notNull(),
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
   brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
+  imageUrl: text("image_url"),
 });
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({
