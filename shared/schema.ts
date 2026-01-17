@@ -98,7 +98,11 @@ export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   description: text("description"),
-  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
+  warranty: text("warranty"),
+  repairTime: text("repair_time"),
+  laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull().default("0"),
+  partsMarkup: decimal("parts_markup", { precision: 5, scale: 2 }).notNull().default("1.0"),
+  notes: text("notes"),
 });
 
 export const insertServiceSchema = createInsertSchema(services).omit({ id: true });
@@ -110,7 +114,6 @@ export const deviceServices = pgTable("device_services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
-  laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull(),
   partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
 });
 
