@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -28,7 +29,9 @@ export default function Home() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
-  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string } | null>(null);
+  const [optInSms, setOptInSms] = useState(false);
+  const [optInEmail, setOptInEmail] = useState(false);
+  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
@@ -119,15 +122,35 @@ export default function Home() {
     setStep(4);
   };
 
-  const handleServiceSelect = async (service: DeviceServiceWithRelations) => {
+  const handleServiceSelect = (service: DeviceServiceWithRelations) => {
     setSelectedServiceId(service.id);
+    setStep(5);
+  };
+
+  const handleContactSubmitAndGetQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDeviceId || !selectedServiceId) return;
+
     setQuoteLoading(true);
     try {
-      const res = await fetch(`/api/calculate-quote/${service.id}`);
+      const res = await fetch(`/api/calculate-quote/${selectedServiceId}`);
       if (res.ok) {
         const data = await res.json();
-        setQuoteResult({ price: data.totalPrice, serviceName: data.serviceName });
-        setStep(5);
+        setQuoteResult({ 
+          price: data.totalPrice, 
+          serviceName: data.serviceName,
+          repairTime: data.repairTime,
+          warranty: data.warranty
+        });
+
+        submitQuoteMutation.mutate({
+          customerName: contactInfo.name,
+          customerEmail: contactInfo.email,
+          customerPhone: contactInfo.phone || undefined,
+          deviceId: selectedDeviceId,
+          deviceServiceId: selectedServiceId,
+        });
+        setStep(6);
       } else {
         toast({
           title: "Error",
@@ -146,20 +169,6 @@ export default function Home() {
     }
   };
 
-  const handleContactSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDeviceId || !selectedServiceId || !quoteResult) return;
-
-    submitQuoteMutation.mutate({
-      customerName: contactInfo.name,
-      customerEmail: contactInfo.email,
-      customerPhone: contactInfo.phone || undefined,
-      deviceId: selectedDeviceId,
-      deviceServiceId: selectedServiceId,
-    });
-    setStep(6);
-  };
-
   const resetForm = () => {
     setStep(1);
     setSelectedTypeId(null);
@@ -167,6 +176,8 @@ export default function Home() {
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
+    setOptInSms(false);
+    setOptInEmail(false);
     setQuoteResult(null);
     setSkippedBrandStep(false);
   };
@@ -328,7 +339,7 @@ export default function Home() {
               <Button variant="ghost" className="mb-4" onClick={() => setStep(3)} data-testid="button-back-step3">
                 Back to devices
               </Button>
-              {servicesLoading || quoteLoading ? (
+              {servicesLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
@@ -336,53 +347,37 @@ export default function Home() {
                 <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
               ) : (
                 <div className="space-y-2">
-                  {deviceServices.map((ds) => {
-                    const partCost = ds.part ? parseFloat(ds.part.price) : 0;
-                    const laborPrice = parseFloat(ds.service.laborPrice || "0");
-                    const partsMarkup = parseFloat(ds.service.partsMarkup || "1");
-                    const markedUpPart = partCost * partsMarkup;
-                    const rawTotal = laborPrice + markedUpPart;
-                    const roundedToFive = Math.round(rawTotal / 5) * 5;
-                    const totalPrice = Math.max(4, roundedToFive - 1);
-                    return (
-                      <Button
-                        key={ds.id}
-                        variant="outline"
-                        className="w-full justify-between hover-elevate"
-                        onClick={() => handleServiceSelect(ds)}
-                        disabled={quoteLoading}
-                        data-testid={`button-service-${ds.id}`}
-                      >
-                        <div className="text-left">
-                          <div className="font-medium">{ds.service.name}</div>
-                          {ds.service.description && (
-                            <div className="text-xs text-muted-foreground">{ds.service.description}</div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold text-primary">${totalPrice.toFixed(2)}</div>
-                        </div>
-                      </Button>
-                    );
-                  })}
+                  {deviceServices.map((ds) => (
+                    <Button
+                      key={ds.id}
+                      variant="outline"
+                      className="w-full justify-start hover-elevate"
+                      onClick={() => handleServiceSelect(ds)}
+                      data-testid={`button-service-${ds.id}`}
+                    >
+                      <div className="text-left">
+                        <div className="font-medium">{ds.service.name}</div>
+                        {ds.service.description && (
+                          <div className="text-xs text-muted-foreground">{ds.service.description}</div>
+                        )}
+                      </div>
+                      <ChevronRight className="h-4 w-4 ml-auto" />
+                    </Button>
+                  ))}
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {step === 5 && quoteResult && (
+        {step === 5 && (
           <Card>
             <CardHeader>
-              <CardTitle>Your Quote</CardTitle>
-              <CardDescription>Enter your contact information to receive your quote</CardDescription>
+              <CardTitle>Your Contact Information</CardTitle>
+              <CardDescription>Enter your details to receive your repair quote</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
-                <p className="text-sm text-muted-foreground mb-1">{quoteResult.serviceName}</p>
-                <p className="text-4xl font-bold text-primary">${quoteResult.price}</p>
-              </div>
-              <form onSubmit={handleContactSubmit} className="space-y-4">
+              <form onSubmit={handleContactSubmitAndGetQuote} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="name">Name *</Label>
                   <Input
@@ -414,20 +409,44 @@ export default function Home() {
                     data-testid="input-customer-phone"
                   />
                 </div>
-                <div className="flex gap-2">
+                <div className="space-y-3 pt-2">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="optInEmail" 
+                      checked={optInEmail} 
+                      onCheckedChange={(checked) => setOptInEmail(checked === true)}
+                      data-testid="checkbox-optin-email"
+                    />
+                    <Label htmlFor="optInEmail" className="text-sm font-normal cursor-pointer">
+                      I agree to receive my quote via email
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <Checkbox 
+                      id="optInSms" 
+                      checked={optInSms} 
+                      onCheckedChange={(checked) => setOptInSms(checked === true)}
+                      data-testid="checkbox-optin-sms"
+                    />
+                    <Label htmlFor="optInSms" className="text-sm font-normal cursor-pointer">
+                      I agree to receive my quote via SMS
+                    </Label>
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-2">
                   <Button type="button" variant="outline" onClick={() => setStep(4)} data-testid="button-back-step4">
                     Back
                   </Button>
                   <Button
                     type="submit"
                     className="flex-1"
-                    disabled={submitQuoteMutation.isPending}
+                    disabled={quoteLoading}
                     data-testid="button-submit-quote"
                   >
-                    {submitQuoteMutation.isPending ? (
+                    {quoteLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      "Get Quote"
+                      "Get My Quote"
                     )}
                   </Button>
                 </div>
@@ -442,14 +461,27 @@ export default function Home() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Check className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle>Quote Request Submitted!</CardTitle>
+              <CardTitle>Your Repair Quote</CardTitle>
               <CardDescription>We've received your request and will be in touch soon</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="bg-muted rounded-lg p-6 mb-6 text-center">
-                <p className="text-sm text-muted-foreground mb-1">Your estimated repair cost</p>
-                <p className="text-4xl font-bold">${quoteResult.price}</p>
-                <p className="text-sm text-muted-foreground mt-2">{quoteResult.serviceName}</p>
+              <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
+                <p className="text-sm text-muted-foreground mb-1">{quoteResult.serviceName}</p>
+                <p className="text-4xl font-bold text-primary">${quoteResult.price}</p>
+              </div>
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                {quoteResult.repairTime && (
+                  <div className="bg-muted rounded-lg p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Repair Time</p>
+                    <p className="font-semibold">{quoteResult.repairTime}</p>
+                  </div>
+                )}
+                {quoteResult.warranty && (
+                  <div className="bg-muted rounded-lg p-4 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">Warranty</p>
+                    <p className="font-semibold">{quoteResult.warranty}</p>
+                  </div>
+                )}
               </div>
               <Button className="w-full" onClick={resetForm} data-testid="button-new-quote">
                 Get Another Quote
