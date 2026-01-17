@@ -822,14 +822,24 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       const data = await file.arrayBuffer();
       const workbook = XLSX.read(data);
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<{ Brand?: string; Type?: string; "Model Name"?: string; "Image URL"?: string }>(sheet);
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
 
-      const devices = rows.map((row) => ({
-        brand: row.Brand || row["Brand"] || "",
-        type: row.Type || row["Type"] || "",
-        modelName: row["Model Name"] || "",
-        imageUrl: row["Image URL"] || "",
-      }));
+      const devices = rows.map((row) => {
+        const getField = (keys: string[]) => {
+          for (const key of keys) {
+            const val = row[key] || row[key.toLowerCase()] || row[key.toUpperCase()];
+            if (val !== undefined && val !== null && val !== "") return String(val).trim();
+          }
+          return "";
+        };
+        
+        return {
+          brand: getField(["Brand", "brand", "BRAND", "Make", "make", "Manufacturer"]),
+          type: getField(["Type", "type", "TYPE", "Device Type", "device type", "Category", "category"]),
+          modelName: getField(["Model Name", "Model", "model", "MODEL", "Device", "device", "DEVICE", "Device Name", "Device Model", "Name", "name"]),
+          imageUrl: getField(["Image URL", "Image", "image", "IMAGE", "ImageUrl", "imageUrl", "Picture", "Photo", "URL"]),
+        };
+      });
 
       const res = await apiRequest("POST", "/api/devices/bulk-import", { devices });
       const result = await res.json();
