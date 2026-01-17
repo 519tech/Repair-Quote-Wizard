@@ -8,6 +8,8 @@ import {
   insertServiceSchema,
   insertDeviceServiceSchema,
   insertQuoteRequestSchema,
+  insertBrandSchema,
+  insertBrandDeviceTypeSchema,
 } from "@shared/schema";
 import { z } from "zod";
 
@@ -61,13 +63,103 @@ export async function registerRoutes(
     }
   });
 
+  // Brands
+  app.get("/api/brands", async (req, res) => {
+    try {
+      const brands = await storage.getBrands();
+      res.json(brands);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch brands" });
+    }
+  });
+
+  app.get("/api/brands/by-type/:deviceTypeId", async (req, res) => {
+    try {
+      const brands = await storage.getBrandsByDeviceType(req.params.deviceTypeId);
+      res.json(brands);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch brands" });
+    }
+  });
+
+  app.post("/api/brands", async (req, res) => {
+    try {
+      const data = insertBrandSchema.parse(req.body);
+      const brand = await storage.createBrand(data);
+      res.status(201).json(brand);
+    } catch (error: any) {
+      if (error.message?.includes("unique constraint")) {
+        res.status(400).json({ error: `A brand with the name "${req.body.name}" already exists` });
+      } else {
+        res.status(400).json({ error: error.message || "Failed to create brand" });
+      }
+    }
+  });
+
+  app.patch("/api/brands/:id", async (req, res) => {
+    try {
+      const data = insertBrandSchema.partial().parse(req.body);
+      const brand = await storage.updateBrand(req.params.id, data);
+      if (!brand) {
+        return res.status(404).json({ error: "Brand not found" });
+      }
+      res.json(brand);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to update brand" });
+    }
+  });
+
+  app.delete("/api/brands/:id", async (req, res) => {
+    try {
+      await storage.deleteBrand(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete brand" });
+    }
+  });
+
+  // Brand-DeviceType Links
+  app.get("/api/brand-device-types", async (req, res) => {
+    try {
+      const links = await storage.getBrandDeviceTypes();
+      res.json(links);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch brand-device-type links" });
+    }
+  });
+
+  app.post("/api/brand-device-types", async (req, res) => {
+    try {
+      const data = insertBrandDeviceTypeSchema.parse(req.body);
+      const link = await storage.createBrandDeviceType(data);
+      res.status(201).json(link);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to create brand-device-type link" });
+    }
+  });
+
+  app.delete("/api/brand-device-types/:id", async (req, res) => {
+    try {
+      await storage.deleteBrandDeviceType(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete brand-device-type link" });
+    }
+  });
+
   // Devices
   app.get("/api/devices", async (req, res) => {
     try {
       const typeId = req.query.typeId as string | undefined;
-      const devices = typeId
-        ? await storage.getDevicesByType(typeId)
-        : await storage.getDevices();
+      const brandId = req.query.brandId as string | undefined;
+      let devices;
+      if (typeId && brandId) {
+        devices = await storage.getDevicesByTypeAndBrand(typeId, brandId);
+      } else if (typeId) {
+        devices = await storage.getDevicesByType(typeId);
+      } else {
+        devices = await storage.getDevices();
+      }
       res.json(devices);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch devices" });
