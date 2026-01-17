@@ -61,6 +61,7 @@ export default function Home() {
       customerPhone?: string;
       deviceId: string;
       deviceServiceId: string;
+      optIn?: boolean;
     }) => {
       const res = await apiRequest("POST", "/api/quote-requests", data);
       return res.json();
@@ -148,6 +149,7 @@ export default function Home() {
           customerPhone: contactInfo.phone || undefined,
           deviceId: selectedDeviceId,
           deviceServiceId: selectedServiceId,
+          optIn: optInQuote,
         });
         setStep(6);
       } else {

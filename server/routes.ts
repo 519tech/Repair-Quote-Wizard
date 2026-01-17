@@ -14,6 +14,8 @@ import {
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import { sendQuoteEmail } from "./gmail";
+import { sendQuoteSms } from "./sms";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -585,6 +587,7 @@ export async function registerRoutes(
     customerPhone: z.string().optional(),
     deviceId: z.string(),
     deviceServiceId: z.string(),
+    optIn: z.boolean().optional(),
   });
 
   app.post("/api/quote-requests", async (req, res) => {
@@ -612,6 +615,28 @@ export async function registerRoutes(
         deviceServiceId: input.deviceServiceId,
         quotedPrice,
       });
+
+      // Send quote via email and SMS if user opted in
+      if (input.optIn) {
+        const quoteData = {
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone || '',
+          deviceName: deviceService.device.name,
+          serviceName: service.name,
+          price: quotedPrice,
+          repairTime: service.repairTime || undefined,
+          warranty: service.warranty || undefined,
+        };
+
+        // Send email (async, don't block response)
+        sendQuoteEmail(quoteData).catch(err => console.error('Email send error:', err));
+
+        // Send SMS via Zapier webhook if phone provided
+        if (input.customerPhone) {
+          sendQuoteSms(quoteData).catch(err => console.error('SMS send error:', err));
+        }
+      }
       
       res.status(201).json(quote);
     } catch (error: any) {

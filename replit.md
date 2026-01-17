@@ -80,3 +80,10 @@ The application manages:
 - **@replit/vite-plugin-runtime-error-modal**: Error overlay in development
 - **@replit/vite-plugin-cartographer**: Development tooling
 - **@replit/vite-plugin-dev-banner**: Development environment banner
+
+### Quote Delivery Integrations
+- **Gmail**: Sends quote emails via Replit Gmail connector (configured in server/gmail.ts)
+- **OpenPhone/Zapier SMS**: Sends quote SMS via Zapier webhook
+  - Requires `ZAPIER_WEBHOOK_URL` environment variable
+  - Set up a Zap in Zapier: Webhook (Catch Hook) → OpenPhone (Send Message)
+  - The webhook receives: phone, message, customerName, deviceName, serviceName, price, repairTime, warranty
