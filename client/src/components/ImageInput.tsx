@@ -2,11 +2,12 @@ import { useState, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Upload, Link, X, Loader2 } from "lucide-react";
+import { Upload, Link, X, Loader2, AlertCircle } from "lucide-react";
 
 interface ImageInputProps {
   value: string;
   onChange: (url: string) => void;
+  onError?: (message: string) => void;
   label?: string;
   placeholder?: string;
   testIdPrefix?: string;
@@ -14,13 +15,15 @@ interface ImageInputProps {
 
 export function ImageInput({ 
   value, 
-  onChange, 
+  onChange,
+  onError,
   label = "Image",
   placeholder = "Enter image URL or upload a file",
   testIdPrefix = "image"
 }: ImageInputProps) {
   const [mode, setMode] = useState<"url" | "upload">("url");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -28,6 +31,7 @@ export function ImageInput({
     if (!file) return;
 
     setIsUploading(true);
+    setUploadError(null);
     try {
       const response = await fetch("/api/uploads/request-url", {
         method: "POST",
@@ -40,20 +44,27 @@ export function ImageInput({
       });
 
       if (!response.ok) {
-        throw new Error("Failed to get upload URL");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || "Failed to get upload URL");
       }
 
       const { uploadURL, objectPath } = await response.json();
 
-      await fetch(uploadURL, {
+      const uploadRes = await fetch(uploadURL, {
         method: "PUT",
         body: file,
         headers: { "Content-Type": file.type || "application/octet-stream" },
       });
 
+      if (!uploadRes.ok) {
+        throw new Error("Failed to upload file");
+      }
+
       onChange(objectPath);
-    } catch (error) {
-      console.error("Upload failed:", error);
+    } catch (error: any) {
+      const message = error.message || "Upload failed";
+      setUploadError(message);
+      onError?.(message);
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -64,6 +75,7 @@ export function ImageInput({
 
   const clearImage = () => {
     onChange("");
+    setUploadError(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -85,7 +97,7 @@ export function ImageInput({
           type="button"
           variant={mode === "url" ? "default" : "outline"}
           size="sm"
-          onClick={() => setMode("url")}
+          onClick={() => { setMode("url"); setUploadError(null); }}
           data-testid={`${testIdPrefix}-mode-url`}
         >
           <Link className="h-4 w-4 mr-1" />
@@ -95,7 +107,7 @@ export function ImageInput({
           type="button"
           variant={mode === "upload" ? "default" : "outline"}
           size="sm"
-          onClick={() => setMode("upload")}
+          onClick={() => { setMode("upload"); setUploadError(null); }}
           data-testid={`${testIdPrefix}-mode-upload`}
         >
           <Upload className="h-4 w-4 mr-1" />
@@ -140,6 +152,12 @@ export function ImageInput({
               </>
             )}
           </Button>
+          {uploadError && (
+            <div className="flex items-center gap-2 text-sm text-destructive">
+              <AlertCircle className="h-4 w-4" />
+              {uploadError}
+            </div>
+          )}
         </div>
       )}
 

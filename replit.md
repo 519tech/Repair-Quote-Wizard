@@ -6,6 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added image upload support to Brands tab - upload logo via Object Storage or enter URL
+- **Jan 2026**: Added image upload support to Devices tab - upload device image via Object Storage or enter URL
+- **Jan 2026**: Created reusable ImageInput component with URL/upload mode toggle and error handling
+- **Jan 2026**: Added bulk device import via Excel (.xlsx) with downloadable sample template
+- **Jan 2026**: Bulk device import columns: Brand, Type, Model Name, Image URL
 - **Jan 2026**: Added spreadsheet-style Service Links tab with columns: Device Type, Brand, Device Model, Service, Part SKU, Total Price, Actions
 - **Jan 2026**: Added inline SKU editing - click on any Part SKU cell to edit directly
 - **Jan 2026**: Added filtering by Brand, Device, or Service in Service Links tab

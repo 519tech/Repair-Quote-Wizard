@@ -496,6 +496,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                 <ImageInput
                   value={logo}
                   onChange={setLogo}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
                   label="Logo"
                   placeholder="Enter logo URL"
                   testIdPrefix="brand-logo"
@@ -525,6 +526,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                 <ImageInput
                   value={editItem?.logo || ""}
                   onChange={(url) => setEditItem(prev => prev ? {...prev, logo: url || null} : null)}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
                   label="Logo"
                   placeholder="Enter logo URL"
                   testIdPrefix="edit-brand-logo"
@@ -948,6 +950,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 <ImageInput
                   value={imageUrl}
                   onChange={setImageUrl}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
                   label="Device Image"
                   placeholder="Enter image URL"
                   testIdPrefix="device-image"
@@ -997,6 +1000,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 <ImageInput
                   value={editItem?.imageUrl || ""}
                   onChange={(url) => setEditItem(prev => prev ? {...prev, imageUrl: url || null} : null)}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
                   label="Device Image"
                   placeholder="Enter image URL"
                   testIdPrefix="edit-device-image"
