@@ -706,12 +706,16 @@ function BrandDeviceTypeLinksTab({ toast }: { toast: ReturnType<typeof useToast>
 function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const [editItem, setEditItem] = useState<Device | null>(null);
   const [name, setName] = useState("");
   const [deviceTypeId, setDeviceTypeId] = useState("");
   const [brandId, setBrandId] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [filterTypeId, setFilterTypeId] = useState("all");
   const [filterBrandId, setFilterBrandId] = useState("all");
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResults, setBulkResults] = useState<{ created: number; errors: string[] } | null>(null);
 
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
@@ -727,7 +731,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string }) => {
+    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/devices", data);
       return res.json();
     },
@@ -737,6 +741,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       setName("");
       setDeviceTypeId("");
       setBrandId("");
+      setImageUrl("");
       toast({ title: "Device created" });
     },
     onError: (error: Error) => {
@@ -745,7 +750,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string; brandId?: string | null } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string; brandId?: string | null; imageUrl?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/devices/${id}`, data);
       return res.json();
     },
@@ -773,7 +778,12 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name, deviceTypeId, brandId: brandId && brandId !== "none" ? brandId : undefined });
+    createMutation.mutate({ 
+      name, 
+      deviceTypeId, 
+      brandId: brandId && brandId !== "none" ? brandId : undefined,
+      imageUrl: imageUrl || undefined 
+    });
   };
 
   const handleEdit = (device: Device) => {
@@ -784,11 +794,60 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, deviceTypeId: editItem.deviceTypeId, brandId: editItem.brandId } });
+    updateMutation.mutate({ 
+      id: editItem.id, 
+      data: { 
+        name: editItem.name, 
+        deviceTypeId: editItem.deviceTypeId, 
+        brandId: editItem.brandId,
+        imageUrl: editItem.imageUrl 
+      } 
+    });
   };
 
   const getTypeName = (typeId: string) => deviceTypes.find((t) => t.id === typeId)?.name || "Unknown";
   const getBrandName = (brandId: string | null) => brandId ? (brands.find((b) => b.id === brandId)?.name || "Unknown") : "-";
+
+  const handleBulkImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkImporting(true);
+    setBulkResults(null);
+
+    try {
+      const XLSX = await import("xlsx");
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<{ Brand?: string; Type?: string; "Model Name"?: string; "Image URL"?: string }>(sheet);
+
+      const devices = rows.map((row) => ({
+        brand: row.Brand || row["Brand"] || "",
+        type: row.Type || row["Type"] || "",
+        modelName: row["Model Name"] || "",
+        imageUrl: row["Image URL"] || "",
+      }));
+
+      const res = await apiRequest("POST", "/api/devices/bulk-import", { devices });
+      const result = await res.json();
+      setBulkResults(result);
+      queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      
+      if (result.created > 0) {
+        toast({ title: `Imported ${result.created} device(s)` });
+      }
+    } catch (error: any) {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    } finally {
+      setBulkImporting(false);
+      e.target.value = "";
+    }
+  };
+
+  const downloadTemplate = () => {
+    window.open("/api/devices/template", "_blank");
+  };
 
   return (
     <Card>
@@ -798,10 +857,64 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             <CardTitle>Devices</CardTitle>
             <CardDescription>Manage specific device models</CardDescription>
           </div>
-          <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-device"><Plus className="h-4 w-4 mr-2" />Add Device</Button>
-          </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={bulkOpen} onOpenChange={(o) => { setBulkOpen(o); if (!o) setBulkResults(null); }}>
+              <DialogTrigger asChild>
+                <Button variant="outline" data-testid="button-bulk-import-device"><Upload className="h-4 w-4 mr-2" />Bulk Import</Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Bulk Import Devices</DialogTitle>
+                  <DialogDescription>Upload an Excel file to import multiple devices at once</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={downloadTemplate} data-testid="button-download-template">
+                      Download Sample Template
+                    </Button>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Upload Excel File (.xlsx)</Label>
+                    <Input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handleBulkImport}
+                      disabled={bulkImporting}
+                      data-testid="input-bulk-file"
+                    />
+                    {bulkImporting && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Importing...
+                      </div>
+                    )}
+                  </div>
+                  {bulkResults && (
+                    <div className="space-y-2 p-3 rounded-md bg-muted">
+                      <p className="font-medium">Import Results:</p>
+                      <p className="text-sm text-green-600">{bulkResults.created} device(s) created</p>
+                      {bulkResults.errors.length > 0 && (
+                        <div className="text-sm text-destructive space-y-1">
+                          {bulkResults.errors.slice(0, 5).map((err, i) => (
+                            <p key={i}>{err}</p>
+                          ))}
+                          {bulkResults.errors.length > 5 && (
+                            <p>...and {bulkResults.errors.length - 5} more errors</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setBulkOpen(false)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-add-device"><Plus className="h-4 w-4 mr-2" />Add Device</Button>
+              </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -832,6 +945,13 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                     </SelectContent>
                   </Select>
                 </div>
+                <ImageInput
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  label="Device Image"
+                  placeholder="Enter image URL"
+                  testIdPrefix="device-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending || !deviceTypeId} data-testid="button-save-device">
@@ -840,7 +960,9 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+            </Dialog>
+          </div>
+        </div>
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent>
             <form onSubmit={handleEditSubmit}>
@@ -872,6 +994,13 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                     </SelectContent>
                   </Select>
                 </div>
+                <ImageInput
+                  value={editItem?.imageUrl || ""}
+                  onChange={(url) => setEditItem(prev => prev ? {...prev, imageUrl: url || null} : null)}
+                  label="Device Image"
+                  placeholder="Enter image URL"
+                  testIdPrefix="edit-device-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-device">
@@ -881,7 +1010,6 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             </form>
           </DialogContent>
         </Dialog>
-        </div>
         <div className="flex flex-wrap gap-4">
           <Select value={filterTypeId} onValueChange={setFilterTypeId}>
             <SelectTrigger className="w-[180px]" data-testid="select-filter-type">
@@ -913,6 +1041,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[60px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Brand</TableHead>
@@ -922,6 +1051,13 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             <TableBody>
               {filteredDevices.map((device) => (
                 <TableRow key={device.id}>
+                  <TableCell>
+                    {device.imageUrl ? (
+                      <img src={device.imageUrl} alt={device.name} className="h-8 w-8 object-contain rounded" />
+                    ) : (
+                      <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">-</div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{device.name}</TableCell>
                   <TableCell><Badge variant="secondary">{getTypeName(device.deviceTypeId)}</Badge></TableCell>
                   <TableCell>{getBrandName(device.brandId)}</TableCell>

@@ -276,6 +276,93 @@ export async function registerRoutes(
     }
   });
 
+  // Device bulk import template
+  app.get("/api/devices/template", requireAdmin, async (req, res) => {
+    try {
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+      const wsData = [
+        ["Brand", "Type", "Model Name", "Image URL"],
+        ["Apple", "smartphone", "iPhone 15 Pro", "https://example.com/iphone15.jpg"],
+        ["Samsung", "smartphone", "Galaxy S24", ""],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+      ws["!cols"] = [{ wch: 15 }, { wch: 15 }, { wch: 25 }, { wch: 50 }];
+      XLSX.utils.book_append_sheet(wb, ws, "Devices");
+      const buffer = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", "attachment; filename=device-import-template.xlsx");
+      res.send(buffer);
+    } catch (error) {
+      console.error("Template generation error:", error);
+      res.status(500).json({ error: "Failed to generate template" });
+    }
+  });
+
+  // Device bulk import
+  app.post("/api/devices/bulk-import", requireAdmin, async (req, res) => {
+    try {
+      const { devices: deviceRows } = req.body;
+      if (!Array.isArray(deviceRows) || deviceRows.length === 0) {
+        return res.status(400).json({ error: "No devices to import" });
+      }
+
+      const brands = await storage.getBrands();
+      const deviceTypes = await storage.getDeviceTypes();
+      
+      const results = { created: 0, errors: [] as string[] };
+      
+      for (const row of deviceRows) {
+        try {
+          const brandName = row.brand?.trim();
+          const typeName = row.type?.trim()?.toLowerCase();
+          const modelName = row.modelName?.trim();
+          const imageUrl = row.imageUrl?.trim();
+          
+          if (!modelName) {
+            results.errors.push(`Row skipped: missing model name`);
+            continue;
+          }
+          
+          const deviceType = deviceTypes.find((t) => t.name.toLowerCase() === typeName);
+          if (!deviceType) {
+            results.errors.push(`Row "${modelName}": device type "${typeName}" not found`);
+            continue;
+          }
+          
+          let brandId: string | null = null;
+          if (brandName) {
+            const brand = brands.find((b) => b.name.toLowerCase() === brandName.toLowerCase());
+            if (!brand) {
+              results.errors.push(`Row "${modelName}": brand "${brandName}" not found`);
+              continue;
+            }
+            brandId = brand.id;
+          }
+          
+          await storage.createDevice({
+            name: modelName,
+            deviceTypeId: deviceType.id,
+            brandId,
+            imageUrl: imageUrl || null,
+          });
+          results.created++;
+        } catch (err: any) {
+          if (err.message?.includes("unique constraint") || err.message?.includes("duplicate")) {
+            results.errors.push(`Row "${row.modelName}": device already exists`);
+          } else {
+            results.errors.push(`Row "${row.modelName}": ${err.message}`);
+          }
+        }
+      }
+      
+      res.json(results);
+    } catch (error: any) {
+      console.error("Bulk import error:", error);
+      res.status(500).json({ error: error.message || "Failed to import devices" });
+    }
+  });
+
   // Parts
   app.get("/api/parts", async (req, res) => {
     try {
