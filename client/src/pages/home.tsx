@@ -337,9 +337,13 @@ export default function Home() {
               ) : (
                 <div className="space-y-2">
                   {deviceServices.map((ds) => {
-                    const partPrice = ds.part ? parseFloat(ds.part.price) : 0;
-                    const laborPrice = parseFloat(ds.laborPrice);
-                    const totalPrice = (partPrice + laborPrice).toFixed(2);
+                    const partCost = ds.part ? parseFloat(ds.part.price) : 0;
+                    const laborPrice = parseFloat(ds.service.laborPrice || "0");
+                    const partsMarkup = parseFloat(ds.service.partsMarkup || "1");
+                    const markedUpPart = partCost * partsMarkup;
+                    const rawTotal = laborPrice + markedUpPart;
+                    const roundedToFive = Math.round(rawTotal / 5) * 5;
+                    const totalPrice = Math.max(4, roundedToFive - 1);
                     return (
                       <Button
                         key={ds.id}
@@ -356,7 +360,7 @@ export default function Home() {
                           )}
                         </div>
                         <div className="text-right">
-                          <div className="font-semibold text-primary">${totalPrice}</div>
+                          <div className="font-semibold text-primary">${totalPrice.toFixed(2)}</div>
                         </div>
                       </Button>
                     );

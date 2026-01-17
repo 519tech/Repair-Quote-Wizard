@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -1055,10 +1055,11 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
 
   const { data: parts = [], isLoading } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
 
-  const filteredParts = parts.filter(part => 
-    part.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    part.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const filteredParts = useMemo(() => 
+    parts.filter(part => 
+      part.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      part.name.toLowerCase().includes(searchQuery.toLowerCase())
+    ), [parts, searchQuery]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1308,10 +1309,11 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: parts = [] } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
 
-  const filteredParts = parts.filter(p => 
-    p.sku.toLowerCase().includes(partSearch.toLowerCase()) ||
-    p.name.toLowerCase().includes(partSearch.toLowerCase())
-  );
+  const filteredParts = useMemo(() => 
+    parts.filter(p => 
+      p.sku.toLowerCase().includes(partSearch.toLowerCase()) ||
+      p.name.toLowerCase().includes(partSearch.toLowerCase())
+    ), [parts, partSearch]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
@@ -1517,25 +1519,36 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                 <TableHead>Device</TableHead>
                 <TableHead>Service</TableHead>
                 <TableHead>Part</TableHead>
+                <TableHead>Total Price</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deviceServices.map((ds) => (
-                <TableRow key={ds.id}>
-                  <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
-                  <TableCell>{ds.service?.name || "Unknown"}</TableCell>
-                  <TableCell>
-                    {ds.part ? (<Badge variant="outline">{ds.part.sku} (${ds.part.price})</Badge>) : (<span className="text-muted-foreground">-</span>)}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {deviceServices.map((ds) => {
+                const partCost = ds.part ? parseFloat(ds.part.price) : 0;
+                const laborPrice = parseFloat(ds.service?.laborPrice || "0");
+                const partsMarkup = parseFloat(ds.service?.partsMarkup || "1");
+                const markedUpPart = partCost * partsMarkup;
+                const rawTotal = laborPrice + markedUpPart;
+                const roundedToFive = Math.round(rawTotal / 5) * 5;
+                const totalPrice = Math.max(4, roundedToFive - 1);
+                return (
+                  <TableRow key={ds.id}>
+                    <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
+                    <TableCell>{ds.service?.name || "Unknown"}</TableCell>
+                    <TableCell>
+                      {ds.part ? (<Badge variant="outline">{ds.part.sku} (${ds.part.price})</Badge>) : (<span className="text-muted-foreground">-</span>)}
+                    </TableCell>
+                    <TableCell className="font-semibold text-primary">${totalPrice.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
