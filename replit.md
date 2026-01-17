@@ -6,6 +6,7 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added filtering to Devices tab - filter by brand or device type
 - **Jan 2026**: Added Excel (.xlsx) file upload for bulk parts import - columns: Product SKU, Product Name, Original Price
 - **Jan 2026**: Added search functionality to Parts tab - filter by SKU or name
 - **Jan 2026**: Added brand selection step to quote wizard (Type → Brand → Device → Service → Contact → Success)

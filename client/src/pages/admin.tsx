@@ -563,10 +563,21 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [name, setName] = useState("");
   const [deviceTypeId, setDeviceTypeId] = useState("");
   const [brandId, setBrandId] = useState("");
+  const [filterTypeId, setFilterTypeId] = useState("all");
+  const [filterBrandId, setFilterBrandId] = useState("all");
 
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+
+  const filteredDevices = devices.filter((device) => {
+    if (filterTypeId !== "all" && device.deviceTypeId !== filterTypeId) return false;
+    if (filterBrandId !== "all") {
+      if (filterBrandId === "none" && device.brandId !== null) return false;
+      if (filterBrandId !== "none" && device.brandId !== filterBrandId) return false;
+    }
+    return true;
+  });
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string }) => {
@@ -634,12 +645,13 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
-        <div>
-          <CardTitle>Devices</CardTitle>
-          <CardDescription>Manage specific device models</CardDescription>
-        </div>
-        <Dialog open={open} onOpenChange={setOpen}>
+      <CardHeader className="flex flex-col gap-4 space-y-0 pb-4">
+        <div className="flex flex-row items-center justify-between gap-4">
+          <div>
+            <CardTitle>Devices</CardTitle>
+            <CardDescription>Manage specific device models</CardDescription>
+          </div>
+          <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
             <Button data-testid="button-add-device"><Plus className="h-4 w-4 mr-2" />Add Device</Button>
           </DialogTrigger>
@@ -682,7 +694,6 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             </form>
           </DialogContent>
         </Dialog>
-
         <Dialog open={editOpen} onOpenChange={setEditOpen}>
           <DialogContent>
             <form onSubmit={handleEditSubmit}>
@@ -723,12 +734,34 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             </form>
           </DialogContent>
         </Dialog>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          <Select value={filterTypeId} onValueChange={setFilterTypeId}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-type">
+              <SelectValue placeholder="Filter by type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              {deviceTypes.map((type) => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+          <Select value={filterBrandId} onValueChange={setFilterBrandId}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-brand">
+              <SelectValue placeholder="Filter by brand" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Brands</SelectItem>
+              <SelectItem value="none">No Brand</SelectItem>
+              {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : devices.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">No devices yet. Add your first one!</p>
+        ) : filteredDevices.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">{devices.length === 0 ? "No devices yet. Add your first one!" : "No devices match your filters."}</p>
         ) : (
           <Table>
             <TableHeader>
@@ -740,7 +773,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               </TableRow>
             </TableHeader>
             <TableBody>
-              {devices.map((device) => (
+              {filteredDevices.map((device) => (
                 <TableRow key={device.id}>
                   <TableCell className="font-medium">{device.name}</TableCell>
                   <TableCell><Badge variant="secondary">{getTypeName(device.deviceTypeId)}</Badge></TableCell>
