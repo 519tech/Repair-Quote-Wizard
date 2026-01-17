@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -946,8 +946,52 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [sku, setSku] = useState("");
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [uploading, setUploading] = useState(false);
 
   const { data: parts = [], isLoading } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
+
+  const filteredParts = parts.filter(part => 
+    part.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    part.name.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.xlsx') && !file.name.endsWith('.xls')) {
+      toast({ title: "Error", description: "Please upload an Excel file (.xlsx or .xls)", variant: "destructive" });
+      return;
+    }
+
+    setUploading(true);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/api/parts/upload', {
+        method: 'POST',
+        body: formData,
+      });
+      const data = await res.json();
+      
+      if (res.ok) {
+        queryClient.invalidateQueries({ queryKey: ["/api/parts"] });
+        toast({ 
+          title: "Upload successful", 
+          description: `${data.inserted} new parts added, ${data.updated} parts updated` 
+        });
+      } else {
+        toast({ title: "Upload failed", description: data.error, variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Upload failed", description: error.message || "Failed to upload file", variant: "destructive" });
+    } finally {
+      setUploading(false);
+      e.target.value = '';
+    }
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: { sku: string; name: string; price: string }) => {
@@ -1012,15 +1056,42 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
         <div>
           <CardTitle>Parts</CardTitle>
           <CardDescription>Manage parts inventory with SKU and pricing</CardDescription>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Search SKU or name..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 w-[200px]"
+              data-testid="input-search-parts"
+            />
+          </div>
+          <label htmlFor="file-upload">
+            <Button variant="outline" asChild disabled={uploading}>
+              <span className="cursor-pointer">
+                {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                Upload Excel
+              </span>
+            </Button>
+          </label>
+          <input 
+            id="file-upload" 
+            type="file" 
+            accept=".xlsx,.xls" 
+            onChange={handleFileUpload}
+            className="hidden"
+            data-testid="input-upload-parts"
+          />
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
+            </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -1079,12 +1150,13 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : parts.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">No parts yet. Add your first one!</p>
+        ) : filteredParts.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">{searchQuery ? "No parts match your search" : "No parts yet. Add your first one!"}</p>
         ) : (
           <Table>
             <TableHeader>
@@ -1096,7 +1168,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {parts.map((part) => (
+              {filteredParts.map((part) => (
                 <TableRow key={part.id}>
                   <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
                   <TableCell className="font-medium">{part.name}</TableCell>

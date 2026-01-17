@@ -303,16 +303,37 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Excel file must have a header row and at least one data row" });
       }
 
+      const headerRow = rows[0];
+      if (!headerRow) {
+        return res.status(400).json({ error: "Missing header row" });
+      }
+
+      const headers = headerRow.map((h: any) => String(h || '').trim().toLowerCase());
+      
+      const skuIndex = headers.findIndex((h: string) => h === 'product sku' || h === 'sku');
+      const nameIndex = headers.findIndex((h: string) => h === 'product name' || h === 'name');
+      const priceIndex = headers.findIndex((h: string) => h === 'original price' || h === 'price');
+
+      if (skuIndex === -1) {
+        return res.status(400).json({ error: "Missing required column: 'Product SKU' or 'SKU'" });
+      }
+      if (nameIndex === -1) {
+        return res.status(400).json({ error: "Missing required column: 'Product Name' or 'Name'" });
+      }
+      if (priceIndex === -1) {
+        return res.status(400).json({ error: "Missing required column: 'Original Price' or 'Price'" });
+      }
+
       const partsToUpsert: { sku: string; name: string; price: string }[] = [];
       const errors: string[] = [];
 
       for (let i = 1; i < rows.length; i++) {
         const row = rows[i];
-        if (!row || row.length < 3) continue;
+        if (!row || row.length === 0) continue;
 
-        const sku = String(row[0] || '').trim();
-        const name = String(row[1] || '').trim();
-        const priceRaw = row[2];
+        const sku = String(row[skuIndex] || '').trim();
+        const name = String(row[nameIndex] || '').trim();
+        const priceRaw = row[priceIndex];
 
         if (!sku) {
           errors.push(`Row ${i + 1}: Missing SKU`);
