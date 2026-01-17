@@ -1631,7 +1631,7 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   });
 
   const defaults = {
-    email_subject: "Your Repair Quote: {serviceName} - ${price}",
+    email_subject: "Your Repair Quote: {serviceName} - ${price} plus taxes",
     email_body: `Dear {customerName},
 
 Thank you for requesting a repair quote from RepairQuote!
@@ -1640,7 +1640,7 @@ Here are your quote details:
 
 Device: {deviceName}
 Service: {serviceName}
-Estimated Price: $\{price}
+Estimated Price: $\{price} plus taxes
 {repairTime}
 {warranty}
 
@@ -1650,7 +1650,7 @@ Thank you for choosing RepairQuote!
 
 Best regards,
 The RepairQuote Team`,
-    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price}. {repairTime}. {warranty}. Reply for questions!"
+    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!"
   };
 
   useEffect(() => {

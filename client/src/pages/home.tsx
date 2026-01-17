@@ -30,7 +30,7 @@ export default function Home() {
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
   const [optInQuote, setOptInQuote] = useState(false);
-  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; repairTime?: string; warranty?: string } | null>(null);
+  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
   const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
@@ -139,6 +139,8 @@ export default function Home() {
         setQuoteResult({ 
           price: data.totalPrice, 
           serviceName: data.serviceName,
+          deviceName: data.deviceName,
+          serviceDescription: data.serviceDescription,
           repairTime: data.repairTime,
           warranty: data.warranty
         });
@@ -455,8 +457,13 @@ export default function Home() {
             </CardHeader>
             <CardContent>
               <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
-                <p className="text-sm text-muted-foreground mb-1">{quoteResult.serviceName}</p>
+                <p className="text-sm text-muted-foreground mb-1">{quoteResult.deviceName}</p>
+                <p className="font-medium mb-2">{quoteResult.serviceName}</p>
+                {quoteResult.serviceDescription && (
+                  <p className="text-sm text-muted-foreground mb-3">{quoteResult.serviceDescription}</p>
+                )}
                 <p className="text-4xl font-bold text-primary">${quoteResult.price}</p>
+                <p className="text-sm text-muted-foreground mt-1">plus taxes</p>
               </div>
               <div className="grid grid-cols-2 gap-4 mb-6">
                 {quoteResult.repairTime && (

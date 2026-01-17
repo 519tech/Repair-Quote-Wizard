@@ -22,7 +22,7 @@ function replaceMacros(template: string, data: QuoteSmsData): string {
     .replace(/\{warranty\}/g, data.warranty || '');
 }
 
-const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price}. {repairTime}. {warranty}. Reply for questions!";
+const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!";
 
 export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   const webhookUrl = process.env.ZAPIER_WEBHOOK_URL;

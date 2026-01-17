@@ -65,7 +65,7 @@ function replaceMacros(template: string, data: QuoteEmailData): string {
     .replace(/\{warranty\}/g, data.warranty ? `Warranty: ${data.warranty}` : '');
 }
 
-const defaultEmailSubject = "Your Repair Quote: {serviceName} - ${price}";
+const defaultEmailSubject = "Your Repair Quote: {serviceName} - ${price} plus taxes";
 const defaultEmailBody = `Dear {customerName},
 
 Thank you for requesting a repair quote from RepairQuote!
@@ -74,7 +74,7 @@ Here are your quote details:
 
 Device: {deviceName}
 Service: {serviceName}
-Estimated Price: ${"{price}"}
+Estimated Price: ${"{price}"} plus taxes
 {repairTime}
 {warranty}
 
