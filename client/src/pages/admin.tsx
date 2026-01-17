@@ -14,6 +14,7 @@ import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOu
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { ImageInput } from "@/components/ImageInput";
 import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand, BrandDeviceType, MessageTemplate } from "@shared/schema";
 
 export default function Admin() {
@@ -406,11 +407,12 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Brand | null>(null);
   const [name, setName] = useState("");
+  const [logo, setLogo] = useState("");
 
   const { data: brands = [], isLoading } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string }) => {
+    mutationFn: async (data: { name: string; logo?: string }) => {
       const res = await apiRequest("POST", "/api/brands", data);
       return res.json();
     },
@@ -418,6 +420,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
       setOpen(false);
       setName("");
+      setLogo("");
       toast({ title: "Brand created" });
     },
     onError: (error: Error) => {
@@ -426,7 +429,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; logo?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/brands/${id}`, data);
       return res.json();
     },
@@ -454,7 +457,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name });
+    createMutation.mutate({ name, logo: logo || undefined });
   };
 
   const handleEdit = (brand: Brand) => {
@@ -465,7 +468,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name } });
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, logo: editItem.logo } });
   };
 
   return (
@@ -490,6 +493,13 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                   <Label>Name</Label>
                   <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Apple" required data-testid="input-brand-name" />
                 </div>
+                <ImageInput
+                  value={logo}
+                  onChange={setLogo}
+                  label="Logo"
+                  placeholder="Enter logo URL"
+                  testIdPrefix="brand-logo"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-brand">
@@ -505,13 +515,20 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
             <form onSubmit={handleEditSubmit}>
               <DialogHeader>
                 <DialogTitle>Edit Brand</DialogTitle>
-                <DialogDescription>Update brand name</DialogDescription>
+                <DialogDescription>Update brand details</DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Name</Label>
                   <Input value={editItem?.name || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, name: e.target.value} : null)} required data-testid="input-edit-brand-name" />
                 </div>
+                <ImageInput
+                  value={editItem?.logo || ""}
+                  onChange={(url) => setEditItem(prev => prev ? {...prev, logo: url || null} : null)}
+                  label="Logo"
+                  placeholder="Enter logo URL"
+                  testIdPrefix="edit-brand-logo"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-brand">
@@ -531,6 +548,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[60px]">Logo</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
@@ -538,6 +556,13 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
             <TableBody>
               {brands.map((brand) => (
                 <TableRow key={brand.id}>
+                  <TableCell>
+                    {brand.logo ? (
+                      <img src={brand.logo} alt={brand.name} className="h-8 w-8 object-contain rounded" />
+                    ) : (
+                      <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">-</div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{brand.name}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
