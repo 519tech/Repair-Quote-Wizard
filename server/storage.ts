@@ -285,7 +285,12 @@ export class DatabaseStorage implements IStorage {
   async getDeviceServices(): Promise<DeviceServiceWithRelations[]> {
     const results = await db.query.deviceServices.findMany({
       with: {
-        device: true,
+        device: {
+          with: {
+            deviceType: true,
+            brand: true,
+          },
+        },
         service: true,
         part: true,
       },
@@ -297,7 +302,12 @@ export class DatabaseStorage implements IStorage {
     const results = await db.query.deviceServices.findMany({
       where: eq(deviceServices.deviceId, deviceId),
       with: {
-        device: true,
+        device: {
+          with: {
+            deviceType: true,
+            brand: true,
+          },
+        },
         service: true,
         part: true,
       },

@@ -178,7 +178,7 @@ export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
 export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };
 export type DeviceServiceWithRelations = DeviceService & { 
-  device: Device; 
+  device: Device & { deviceType?: DeviceType; brand?: Brand | null }; 
   service: Service; 
   part: Part | null;
 };

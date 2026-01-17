@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1428,10 +1428,51 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editPartSku, setEditPartSku] = useState("");
   const [editPartSearch, setEditPartSearch] = useState("");
 
+  const [filterBrand, setFilterBrand] = useState<string>("all");
+  const [filterDevice, setFilterDevice] = useState<string>("all");
+  const [filterService, setFilterService] = useState<string>("all");
+
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null);
+  const [inlineEditSku, setInlineEditSku] = useState("");
+
   const { data: deviceServices = [], isLoading } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: parts = [] } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
+  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+
+  const uniqueBrands = useMemo(() => {
+    const brandSet = new Set<string>();
+    deviceServices.forEach(ds => {
+      if (ds.device?.brand?.name) brandSet.add(ds.device.brand.name);
+    });
+    return Array.from(brandSet).sort();
+  }, [deviceServices]);
+
+  const uniqueDevices = useMemo(() => {
+    const deviceSet = new Set<string>();
+    deviceServices.forEach(ds => {
+      if (ds.device?.name) deviceSet.add(ds.device.name);
+    });
+    return Array.from(deviceSet).sort();
+  }, [deviceServices]);
+
+  const uniqueServices = useMemo(() => {
+    const serviceSet = new Set<string>();
+    deviceServices.forEach(ds => {
+      if (ds.service?.name) serviceSet.add(ds.service.name);
+    });
+    return Array.from(serviceSet).sort();
+  }, [deviceServices]);
+
+  const filteredDeviceServices = useMemo(() => {
+    return deviceServices.filter(ds => {
+      if (filterBrand !== "all" && ds.device?.brand?.name !== filterBrand) return false;
+      if (filterDevice !== "all" && ds.device?.name !== filterDevice) return false;
+      if (filterService !== "all" && ds.service?.name !== filterService) return false;
+      return true;
+    });
+  }, [deviceServices, filterBrand, filterDevice, filterService]);
 
   const filteredParts = useMemo(() => 
     parts.filter(p => 
@@ -1448,6 +1489,10 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const editSkuPart = useMemo(() => 
     parts.find(p => p.sku.toLowerCase() === editPartSku.toLowerCase()), 
     [parts, editPartSku]);
+
+  const inlineSkuPart = useMemo(() => 
+    parts.find(p => p.sku.toLowerCase() === inlineEditSku.toLowerCase()), 
+    [parts, inlineEditSku]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
@@ -1497,6 +1542,36 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  const inlineUpdateMutation = useMutation({
+    mutationFn: async ({ id, partSku }: { id: string; partSku: string }) => {
+      const res = await apiRequest("PATCH", `/api/device-services/${id}`, { partSku: partSku || undefined });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      setInlineEditId(null);
+      setInlineEditSku("");
+      toast({ title: "SKU updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleInlineEdit = (ds: DeviceServiceWithRelations) => {
+    setInlineEditId(ds.id);
+    setInlineEditSku(ds.part?.sku || "");
+  };
+
+  const handleInlineSave = (id: string) => {
+    inlineUpdateMutation.mutate({ id, partSku: inlineEditSku });
+  };
+
+  const handleInlineCancel = () => {
+    setInlineEditId(null);
+    setInlineEditSku("");
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1689,49 +1764,172 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         </Dialog>
       </CardHeader>
       <CardContent>
+        <div className="flex flex-wrap gap-3 mb-4 items-end">
+          <div className="flex items-center gap-2">
+            <Filter className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground">Filters:</span>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Brand</Label>
+            <Select value={filterBrand} onValueChange={setFilterBrand}>
+              <SelectTrigger className="w-[140px]" data-testid="filter-brand">
+                <SelectValue placeholder="All Brands" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Brands</SelectItem>
+                {uniqueBrands.map((brand) => (
+                  <SelectItem key={brand} value={brand}>{brand}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Device</Label>
+            <Select value={filterDevice} onValueChange={setFilterDevice}>
+              <SelectTrigger className="w-[160px]" data-testid="filter-device">
+                <SelectValue placeholder="All Devices" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Devices</SelectItem>
+                {uniqueDevices.map((device) => (
+                  <SelectItem key={device} value={device}>{device}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs">Service</Label>
+            <Select value={filterService} onValueChange={setFilterService}>
+              <SelectTrigger className="w-[180px]" data-testid="filter-service">
+                <SelectValue placeholder="All Services" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Services</SelectItem>
+                {uniqueServices.map((service) => (
+                  <SelectItem key={service} value={service}>{service}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          {(filterBrand !== "all" || filterDevice !== "all" || filterService !== "all") && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={() => { setFilterBrand("all"); setFilterDevice("all"); setFilterService("all"); }}
+              data-testid="button-clear-filters"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Clear
+            </Button>
+          )}
+        </div>
+
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
         ) : deviceServices.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No links yet. Create one to offer services!</p>
+        ) : filteredDeviceServices.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">No results match your filters.</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Device</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Part</TableHead>
-                <TableHead>Total Price</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {deviceServices.map((ds) => {
-                const partCost = ds.part ? parseFloat(ds.part.price) : 0;
-                const laborPrice = parseFloat(ds.service?.laborPrice || "0");
-                const partsMarkup = parseFloat(ds.service?.partsMarkup || "1");
-                const markedUpPart = partCost * partsMarkup;
-                const rawTotal = laborPrice + markedUpPart;
-                const roundedToFive = Math.round(rawTotal / 5) * 5;
-                const totalPrice = Math.max(4, roundedToFive - 1);
-                return (
-                  <TableRow key={ds.id}>
-                    <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
-                    <TableCell>{ds.service?.name || "Unknown"}</TableCell>
-                    <TableCell>
-                      {ds.part ? (<Badge variant="outline">{ds.part.sku} (${ds.part.price})</Badge>) : (<span className="text-muted-foreground">-</span>)}
-                    </TableCell>
-                    <TableCell className="font-semibold text-primary">${totalPrice.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
+          <div className="border rounded-md overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow className="bg-muted/50">
+                  <TableHead className="font-semibold">Device Type</TableHead>
+                  <TableHead className="font-semibold">Brand</TableHead>
+                  <TableHead className="font-semibold">Device Model</TableHead>
+                  <TableHead className="font-semibold">Service</TableHead>
+                  <TableHead className="font-semibold">Part SKU</TableHead>
+                  <TableHead className="font-semibold text-right">Total Price</TableHead>
+                  <TableHead className="w-[100px] font-semibold">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredDeviceServices.map((ds) => {
+                  const partCost = ds.part ? parseFloat(ds.part.price) : 0;
+                  const laborPrice = parseFloat(ds.service?.laborPrice || "0");
+                  const partsMarkup = parseFloat(ds.service?.partsMarkup || "1");
+                  const markedUpPart = partCost * partsMarkup;
+                  const rawTotal = laborPrice + markedUpPart;
+                  const roundedToFive = Math.round(rawTotal / 5) * 5;
+                  const totalPrice = Math.max(4, roundedToFive - 1);
+                  const isEditing = inlineEditId === ds.id;
+                  
+                  return (
+                    <TableRow key={ds.id} className="hover:bg-muted/30">
+                      <TableCell className="text-muted-foreground">{ds.device?.deviceType?.name || "-"}</TableCell>
+                      <TableCell className="text-muted-foreground">{ds.device?.brand?.name || "-"}</TableCell>
+                      <TableCell className="font-medium">{ds.device?.name || "Unknown"}</TableCell>
+                      <TableCell>{ds.service?.name || "Unknown"}</TableCell>
+                      <TableCell>
+                        {isEditing ? (
+                          <div className="flex items-center gap-1">
+                            <Input 
+                              value={inlineEditSku} 
+                              onChange={(e) => setInlineEditSku(e.target.value)} 
+                              className="h-8 w-32"
+                              placeholder="Enter SKU"
+                              autoFocus
+                              data-testid={`input-inline-sku-${ds.id}`}
+                            />
+                            {inlineEditSku && inlineSkuPart && (
+                              <span className="text-xs text-green-600">${inlineSkuPart.price}</span>
+                            )}
+                            {inlineEditSku && !inlineSkuPart && inlineEditSku.length > 0 && (
+                              <span className="text-xs text-destructive">?</span>
+                            )}
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={() => handleInlineSave(ds.id)}
+                              disabled={inlineUpdateMutation.isPending || (inlineEditSku.length > 0 && !inlineSkuPart)}
+                              data-testid={`button-inline-save-${ds.id}`}
+                            >
+                              {inlineUpdateMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3 text-green-600" />}
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={handleInlineCancel}
+                              data-testid={`button-inline-cancel-${ds.id}`}
+                            >
+                              <X className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                        ) : (
+                          <div 
+                            className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[80px] min-h-[28px] flex items-center"
+                            onClick={() => handleInlineEdit(ds)}
+                            data-testid={`cell-sku-${ds.id}`}
+                          >
+                            {ds.part ? (
+                              <Badge variant="outline" className="font-mono">{ds.part.sku}</Badge>
+                            ) : (
+                              <span className="text-muted-foreground text-sm italic">Click to add</span>
+                            )}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="font-semibold text-primary text-right">${totalPrice.toFixed(2)}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </div>
+        )}
+        {filteredDeviceServices.length > 0 && (
+          <p className="text-sm text-muted-foreground mt-2">
+            Showing {filteredDeviceServices.length} of {deviceServices.length} links
+          </p>
         )}
       </CardContent>
     </Card>

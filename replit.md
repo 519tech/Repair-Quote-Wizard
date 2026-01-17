@@ -6,6 +6,9 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added spreadsheet-style Service Links tab with columns: Device Type, Brand, Device Model, Service, Part SKU, Total Price, Actions
+- **Jan 2026**: Added inline SKU editing - click on any Part SKU cell to edit directly
+- **Jan 2026**: Added filtering by Brand, Device, or Service in Service Links tab
 - **Jan 2026**: Added embeddable quote widget at /embed - can be embedded via iframe on external websites
 - **Jan 2026**: Added password protection to admin panel - requires ADMIN_PASSWORD to access
 - **Jan 2026**: Added Settings tab in admin panel to customize email and SMS message templates with macros
