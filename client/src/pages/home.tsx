@@ -1,0 +1,386 @@
+import { useState } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { DeviceType, Device, DeviceServiceWithRelations } from "@shared/schema";
+
+const iconMap: Record<string, typeof Smartphone> = {
+  smartphone: Smartphone,
+  tablet: Tablet,
+  laptop: Laptop,
+  desktop: Monitor,
+  gaming: Gamepad2,
+  watch: Watch,
+  headphones: Headphones,
+  camera: Camera,
+};
+
+export default function Home() {
+  const { toast } = useToast();
+  const [step, setStep] = useState(1);
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
+  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string } | null>(null);
+
+  const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
+    queryKey: ["/api/device-types"],
+  });
+
+  const { data: devices = [], isLoading: devicesLoading } = useQuery<Device[]>({
+    queryKey: ["/api/devices", selectedTypeId],
+    enabled: !!selectedTypeId,
+  });
+
+  const { data: deviceServices = [], isLoading: servicesLoading } = useQuery<DeviceServiceWithRelations[]>({
+    queryKey: ["/api/device-services", selectedDeviceId],
+    enabled: !!selectedDeviceId,
+  });
+
+  const submitQuoteMutation = useMutation({
+    mutationFn: async (data: {
+      customerName: string;
+      customerEmail: string;
+      customerPhone?: string;
+      deviceId: string;
+      deviceServiceId: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/quote-requests", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quote-requests"] });
+      toast({
+        title: "Quote Request Submitted",
+        description: "We'll be in touch soon!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTypeSelect = (typeId: string) => {
+    setSelectedTypeId(typeId);
+    setSelectedDeviceId(null);
+    setSelectedServiceId(null);
+    setStep(2);
+  };
+
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    setSelectedServiceId(null);
+    setStep(3);
+  };
+
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  const handleServiceSelect = async (service: DeviceServiceWithRelations) => {
+    setSelectedServiceId(service.id);
+    setQuoteLoading(true);
+    try {
+      const res = await fetch(`/api/calculate-quote/${service.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setQuoteResult({ price: data.totalPrice, serviceName: data.serviceName });
+        setStep(4);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to calculate quote. Please try again.",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "Failed to calculate quote. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
+
+  const handleContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDeviceId || !selectedServiceId || !quoteResult) return;
+
+    submitQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceId: selectedServiceId,
+    });
+    setStep(5);
+  };
+
+  const resetForm = () => {
+    setStep(1);
+    setSelectedTypeId(null);
+    setSelectedDeviceId(null);
+    setSelectedServiceId(null);
+    setContactInfo({ name: "", email: "", phone: "" });
+    setQuoteResult(null);
+  };
+
+  const filteredDevices = devices.filter((d) => d.deviceTypeId === selectedTypeId);
+
+  return (
+    <div className="min-h-screen bg-background">
+      <header className="border-b bg-card">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Wrench className="h-6 w-6 text-primary" />
+            <span className="text-xl font-semibold">RepairQuote</span>
+          </div>
+          <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-admin">
+            Admin
+          </a>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-8 max-w-3xl">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-bold mb-2">Get Your Repair Quote</h1>
+          <p className="text-muted-foreground">Fast, transparent pricing for device repairs</p>
+        </div>
+
+        <div className="flex items-center justify-center mb-8 gap-2">
+          {[1, 2, 3, 4, 5].map((s) => (
+            <div key={s} className="flex items-center gap-2">
+              <div
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                  step >= s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                }`}
+              >
+                {step > s ? <Check className="h-4 w-4" /> : s}
+              </div>
+              {s < 5 && <div className={`w-8 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
+            </div>
+          ))}
+        </div>
+
+        {step === 1 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Device Type</CardTitle>
+              <CardDescription>What type of device needs repair?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {typesLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : deviceTypes.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No device types available. Please contact admin.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {deviceTypes.map((type) => {
+                    const Icon = iconMap[type.icon] || Smartphone;
+                    return (
+                      <Button
+                        key={type.id}
+                        variant="outline"
+                        className="h-24 flex-col gap-2 hover-elevate"
+                        onClick={() => handleTypeSelect(type.id)}
+                        data-testid={`button-type-${type.id}`}
+                      >
+                        <Icon className="h-6 w-6" />
+                        <span>{type.name}</span>
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 2 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Your Device</CardTitle>
+              <CardDescription>Choose your specific model</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="ghost" className="mb-4" onClick={() => setStep(1)} data-testid="button-back-step1">
+                Back to device types
+              </Button>
+              {devicesLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredDevices.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No devices available for this type.</p>
+              ) : (
+                <div className="space-y-2">
+                  {filteredDevices.map((device) => (
+                    <Button
+                      key={device.id}
+                      variant="outline"
+                      className="w-full justify-between hover-elevate"
+                      onClick={() => handleDeviceSelect(device.id)}
+                      data-testid={`button-device-${device.id}`}
+                    >
+                      <span>{device.name}</span>
+                      <ChevronRight className="h-4 w-4" />
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Service</CardTitle>
+              <CardDescription>What issue needs to be fixed?</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="ghost" className="mb-4" onClick={() => setStep(2)} data-testid="button-back-step2">
+                Back to devices
+              </Button>
+              {servicesLoading || quoteLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : deviceServices.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
+              ) : (
+                <div className="space-y-2">
+                  {deviceServices.map((ds) => {
+                    const partPrice = ds.part ? parseFloat(ds.part.price) : 0;
+                    const laborPrice = parseFloat(ds.laborPrice);
+                    const totalPrice = (partPrice + laborPrice).toFixed(2);
+                    return (
+                      <Button
+                        key={ds.id}
+                        variant="outline"
+                        className="w-full justify-between hover-elevate"
+                        onClick={() => handleServiceSelect(ds)}
+                        disabled={quoteLoading}
+                        data-testid={`button-service-${ds.id}`}
+                      >
+                        <div className="text-left">
+                          <div className="font-medium">{ds.service.name}</div>
+                          {ds.service.description && (
+                            <div className="text-xs text-muted-foreground">{ds.service.description}</div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold text-primary">${totalPrice}</div>
+                        </div>
+                      </Button>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 4 && quoteResult && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Quote</CardTitle>
+              <CardDescription>Enter your contact information to receive your quote</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
+                <p className="text-sm text-muted-foreground mb-1">{quoteResult.serviceName}</p>
+                <p className="text-4xl font-bold text-primary">${quoteResult.price}</p>
+              </div>
+              <form onSubmit={handleContactSubmit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="name">Name *</Label>
+                  <Input
+                    id="name"
+                    value={contactInfo.name}
+                    onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                    required
+                    data-testid="input-name"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={contactInfo.email}
+                    onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                    required
+                    data-testid="input-email"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="phone">Phone (optional)</Label>
+                  <Input
+                    id="phone"
+                    type="tel"
+                    value={contactInfo.phone}
+                    onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                    data-testid="input-phone"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(3)} data-testid="button-back-step3">
+                    Back
+                  </Button>
+                  <Button
+                    type="submit"
+                    className="flex-1"
+                    disabled={submitQuoteMutation.isPending}
+                    data-testid="button-submit-quote"
+                  >
+                    {submitQuoteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Get Quote"
+                    )}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 5 && quoteResult && (
+          <Card>
+            <CardHeader className="text-center">
+              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                <Check className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle>Quote Request Submitted!</CardTitle>
+              <CardDescription>We've received your request and will be in touch soon</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-muted rounded-lg p-6 mb-6 text-center">
+                <p className="text-sm text-muted-foreground mb-1">Your estimated repair cost</p>
+                <p className="text-4xl font-bold">${quoteResult.price}</p>
+                <p className="text-sm text-muted-foreground mt-2">{quoteResult.serviceName}</p>
+              </div>
+              <Button className="w-full" onClick={resetForm} data-testid="button-new-quote">
+                Get Another Quote
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </main>
+    </div>
+  );
+}
