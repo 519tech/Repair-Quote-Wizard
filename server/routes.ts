@@ -10,6 +10,7 @@ import {
   insertQuoteRequestSchema,
   insertBrandSchema,
   insertBrandDeviceTypeSchema,
+  insertMessageTemplateSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -641,6 +642,38 @@ export async function registerRoutes(
       res.status(201).json(quote);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create quote request" });
+    }
+  });
+
+  // Message Templates
+  app.get("/api/message-templates", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      res.json(templates);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch message templates" });
+    }
+  });
+
+  app.get("/api/message-templates/:type", async (req, res) => {
+    try {
+      const template = await storage.getMessageTemplate(req.params.type);
+      if (!template) {
+        return res.status(404).json({ error: "Template not found" });
+      }
+      res.json(template);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch message template" });
+    }
+  });
+
+  app.put("/api/message-templates", async (req, res) => {
+    try {
+      const data = insertMessageTemplateSchema.parse(req.body);
+      const template = await storage.upsertMessageTemplate(data);
+      res.json(template);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to update message template" });
     }
   });
 
