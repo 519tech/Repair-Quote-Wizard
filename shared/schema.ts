@@ -139,8 +139,8 @@ export const quoteRequests = pgTable("quote_requests", {
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
-  deviceId: varchar("device_id").notNull().references(() => devices.id),
-  deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id),
+  deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
   quotedPrice: decimal("quoted_price", { precision: 10, scale: 2 }).notNull(),
   createdAt: text("created_at").notNull().default(sql`now()`),
 });

@@ -58,8 +58,9 @@ export async function registerRoutes(
     try {
       await storage.deleteDeviceType(req.params.id);
       res.status(204).send();
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete device type" });
+    } catch (error: any) {
+      console.error("Delete device type error:", error);
+      res.status(500).json({ error: error.message || "Failed to delete device type" });
     }
   });
 
