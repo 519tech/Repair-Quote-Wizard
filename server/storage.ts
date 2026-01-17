@@ -5,6 +5,8 @@ import {
   services,
   deviceServices,
   quoteRequests,
+  brands,
+  brandDeviceTypes,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -18,9 +20,14 @@ import {
   type QuoteRequest,
   type InsertQuoteRequest,
   type DeviceServiceWithRelations,
+  type Brand,
+  type InsertBrand,
+  type BrandDeviceType,
+  type InsertBrandDeviceType,
+  type BrandDeviceTypeWithRelations,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 export interface IStorage {
   // Device Types
@@ -30,9 +37,23 @@ export interface IStorage {
   updateDeviceType(id: string, data: Partial<InsertDeviceType>): Promise<DeviceType | undefined>;
   deleteDeviceType(id: string): Promise<void>;
 
+  // Brands
+  getBrands(): Promise<Brand[]>;
+  getBrand(id: string): Promise<Brand | undefined>;
+  createBrand(data: InsertBrand): Promise<Brand>;
+  updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined>;
+  deleteBrand(id: string): Promise<void>;
+
+  // Brand-DeviceType Links
+  getBrandDeviceTypes(): Promise<BrandDeviceTypeWithRelations[]>;
+  getBrandsByDeviceType(deviceTypeId: string): Promise<Brand[]>;
+  createBrandDeviceType(data: InsertBrandDeviceType): Promise<BrandDeviceType>;
+  deleteBrandDeviceType(id: string): Promise<void>;
+
   // Devices
   getDevices(): Promise<Device[]>;
   getDevicesByType(typeId: string): Promise<Device[]>;
+  getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]>;
   getDevice(id: string): Promise<Device | undefined>;
   createDevice(data: InsertDevice): Promise<Device>;
   updateDevice(id: string, data: Partial<InsertDevice>): Promise<Device | undefined>;
@@ -92,6 +113,60 @@ export class DatabaseStorage implements IStorage {
     await db.delete(deviceTypes).where(eq(deviceTypes.id, id));
   }
 
+  // Brands
+  async getBrands(): Promise<Brand[]> {
+    return db.select().from(brands);
+  }
+
+  async getBrand(id: string): Promise<Brand | undefined> {
+    const [brand] = await db.select().from(brands).where(eq(brands.id, id));
+    return brand || undefined;
+  }
+
+  async createBrand(data: InsertBrand): Promise<Brand> {
+    const [brand] = await db.insert(brands).values(data).returning();
+    return brand;
+  }
+
+  async updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined> {
+    const [brand] = await db.update(brands).set(data).where(eq(brands.id, id)).returning();
+    return brand || undefined;
+  }
+
+  async deleteBrand(id: string): Promise<void> {
+    await db.delete(brands).where(eq(brands.id, id));
+  }
+
+  // Brand-DeviceType Links
+  async getBrandDeviceTypes(): Promise<BrandDeviceTypeWithRelations[]> {
+    const results = await db.query.brandDeviceTypes.findMany({
+      with: {
+        brand: true,
+        deviceType: true,
+      },
+    });
+    return results;
+  }
+
+  async getBrandsByDeviceType(deviceTypeId: string): Promise<Brand[]> {
+    const links = await db.query.brandDeviceTypes.findMany({
+      where: eq(brandDeviceTypes.deviceTypeId, deviceTypeId),
+      with: {
+        brand: true,
+      },
+    });
+    return links.map((link) => link.brand);
+  }
+
+  async createBrandDeviceType(data: InsertBrandDeviceType): Promise<BrandDeviceType> {
+    const [link] = await db.insert(brandDeviceTypes).values(data).returning();
+    return link;
+  }
+
+  async deleteBrandDeviceType(id: string): Promise<void> {
+    await db.delete(brandDeviceTypes).where(eq(brandDeviceTypes.id, id));
+  }
+
   // Devices
   async getDevices(): Promise<Device[]> {
     return db.select().from(devices);
@@ -99,6 +174,12 @@ export class DatabaseStorage implements IStorage {
 
   async getDevicesByType(typeId: string): Promise<Device[]> {
     return db.select().from(devices).where(eq(devices.deviceTypeId, typeId));
+  }
+
+  async getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]> {
+    return db.select().from(devices).where(
+      and(eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId))
+    );
   }
 
   async getDevice(id: string): Promise<Device | undefined> {

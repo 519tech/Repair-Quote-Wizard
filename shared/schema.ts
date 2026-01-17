@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -12,23 +12,67 @@ export const deviceTypes = pgTable("device_types", {
 
 export const deviceTypesRelations = relations(deviceTypes, ({ many }) => ({
   devices: many(devices),
+  brandDeviceTypes: many(brandDeviceTypes),
 }));
 
 export const insertDeviceTypeSchema = createInsertSchema(deviceTypes).omit({ id: true });
 export type InsertDeviceType = z.infer<typeof insertDeviceTypeSchema>;
 export type DeviceType = typeof deviceTypes.$inferSelect;
 
+// Brands (Apple, Samsung, Google, Dell, etc.)
+export const brands = pgTable("brands", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull().unique(),
+  logo: text("logo"),
+});
+
+export const brandsRelations = relations(brands, ({ many }) => ({
+  devices: many(devices),
+  brandDeviceTypes: many(brandDeviceTypes),
+}));
+
+export const insertBrandSchema = createInsertSchema(brands).omit({ id: true });
+export type InsertBrand = z.infer<typeof insertBrandSchema>;
+export type Brand = typeof brands.$inferSelect;
+
+// Brand-DeviceType linking (which brands make which device types)
+export const brandDeviceTypes = pgTable("brand_device_types", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId: varchar("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
+  deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
+});
+
+export const brandDeviceTypesRelations = relations(brandDeviceTypes, ({ one }) => ({
+  brand: one(brands, {
+    fields: [brandDeviceTypes.brandId],
+    references: [brands.id],
+  }),
+  deviceType: one(deviceTypes, {
+    fields: [brandDeviceTypes.deviceTypeId],
+    references: [deviceTypes.id],
+  }),
+}));
+
+export const insertBrandDeviceTypeSchema = createInsertSchema(brandDeviceTypes).omit({ id: true });
+export type InsertBrandDeviceType = z.infer<typeof insertBrandDeviceTypeSchema>;
+export type BrandDeviceType = typeof brandDeviceTypes.$inferSelect;
+
 // Devices (iPhone 15, Samsung Galaxy S24, MacBook Pro, etc.)
 export const devices = pgTable("devices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
+  brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
 });
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({
   deviceType: one(deviceTypes, {
     fields: [devices.deviceTypeId],
     references: [deviceTypes.id],
+  }),
+  brand: one(brands, {
+    fields: [devices.brandId],
+    references: [brands.id],
   }),
   deviceServices: many(deviceServices),
 }));
@@ -117,7 +161,8 @@ export type InsertQuoteRequest = z.infer<typeof insertQuoteRequestSchema>;
 export type QuoteRequest = typeof quoteRequests.$inferSelect;
 
 // Extended types for frontend with relations
-export type DeviceWithType = Device & { deviceType: DeviceType };
+export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
+export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };
 export type DeviceServiceWithRelations = DeviceService & { 
   device: Device; 
   service: Service; 
