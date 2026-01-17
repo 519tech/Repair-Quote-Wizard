@@ -1303,6 +1303,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [partSku, setPartSku] = useState("");
   const [partSearch, setPartSearch] = useState("");
   const [partId, setPartId] = useState<string | undefined>();
+  const [editPartSku, setEditPartSku] = useState("");
+  const [editPartSearch, setEditPartSearch] = useState("");
 
   const { data: deviceServices = [], isLoading } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
@@ -1314,6 +1316,16 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       p.sku.toLowerCase().includes(partSearch.toLowerCase()) ||
       p.name.toLowerCase().includes(partSearch.toLowerCase())
     ), [parts, partSearch]);
+
+  const editFilteredParts = useMemo(() => 
+    parts.filter(p => 
+      p.sku.toLowerCase().includes(editPartSearch.toLowerCase()) ||
+      p.name.toLowerCase().includes(editPartSearch.toLowerCase())
+    ), [parts, editPartSearch]);
+
+  const editSkuPart = useMemo(() => 
+    parts.find(p => p.sku.toLowerCase() === editPartSku.toLowerCase()), 
+    [parts, editPartSku]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
@@ -1344,6 +1356,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
       setEditOpen(false);
       setEditItem(null);
+      setEditPartSku("");
+      setEditPartSearch("");
       toast({ title: "Link updated" });
     },
     onError: (error: Error) => {
@@ -1374,6 +1388,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
 
   const handleEdit = (ds: DeviceServiceWithRelations) => {
     setEditItem(ds);
+    setEditPartSku(ds.part?.sku || "");
+    setEditPartSearch("");
     setEditOpen(true);
   };
 
@@ -1385,6 +1401,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       data: {
         deviceId: editItem.deviceId,
         serviceId: editItem.serviceId,
+        partSku: editPartSku || undefined,
         partId: editItem.partId || undefined,
       },
     });
@@ -1441,14 +1458,20 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                 </div>
                 <div className="space-y-2">
                   <Label>Or Search Part by Name</Label>
-                  <Input value={partSearch} onChange={(e) => setPartSearch(e.target.value)} placeholder="Search parts..." data-testid="input-part-search-link" />
-                  <Select value={partId} onValueChange={(v) => { setPartId(v); setPartSku(""); }}>
-                    <SelectTrigger data-testid="select-link-part"><SelectValue placeholder="Select part (optional)" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No part required</SelectItem>
-                      {filteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <Input value={partSearch} onChange={(e) => setPartSearch(e.target.value)} placeholder="Type to search parts..." data-testid="input-part-search-link" />
+                  {partSearch.length > 0 && (
+                    <Select value={partId} onValueChange={(v) => { setPartId(v); setPartSku(""); }}>
+                      <SelectTrigger data-testid="select-link-part"><SelectValue placeholder="Select from results" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No part required</SelectItem>
+                        {filteredParts.slice(0, 50).map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                        {filteredParts.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results...</p>}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {partSearch.length === 0 && !partSku && (
+                    <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
+                  )}
                   {selectedPart && <p className="text-sm text-muted-foreground">Part cost ${selectedPart.price} will be marked up per service settings</p>}
                 </div>
               </div>
@@ -1488,14 +1511,50 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Part</Label>
-                  <Select value={editItem?.partId || "none"} onValueChange={(v) => setEditItem(prev => prev ? {...prev, partId: v === "none" ? null : v} : null)}>
-                    <SelectTrigger><SelectValue placeholder="No part required" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">No part required</SelectItem>
-                      {parts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Part SKU (optional)</Label>
+                  <Input 
+                    value={editPartSku} 
+                    onChange={(e) => { 
+                      setEditPartSku(e.target.value); 
+                      setEditItem(prev => prev ? {...prev, partId: null} : null); 
+                    }} 
+                    placeholder="Enter SKU to auto-lookup" 
+                    data-testid="input-edit-part-sku" 
+                  />
+                  {editPartSku && editSkuPart && (
+                    <p className="text-sm text-green-600">Found: {editSkuPart.name} (${editSkuPart.price})</p>
+                  )}
+                  {editPartSku && !editSkuPart && editPartSku.length > 0 && (
+                    <p className="text-sm text-destructive">SKU not found</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Or Search Part by Name</Label>
+                  <Input 
+                    value={editPartSearch} 
+                    onChange={(e) => setEditPartSearch(e.target.value)} 
+                    placeholder="Type to search parts..." 
+                    data-testid="input-edit-part-search" 
+                  />
+                  {editPartSearch.length > 0 && (
+                    <Select 
+                      value={editItem?.partId || "none"} 
+                      onValueChange={(v) => { 
+                        setEditItem(prev => prev ? {...prev, partId: v === "none" ? null : v} : null); 
+                        setEditPartSku(""); 
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No part required</SelectItem>
+                        {editFilteredParts.slice(0, 50).map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                        {editFilteredParts.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results...</p>}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  {editPartSearch.length === 0 && !editPartSku && (
+                    <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
+                  )}
                 </div>
               </div>
               <DialogFooter>
