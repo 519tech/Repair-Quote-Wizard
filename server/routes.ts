@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import {
@@ -17,6 +17,14 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { sendQuoteEmail } from "./gmail";
 import { sendQuoteSms } from "./sms";
+
+// Admin authentication middleware
+function requireAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdmin) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  next();
+}
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -38,6 +46,41 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Admin authentication endpoints
+  app.post("/api/admin/login", async (req, res) => {
+    try {
+      const { password } = req.body;
+      const adminPassword = process.env.ADMIN_PASSWORD;
+      
+      if (!adminPassword) {
+        return res.status(500).json({ error: "Admin password not configured" });
+      }
+      
+      if (password === adminPassword) {
+        req.session.isAdmin = true;
+        res.json({ success: true });
+      } else {
+        res.status(401).json({ error: "Invalid password" });
+      }
+    } catch (error) {
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
+
+  app.post("/api/admin/logout", (req, res) => {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).json({ error: "Logout failed" });
+      }
+      res.clearCookie("connect.sid");
+      res.json({ success: true });
+    });
+  });
+
+  app.get("/api/admin/me", (req, res) => {
+    res.json({ isAdmin: req.session?.isAdmin === true });
+  });
+
   // Device Types
   app.get("/api/device-types", async (req, res) => {
     try {
@@ -48,7 +91,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/device-types", async (req, res) => {
+  app.post("/api/device-types", requireAdmin, async (req, res) => {
     try {
       const data = insertDeviceTypeSchema.parse(req.body);
       const type = await storage.createDeviceType(data);
@@ -62,7 +105,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/device-types/:id", async (req, res) => {
+  app.patch("/api/device-types/:id", requireAdmin, async (req, res) => {
     try {
       const data = insertDeviceTypeSchema.partial().parse(req.body);
       const type = await storage.updateDeviceType(req.params.id, data);
@@ -75,7 +118,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/device-types/:id", async (req, res) => {
+  app.delete("/api/device-types/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteDeviceType(req.params.id);
       res.status(204).send();
@@ -104,7 +147,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/brands", async (req, res) => {
+  app.post("/api/brands", requireAdmin, async (req, res) => {
     try {
       const data = insertBrandSchema.parse(req.body);
       const brand = await storage.createBrand(data);
@@ -118,7 +161,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/brands/:id", async (req, res) => {
+  app.patch("/api/brands/:id", requireAdmin, async (req, res) => {
     try {
       const data = insertBrandSchema.partial().parse(req.body);
       const brand = await storage.updateBrand(req.params.id, data);
@@ -131,7 +174,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/brands/:id", async (req, res) => {
+  app.delete("/api/brands/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteBrand(req.params.id);
       res.status(204).send();
@@ -150,7 +193,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/brand-device-types", async (req, res) => {
+  app.post("/api/brand-device-types", requireAdmin, async (req, res) => {
     try {
       const data = insertBrandDeviceTypeSchema.parse(req.body);
       const link = await storage.createBrandDeviceType(data);
@@ -160,7 +203,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/brand-device-types/:id", async (req, res) => {
+  app.delete("/api/brand-device-types/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteBrandDeviceType(req.params.id);
       res.status(204).send();
@@ -197,7 +240,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/devices", async (req, res) => {
+  app.post("/api/devices", requireAdmin, async (req, res) => {
     try {
       const data = insertDeviceSchema.parse(req.body);
       const device = await storage.createDevice(data);
@@ -207,7 +250,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/devices/:id", async (req, res) => {
+  app.patch("/api/devices/:id", requireAdmin, async (req, res) => {
     try {
       const data = insertDeviceSchema.partial().parse(req.body);
       const device = await storage.updateDevice(req.params.id, data);
@@ -220,7 +263,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/devices/:id", async (req, res) => {
+  app.delete("/api/devices/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteDevice(req.params.id);
       res.status(204).send();
@@ -251,7 +294,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/parts", async (req, res) => {
+  app.post("/api/parts", requireAdmin, async (req, res) => {
     try {
       const data = insertPartSchema.parse(req.body);
       const part = await storage.createPart(data);
@@ -265,7 +308,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/parts/:id", async (req, res) => {
+  app.patch("/api/parts/:id", requireAdmin, async (req, res) => {
     try {
       const data = insertPartSchema.partial().parse(req.body);
       const part = await storage.updatePart(req.params.id, data);
@@ -278,7 +321,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/parts/:id", async (req, res) => {
+  app.delete("/api/parts/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deletePart(req.params.id);
       res.status(204).send();
@@ -287,7 +330,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/parts/upload", upload.single('file'), async (req, res) => {
+  app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
@@ -397,7 +440,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/services", async (req, res) => {
+  app.post("/api/services", requireAdmin, async (req, res) => {
     try {
       const data = insertServiceSchema.parse(req.body);
       const service = await storage.createService(data);
@@ -407,7 +450,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/services/:id", async (req, res) => {
+  app.patch("/api/services/:id", requireAdmin, async (req, res) => {
     try {
       const data = insertServiceSchema.partial().parse(req.body);
       const service = await storage.updateService(req.params.id, data);
@@ -420,7 +463,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/services/:id", async (req, res) => {
+  app.delete("/api/services/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteService(req.params.id);
       res.status(204).send();
@@ -467,7 +510,7 @@ export async function registerRoutes(
     partId: z.string().optional(),
   });
 
-  app.post("/api/device-services", async (req, res) => {
+  app.post("/api/device-services", requireAdmin, async (req, res) => {
     try {
       const input = deviceServiceWithSkuSchema.parse(req.body);
       
@@ -493,7 +536,7 @@ export async function registerRoutes(
     }
   });
 
-  app.patch("/api/device-services/:id", async (req, res) => {
+  app.patch("/api/device-services/:id", requireAdmin, async (req, res) => {
     try {
       const input = deviceServiceWithSkuSchema.partial().parse(req.body);
       
@@ -521,7 +564,7 @@ export async function registerRoutes(
     }
   });
 
-  app.delete("/api/device-services/:id", async (req, res) => {
+  app.delete("/api/device-services/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteDeviceService(req.params.id);
       res.status(204).send();
@@ -667,7 +710,7 @@ export async function registerRoutes(
     }
   });
 
-  app.put("/api/message-templates", async (req, res) => {
+  app.put("/api/message-templates", requireAdmin, async (req, res) => {
     try {
       const data = insertMessageTemplateSchema.parse(req.body);
       const template = await storage.upsertMessageTemplate(data);

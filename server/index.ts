@@ -29,9 +29,13 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+if (!process.env.SESSION_SECRET) {
+  console.error("WARNING: SESSION_SECRET not set - using a default for development only");
+}
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "repairquote-session-secret",
+    secret: process.env.SESSION_SECRET || "dev-only-secret-not-for-production",
     resave: false,
     saveUninitialized: false,
     cookie: {
