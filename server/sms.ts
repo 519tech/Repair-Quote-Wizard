@@ -1,5 +1,6 @@
 // SMS integration via Zapier webhook for OpenPhone
 // Configure ZAPIER_WEBHOOK_URL environment variable
+import { storage } from './storage';
 
 interface QuoteSmsData {
   customerName: string;
@@ -10,6 +11,18 @@ interface QuoteSmsData {
   repairTime?: string;
   warranty?: string;
 }
+
+function replaceMacros(template: string, data: QuoteSmsData): string {
+  return template
+    .replace(/\{customerName\}/g, data.customerName)
+    .replace(/\{deviceName\}/g, data.deviceName)
+    .replace(/\{serviceName\}/g, data.serviceName)
+    .replace(/\{price\}/g, data.price)
+    .replace(/\{repairTime\}/g, data.repairTime || '')
+    .replace(/\{warranty\}/g, data.warranty || '');
+}
+
+const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price}. {repairTime}. {warranty}. Reply for questions!";
 
 export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   const webhookUrl = process.env.ZAPIER_WEBHOOK_URL;
@@ -25,7 +38,9 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   }
 
   try {
-    const message = `Hi ${data.customerName}! Your RepairQuote: ${data.serviceName} for ${data.deviceName} - $${data.price}${data.repairTime ? `. Time: ${data.repairTime}` : ''}${data.warranty ? `. Warranty: ${data.warranty}` : ''}. Reply for more info!`;
+    // Fetch custom template from database
+    const smsTemplate = await storage.getMessageTemplate('sms');
+    const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data);
 
     const response = await fetch(webhookUrl, {
       method: 'POST',

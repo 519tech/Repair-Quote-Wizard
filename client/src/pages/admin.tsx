@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -14,7 +14,7 @@ import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload } from
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand, BrandDeviceType } from "@shared/schema";
+import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand, BrandDeviceType, MessageTemplate } from "@shared/schema";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -47,6 +47,7 @@ export default function Admin() {
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
             <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
             <TabsTrigger value="links" data-testid="tab-links">Service Links</TabsTrigger>
+            <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="device-types">
@@ -75,6 +76,10 @@ export default function Admin() {
 
           <TabsContent value="links">
             <DeviceServicesTab toast={toast} />
+          </TabsContent>
+
+          <TabsContent value="settings">
+            <SettingsTab toast={toast} />
           </TabsContent>
         </Tabs>
       </main>
@@ -1613,5 +1618,161 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [emailSubject, setEmailSubject] = useState("");
+  const [emailBody, setEmailBody] = useState("");
+  const [smsTemplate, setSmsTemplate] = useState("");
+
+  const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
+    queryKey: ["/api/message-templates"],
+  });
+
+  const defaults = {
+    email_subject: "Your Repair Quote: {serviceName} - ${price}",
+    email_body: `Dear {customerName},
+
+Thank you for requesting a repair quote from RepairQuote!
+
+Here are your quote details:
+
+Device: {deviceName}
+Service: {serviceName}
+Estimated Price: $\{price}
+{repairTime}
+{warranty}
+
+To proceed with this repair, please reply to this email or visit our store.
+
+Thank you for choosing RepairQuote!
+
+Best regards,
+The RepairQuote Team`,
+    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price}. {repairTime}. {warranty}. Reply for questions!"
+  };
+
+  useEffect(() => {
+    const emailSubjectTemplate = templates.find(t => t.type === "email_subject");
+    const emailBodyTemplate = templates.find(t => t.type === "email_body");
+    const smsTemplateData = templates.find(t => t.type === "sms");
+    
+    setEmailSubject(emailSubjectTemplate?.content || defaults.email_subject);
+    setEmailBody(emailBodyTemplate?.content || defaults.email_body);
+    setSmsTemplate(smsTemplateData?.content || defaults.sms);
+  }, [templates]);
+
+  const saveMutation = useMutation({
+    mutationFn: async (data: { type: string; content: string }) => {
+      const res = await apiRequest("PUT", "/api/message-templates", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/message-templates"] });
+      toast({ title: "Template saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSaveEmailSubject = () => saveMutation.mutate({ type: "email_subject", content: emailSubject });
+  const handleSaveEmailBody = () => saveMutation.mutate({ type: "email_body", content: emailBody });
+  const handleSaveSms = () => saveMutation.mutate({ type: "sms", content: smsTemplate });
+
+  const macros = [
+    { name: "{customerName}", description: "Customer's name" },
+    { name: "{deviceName}", description: "Device name (e.g., iPhone 15 Pro)" },
+    { name: "{serviceName}", description: "Service name (e.g., Screen Replacement)" },
+    { name: "{price}", description: "Quoted price (number only, add $ manually)" },
+    { name: "{repairTime}", description: "Estimated repair time" },
+    { name: "{warranty}", description: "Warranty information" },
+  ];
+
+  if (isLoading) {
+    return <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>;
+  }
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Available Macros</CardTitle>
+          <CardDescription>Use these placeholders in your message templates</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            {macros.map((macro) => (
+              <Badge key={macro.name} variant="secondary" className="text-sm" data-testid={`macro-${macro.name}`}>
+                {macro.name} - {macro.description}
+              </Badge>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Subject Template</CardTitle>
+          <CardDescription>Subject line for quote emails</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Input 
+            value={emailSubject} 
+            onChange={(e) => setEmailSubject(e.target.value)} 
+            placeholder="Enter email subject..."
+            data-testid="input-email-subject"
+          />
+          <Button onClick={handleSaveEmailSubject} disabled={saveMutation.isPending} data-testid="button-save-email-subject">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Subject
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Email Body Template</CardTitle>
+          <CardDescription>Main content of quote emails</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Textarea 
+            value={emailBody} 
+            onChange={(e) => setEmailBody(e.target.value)} 
+            placeholder="Enter email body..."
+            className="min-h-[250px] font-mono text-sm"
+            data-testid="textarea-email-body"
+          />
+          <Button onClick={handleSaveEmailBody} disabled={saveMutation.isPending} data-testid="button-save-email-body">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Body
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>SMS Template</CardTitle>
+          <CardDescription>Text message content for quotes (keep it concise)</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Textarea 
+            value={smsTemplate} 
+            onChange={(e) => setSmsTemplate(e.target.value)} 
+            placeholder="Enter SMS template..."
+            className="min-h-[100px]"
+            data-testid="textarea-sms"
+          />
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">{smsTemplate.length} characters (160 recommended max)</p>
+            <Button onClick={handleSaveSms} disabled={saveMutation.isPending} data-testid="button-save-sms">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save SMS
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   );
 }

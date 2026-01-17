@@ -2,6 +2,7 @@
 // Using Replit's Gmail connector
 // WARNING: Never cache the Gmail client - access tokens expire
 import { google } from 'googleapis';
+import { storage } from './storage';
 
 async function getAccessToken() {
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
@@ -54,32 +55,46 @@ interface QuoteEmailData {
   warranty?: string;
 }
 
-export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
-  try {
-    const gmail = await getGmailClient();
-    
-    const emailBody = `
-Dear ${data.customerName},
+function replaceMacros(template: string, data: QuoteEmailData): string {
+  return template
+    .replace(/\{customerName\}/g, data.customerName)
+    .replace(/\{deviceName\}/g, data.deviceName)
+    .replace(/\{serviceName\}/g, data.serviceName)
+    .replace(/\{price\}/g, data.price)
+    .replace(/\{repairTime\}/g, data.repairTime ? `Repair Time: ${data.repairTime}` : '')
+    .replace(/\{warranty\}/g, data.warranty ? `Warranty: ${data.warranty}` : '');
+}
+
+const defaultEmailSubject = "Your Repair Quote: {serviceName} - ${price}";
+const defaultEmailBody = `Dear {customerName},
 
 Thank you for requesting a repair quote from RepairQuote!
 
 Here are your quote details:
 
-Device: ${data.deviceName}
-Service: ${data.serviceName}
-Estimated Price: $${data.price}
-${data.repairTime ? `Repair Time: ${data.repairTime}` : ''}
-${data.warranty ? `Warranty: ${data.warranty}` : ''}
+Device: {deviceName}
+Service: {serviceName}
+Estimated Price: ${"{price}"}
+{repairTime}
+{warranty}
 
 To proceed with this repair, please reply to this email or visit our store.
 
 Thank you for choosing RepairQuote!
 
 Best regards,
-The RepairQuote Team
-    `.trim();
+The RepairQuote Team`;
 
-    const subject = `Your Repair Quote: ${data.serviceName} - $${data.price}`;
+export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+    
+    // Fetch custom templates from database
+    const subjectTemplate = await storage.getMessageTemplate('email_subject');
+    const bodyTemplate = await storage.getMessageTemplate('email_body');
+    
+    const subject = replaceMacros(subjectTemplate?.content || defaultEmailSubject, data);
+    const emailBody = replaceMacros(bodyTemplate?.content || defaultEmailBody, data).trim();
     
     const message = [
       `To: ${data.customerEmail}`,
