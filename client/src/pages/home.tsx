@@ -4,11 +4,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceType, Device, DeviceServiceWithRelations } from "@shared/schema";
+import type { DeviceType, Device, DeviceServiceWithRelations, Brand } from "@shared/schema";
 
 const iconMap: Record<string, typeof Smartphone> = {
   smartphone: Smartphone,
@@ -25,23 +24,45 @@ export default function Home() {
   const { toast } = useToast();
   const [step, setStep] = useState(1);
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string } | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
 
   const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
     queryKey: ["/api/device-types"],
   });
 
-  const { data: devices = [], isLoading: devicesLoading } = useQuery<Device[]>({
-    queryKey: ["/api/devices", selectedTypeId],
+  const { data: brands = [], isLoading: brandsLoading } = useQuery<Brand[]>({
+    queryKey: ["/api/brands/by-type", selectedTypeId],
     enabled: !!selectedTypeId,
+    queryFn: async () => {
+      const res = await fetch(`/api/brands/by-type/${selectedTypeId}`);
+      if (!res.ok) throw new Error("Failed to fetch brands");
+      return res.json();
+    },
+  });
+
+  const { data: devices = [], isLoading: devicesLoading } = useQuery<Device[]>({
+    queryKey: ["/api/devices", selectedTypeId, selectedBrandId],
+    enabled: !!selectedTypeId && !!selectedBrandId,
+    queryFn: async () => {
+      const res = await fetch(`/api/devices?typeId=${selectedTypeId}&brandId=${selectedBrandId}`);
+      if (!res.ok) throw new Error("Failed to fetch devices");
+      return res.json();
+    },
   });
 
   const { data: deviceServices = [], isLoading: servicesLoading } = useQuery<DeviceServiceWithRelations[]>({
     queryKey: ["/api/device-services", selectedDeviceId],
     enabled: !!selectedDeviceId,
+    queryFn: async () => {
+      const res = await fetch(`/api/device-services/by-device/${selectedDeviceId}`);
+      if (!res.ok) throw new Error("Failed to fetch services");
+      return res.json();
+    },
   });
 
   const submitQuoteMutation = useMutation({
@@ -73,18 +94,24 @@ export default function Home() {
 
   const handleTypeSelect = (typeId: string) => {
     setSelectedTypeId(typeId);
+    setSelectedBrandId(null);
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
     setStep(2);
   };
 
-  const handleDeviceSelect = (deviceId: string) => {
-    setSelectedDeviceId(deviceId);
+  const handleBrandSelect = (brandId: string) => {
+    setSelectedBrandId(brandId);
+    setSelectedDeviceId(null);
     setSelectedServiceId(null);
     setStep(3);
   };
 
-  const [quoteLoading, setQuoteLoading] = useState(false);
+  const handleDeviceSelect = (deviceId: string) => {
+    setSelectedDeviceId(deviceId);
+    setSelectedServiceId(null);
+    setStep(4);
+  };
 
   const handleServiceSelect = async (service: DeviceServiceWithRelations) => {
     setSelectedServiceId(service.id);
@@ -94,7 +121,7 @@ export default function Home() {
       if (res.ok) {
         const data = await res.json();
         setQuoteResult({ price: data.totalPrice, serviceName: data.serviceName });
-        setStep(4);
+        setStep(5);
       } else {
         toast({
           title: "Error",
@@ -124,19 +151,18 @@ export default function Home() {
       deviceId: selectedDeviceId,
       deviceServiceId: selectedServiceId,
     });
-    setStep(5);
+    setStep(6);
   };
 
   const resetForm = () => {
     setStep(1);
     setSelectedTypeId(null);
+    setSelectedBrandId(null);
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
     setQuoteResult(null);
   };
-
-  const filteredDevices = devices.filter((d) => d.deviceTypeId === selectedTypeId);
 
   return (
     <div className="min-h-screen bg-background">
@@ -159,7 +185,7 @@ export default function Home() {
         </div>
 
         <div className="flex items-center justify-center mb-8 gap-2">
-          {[1, 2, 3, 4, 5].map((s) => (
+          {[1, 2, 3, 4, 5, 6].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -168,7 +194,7 @@ export default function Home() {
               >
                 {step > s ? <Check className="h-4 w-4" /> : s}
               </div>
-              {s < 5 && <div className={`w-8 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
+              {s < 6 && <div className={`w-6 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
@@ -212,22 +238,57 @@ export default function Home() {
         {step === 2 && (
           <Card>
             <CardHeader>
-              <CardTitle>Select Your Device</CardTitle>
-              <CardDescription>Choose your specific model</CardDescription>
+              <CardTitle>Select Brand</CardTitle>
+              <CardDescription>Choose the brand of your device</CardDescription>
             </CardHeader>
             <CardContent>
               <Button variant="ghost" className="mb-4" onClick={() => setStep(1)} data-testid="button-back-step1">
                 Back to device types
               </Button>
+              {brandsLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : brands.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No brands available for this device type. Please contact admin.</p>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {brands.map((brand) => (
+                    <Button
+                      key={brand.id}
+                      variant="outline"
+                      className="h-16 hover-elevate"
+                      onClick={() => handleBrandSelect(brand.id)}
+                      data-testid={`button-brand-${brand.id}`}
+                    >
+                      {brand.name}
+                    </Button>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {step === 3 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Select Your Device</CardTitle>
+              <CardDescription>Choose your specific model</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="ghost" className="mb-4" onClick={() => setStep(2)} data-testid="button-back-step2">
+                Back to brands
+              </Button>
               {devicesLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
-              ) : filteredDevices.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No devices available for this type.</p>
+              ) : devices.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No devices available for this brand.</p>
               ) : (
                 <div className="space-y-2">
-                  {filteredDevices.map((device) => (
+                  {devices.map((device) => (
                     <Button
                       key={device.id}
                       variant="outline"
@@ -245,14 +306,14 @@ export default function Home() {
           </Card>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <Card>
             <CardHeader>
               <CardTitle>Select Service</CardTitle>
               <CardDescription>What issue needs to be fixed?</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => setStep(2)} data-testid="button-back-step2">
+              <Button variant="ghost" className="mb-4" onClick={() => setStep(3)} data-testid="button-back-step3">
                 Back to devices
               </Button>
               {servicesLoading || quoteLoading ? (
@@ -294,7 +355,7 @@ export default function Home() {
           </Card>
         )}
 
-        {step === 4 && quoteResult && (
+        {step === 5 && quoteResult && (
           <Card>
             <CardHeader>
               <CardTitle>Your Quote</CardTitle>
@@ -313,7 +374,7 @@ export default function Home() {
                     value={contactInfo.name}
                     onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
                     required
-                    data-testid="input-name"
+                    data-testid="input-customer-name"
                   />
                 </div>
                 <div className="space-y-2">
@@ -324,7 +385,7 @@ export default function Home() {
                     value={contactInfo.email}
                     onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
                     required
-                    data-testid="input-email"
+                    data-testid="input-customer-email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -334,11 +395,11 @@ export default function Home() {
                     type="tel"
                     value={contactInfo.phone}
                     onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                    data-testid="input-phone"
+                    data-testid="input-customer-phone"
                   />
                 </div>
                 <div className="flex gap-2">
-                  <Button type="button" variant="outline" onClick={() => setStep(3)} data-testid="button-back-step3">
+                  <Button type="button" variant="outline" onClick={() => setStep(4)} data-testid="button-back-step4">
                     Back
                   </Button>
                   <Button
@@ -359,7 +420,7 @@ export default function Home() {
           </Card>
         )}
 
-        {step === 5 && quoteResult && (
+        {step === 6 && quoteResult && (
           <Card>
             <CardHeader className="text-center">
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">

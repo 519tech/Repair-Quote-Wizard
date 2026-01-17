@@ -320,6 +320,15 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/device-services/by-device/:deviceId", async (req, res) => {
+    try {
+      const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId);
+      res.json(deviceServices);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch device services" });
+    }
+  });
+
   app.get("/api/device-services/:deviceId", async (req, res) => {
     try {
       const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId);
