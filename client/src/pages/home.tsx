@@ -29,8 +29,7 @@ export default function Home() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
-  const [optInSms, setOptInSms] = useState(false);
-  const [optInEmail, setOptInEmail] = useState(false);
+  const [optInQuote, setOptInQuote] = useState(false);
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
 
@@ -176,8 +175,7 @@ export default function Home() {
     setSelectedDeviceId(null);
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
-    setOptInSms(false);
-    setOptInEmail(false);
+    setOptInQuote(false);
     setQuoteResult(null);
     setSkippedBrandStep(false);
   };
@@ -409,27 +407,16 @@ export default function Home() {
                     data-testid="input-customer-phone"
                   />
                 </div>
-                <div className="space-y-3 pt-2">
+                <div className="pt-2">
                   <div className="flex items-center space-x-2">
                     <Checkbox 
-                      id="optInEmail" 
-                      checked={optInEmail} 
-                      onCheckedChange={(checked) => setOptInEmail(checked === true)}
-                      data-testid="checkbox-optin-email"
+                      id="optInQuote" 
+                      checked={optInQuote} 
+                      onCheckedChange={(checked) => setOptInQuote(checked === true)}
+                      data-testid="checkbox-optin-quote"
                     />
-                    <Label htmlFor="optInEmail" className="text-sm font-normal cursor-pointer">
-                      I agree to receive my quote via email
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="optInSms" 
-                      checked={optInSms} 
-                      onCheckedChange={(checked) => setOptInSms(checked === true)}
-                      data-testid="checkbox-optin-sms"
-                    />
-                    <Label htmlFor="optInSms" className="text-sm font-normal cursor-pointer">
-                      I agree to receive my quote via SMS
+                    <Label htmlFor="optInQuote" className="text-sm font-normal cursor-pointer">
+                      I agree to receive my quote via email and SMS
                     </Label>
                   </div>
                 </div>
