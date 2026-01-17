@@ -6,6 +6,10 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Quote widget rearranged - contact info collected before showing quote
+- **Jan 2026**: Removed price from service selection step (shown only after contact info)
+- **Jan 2026**: Quote display now shows repair time and warranty
+- **Jan 2026**: Added opt-in checkboxes for SMS and email quote delivery
 - **Jan 2026**: Performance optimization - parts dropdown only renders when searching, capped at 50 results
 - **Jan 2026**: Added SKU input to edit service links dialog (not just create)
 - **Jan 2026**: Added Total Price column to Service Links table showing calculated price
