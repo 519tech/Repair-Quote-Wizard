@@ -460,7 +460,6 @@ export async function registerRoutes(
   const deviceServiceWithSkuSchema = z.object({
     deviceId: z.string(),
     serviceId: z.string(),
-    laborPrice: z.string(),
     partSku: z.string().optional(),
     partId: z.string().optional(),
   });
@@ -481,7 +480,6 @@ export async function registerRoutes(
       const data = {
         deviceId: input.deviceId,
         serviceId: input.serviceId,
-        laborPrice: input.laborPrice,
         partId: partId || null,
       };
       
@@ -508,7 +506,6 @@ export async function registerRoutes(
       const data: any = {};
       if (input.deviceId) data.deviceId = input.deviceId;
       if (input.serviceId) data.serviceId = input.serviceId;
-      if (input.laborPrice) data.laborPrice = input.laborPrice;
       if (partId !== undefined) data.partId = partId || null;
       
       const deviceService = await storage.updateDeviceService(req.params.id, data);
@@ -530,7 +527,14 @@ export async function registerRoutes(
     }
   });
 
+  // Round price to nearest 5 minus 1 (so prices end in 9 or 4, like $99, $84, $149)
+  function roundToNearestFiveMinus1(price: number): number {
+    const rounded = Math.round(price / 5) * 5;
+    return Math.max(4, rounded - 1);
+  }
+
   // Quote calculation endpoint - calculates price on server side
+  // Formula: Labor price + (parts cost × parts markup), rounded to nearest 5 minus 1
   app.get("/api/calculate-quote/:deviceServiceId", async (req, res) => {
     try {
       const deviceService = await storage.getDeviceServiceWithRelations(req.params.deviceServiceId);
@@ -538,19 +542,27 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Device service not found" });
       }
       
-      const laborPrice = parseFloat(deviceService.laborPrice);
-      const partPrice = deviceService.part ? parseFloat(deviceService.part.price) : 0;
-      const totalPrice = (laborPrice + partPrice).toFixed(2);
+      const service = deviceService.service;
+      const laborPrice = parseFloat(service.laborPrice || "0");
+      const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+      const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+      const markedUpPartCost = partCost * partsMarkup;
+      const rawTotal = laborPrice + markedUpPartCost;
+      const totalPrice = roundToNearestFiveMinus1(rawTotal);
       
       res.json({
         deviceServiceId: deviceService.id,
         deviceName: deviceService.device.name,
-        serviceName: deviceService.service.name,
-        laborPrice: deviceService.laborPrice,
-        partPrice: deviceService.part?.price || "0.00",
+        serviceName: service.name,
+        serviceDescription: service.description,
+        warranty: service.warranty,
+        repairTime: service.repairTime,
+        laborPrice: service.laborPrice,
+        partsMarkup: service.partsMarkup,
+        partCost: deviceService.part?.price || "0.00",
         partSku: deviceService.part?.sku || null,
         partName: deviceService.part?.name || null,
-        totalPrice,
+        totalPrice: totalPrice.toFixed(2),
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to calculate quote" });
@@ -584,9 +596,13 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Device service not found" });
       }
       
-      const laborPrice = parseFloat(deviceService.laborPrice);
-      const partPrice = deviceService.part ? parseFloat(deviceService.part.price) : 0;
-      const quotedPrice = (laborPrice + partPrice).toFixed(2);
+      const service = deviceService.service;
+      const laborPrice = parseFloat(service.laborPrice || "0");
+      const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+      const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+      const markedUpPartCost = partCost * partsMarkup;
+      const rawTotal = laborPrice + markedUpPartCost;
+      const quotedPrice = roundToNearestFiveMinus1(rawTotal).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
         customerName: input.customerName,
