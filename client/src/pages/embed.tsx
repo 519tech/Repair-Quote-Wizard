@@ -231,32 +231,39 @@ export default function Embed() {
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-xl mx-auto">
         {step < 4 && (
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
-                onFocus={() => setShowSearch(true)}
-                placeholder="Search for your device model..."
-                className="pl-9 pr-9"
-                data-testid="input-device-search"
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
-                  onClick={clearSearch}
-                  data-testid="button-clear-search"
-                >
-                  <X className="h-4 w-4" />
-                </Button>
-              )}
-            </div>
-            {showSearch && searchQuery.length >= 2 && (
-              <Card className="mt-2 max-h-64 overflow-y-auto">
-                <CardContent className="p-2">
+          <Card className="mb-6 border-2 border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Quick Search
+              </CardTitle>
+              <CardDescription>Find your device instantly</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                  onFocus={() => setShowSearch(true)}
+                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
+                  className="pl-9 pr-9 h-12 text-base"
+                  data-testid="input-device-search"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9"
+                    onClick={clearSearch}
+                    data-testid="button-clear-search"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {showSearch && searchQuery.length >= 2 && (
+                <div className="mt-3 border rounded-md max-h-64 overflow-y-auto">
                   {searchLoading ? (
                     <div className="flex justify-center py-4">
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -264,12 +271,12 @@ export default function Embed() {
                   ) : searchResults.length === 0 ? (
                     <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="p-1 space-y-1">
                       {searchResults.map((device) => (
                         <Button
                           key={device.id}
                           variant="ghost"
-                          className="w-full justify-start text-left h-auto py-2"
+                          className="w-full justify-start text-left h-auto py-3 hover-elevate"
                           onClick={() => handleSearchSelect(device)}
                           data-testid={`button-search-result-${device.id}`}
                         >
@@ -283,10 +290,10 @@ export default function Embed() {
                       ))}
                     </div>
                   )}
-                </CardContent>
-              </Card>
-            )}
-          </div>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         <div className="flex items-center justify-center mb-6 gap-2">
