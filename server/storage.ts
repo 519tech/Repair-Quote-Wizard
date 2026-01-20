@@ -8,6 +8,7 @@ import {
   quoteRequests,
   brands,
   brandDeviceTypes,
+  brandServiceCategories,
   messageTemplates,
   type DeviceType,
   type InsertDeviceType,
@@ -29,6 +30,9 @@ import {
   type BrandDeviceType,
   type InsertBrandDeviceType,
   type BrandDeviceTypeWithRelations,
+  type BrandServiceCategory,
+  type InsertBrandServiceCategory,
+  type BrandServiceCategoryWithRelations,
   type MessageTemplate,
   type InsertMessageTemplate,
 } from "@shared/schema";
@@ -55,6 +59,12 @@ export interface IStorage {
   getBrandsByDeviceType(deviceTypeId: string): Promise<Brand[]>;
   createBrandDeviceType(data: InsertBrandDeviceType): Promise<BrandDeviceType>;
   deleteBrandDeviceType(id: string): Promise<void>;
+
+  // Brand-ServiceCategory Links
+  getBrandServiceCategories(): Promise<BrandServiceCategoryWithRelations[]>;
+  getCategoriesByBrand(brandId: string): Promise<ServiceCategory[]>;
+  createBrandServiceCategory(data: InsertBrandServiceCategory): Promise<BrandServiceCategory>;
+  deleteBrandServiceCategory(id: string): Promise<void>;
 
   // Devices
   getDevices(): Promise<Device[]>;
@@ -184,6 +194,36 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBrandDeviceType(id: string): Promise<void> {
     await db.delete(brandDeviceTypes).where(eq(brandDeviceTypes.id, id));
+  }
+
+  // Brand-ServiceCategory Links
+  async getBrandServiceCategories(): Promise<BrandServiceCategoryWithRelations[]> {
+    const results = await db.query.brandServiceCategories.findMany({
+      with: {
+        brand: true,
+        category: true,
+      },
+    });
+    return results;
+  }
+
+  async getCategoriesByBrand(brandId: string): Promise<ServiceCategory[]> {
+    const links = await db.query.brandServiceCategories.findMany({
+      where: eq(brandServiceCategories.brandId, brandId),
+      with: {
+        category: true,
+      },
+    });
+    return links.map((link) => link.category);
+  }
+
+  async createBrandServiceCategory(data: InsertBrandServiceCategory): Promise<BrandServiceCategory> {
+    const [link] = await db.insert(brandServiceCategories).values(data).returning();
+    return link;
+  }
+
+  async deleteBrandServiceCategory(id: string): Promise<void> {
+    await db.delete(brandServiceCategories).where(eq(brandServiceCategories.id, id));
   }
 
   // Devices

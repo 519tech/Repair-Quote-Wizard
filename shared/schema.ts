@@ -29,6 +29,7 @@ export const brands = pgTable("brands", {
 export const brandsRelations = relations(brands, ({ many }) => ({
   devices: many(devices),
   brandDeviceTypes: many(brandDeviceTypes),
+  brandServiceCategories: many(brandServiceCategories),
 }));
 
 export const insertBrandSchema = createInsertSchema(brands).omit({ id: true });
@@ -103,11 +104,35 @@ export const serviceCategories = pgTable("service_categories", {
 
 export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
   services: many(services),
+  brandServiceCategories: many(brandServiceCategories),
 }));
 
 export const insertServiceCategorySchema = createInsertSchema(serviceCategories).omit({ id: true });
 export type InsertServiceCategory = z.infer<typeof insertServiceCategorySchema>;
 export type ServiceCategory = typeof serviceCategories.$inferSelect;
+
+// Brand-ServiceCategory linking (which categories apply to which brands)
+export const brandServiceCategories = pgTable("brand_service_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  brandId: varchar("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
+  categoryId: varchar("category_id").notNull().references(() => serviceCategories.id, { onDelete: "cascade" }),
+});
+
+export const brandServiceCategoriesRelations = relations(brandServiceCategories, ({ one }) => ({
+  brand: one(brands, {
+    fields: [brandServiceCategories.brandId],
+    references: [brands.id],
+  }),
+  category: one(serviceCategories, {
+    fields: [brandServiceCategories.categoryId],
+    references: [serviceCategories.id],
+  }),
+}));
+
+export const insertBrandServiceCategorySchema = createInsertSchema(brandServiceCategories).omit({ id: true });
+export type InsertBrandServiceCategory = z.infer<typeof insertBrandServiceCategorySchema>;
+export type BrandServiceCategory = typeof brandServiceCategories.$inferSelect;
+export type BrandServiceCategoryWithRelations = BrandServiceCategory & { brand: Brand; category: ServiceCategory };
 
 // Services (Original, Aftermarket, Premium, Budget, etc.)
 export const services = pgTable("services", {
