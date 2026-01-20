@@ -464,7 +464,8 @@ export default function Embed() {
                 const categories = allCategories.filter(cat => {
                   const linksForCategory = brandCategoryLinks.filter(l => l.categoryId === cat.id);
                   if (linksForCategory.length === 0) return true;
-                  return selectedBrandId ? linksForCategory.some(l => l.brandId === selectedBrandId) : true;
+                  if (!selectedBrandId) return false;
+                  return linksForCategory.some(l => l.brandId === selectedBrandId);
                 });
                 
                 const uncategorized = deviceServices.filter(ds => !ds.service.category);

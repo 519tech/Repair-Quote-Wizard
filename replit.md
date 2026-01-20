@@ -6,6 +6,9 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added brand-service-category linking - service categories can be restricted to specific brands
+- **Jan 2026**: Service Categories tab now shows linked brands column and "Manage Brand Links" dialog
+- **Jan 2026**: Quote wizard filters categories by selected brand (categories with no links appear for all brands)
 - **Jan 2026**: Added Service Categories feature - services can now be grouped into categories (e.g., "Battery Replacement", "Screen Replacement")
 - **Jan 2026**: Quote wizard now shows category selection first when multiple categories exist, then service types within category
 - **Jan 2026**: Added Service Categories tab in admin panel with full CRUD (create, edit, delete categories)
