@@ -217,6 +217,39 @@ export async function registerRoutes(
   });
 
   // Devices
+  app.get("/api/devices/search", async (req, res) => {
+    try {
+      const query = (req.query.q as string || "").toLowerCase().trim();
+      if (!query || query.length < 2) {
+        return res.json([]);
+      }
+      const allDevices = await storage.getDevices();
+      const allBrands = await storage.getBrands();
+      const allTypes = await storage.getDeviceTypes();
+      
+      const brandsMap = new Map(allBrands.map(b => [b.id, b]));
+      const typesMap = new Map(allTypes.map(t => [t.id, t]));
+      
+      const results = allDevices
+        .map(device => ({
+          ...device,
+          brand: device.brandId ? brandsMap.get(device.brandId) : null,
+          deviceType: typesMap.get(device.deviceTypeId),
+        }))
+        .filter(device => {
+          const deviceName = device.name.toLowerCase();
+          const brandName = device.brand?.name?.toLowerCase() || "";
+          const typeName = device.deviceType?.name?.toLowerCase() || "";
+          return deviceName.includes(query) || brandName.includes(query) || typeName.includes(query);
+        })
+        .slice(0, 20);
+      
+      res.json(results);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to search devices" });
+    }
+  });
+
   app.get("/api/devices", async (req, res) => {
     try {
       const typeId = req.query.typeId as string | undefined;

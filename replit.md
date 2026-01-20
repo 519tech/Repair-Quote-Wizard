@@ -6,6 +6,10 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added device search bar to quote widget - search all models to skip step-by-step selection
+- **Jan 2026**: Search results show device name, brand, and type for easy identification
+- **Jan 2026**: Selecting a search result jumps directly to service selection (step 4)
+- **Jan 2026**: Bulk device import now accepts flexible column names (Model, Device, Name, etc.)
 - **Jan 2026**: Added image upload support to Brands tab - upload logo via Object Storage or enter URL
 - **Jan 2026**: Added image upload support to Devices tab - upload device image via Object Storage or enter URL
 - **Jan 2026**: Created reusable ImageInput component with URL/upload mode toggle and error handling

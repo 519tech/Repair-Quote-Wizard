@@ -1,14 +1,19 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, RotateCcw } from "lucide-react";
+import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, RotateCcw, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceType, Device, DeviceServiceWithRelations, Brand } from "@shared/schema";
+
+type DeviceSearchResult = Device & {
+  brand?: Brand | null;
+  deviceType?: DeviceType;
+};
 
 const iconMap: Record<string, typeof Smartphone> = {
   smartphone: Smartphone,
@@ -32,6 +37,13 @@ export default function Embed() {
   const [optInQuote, setOptInQuote] = useState(false);
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [usedSearch, setUsedSearch] = useState(false);
 
   const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
     queryKey: ["/api/device-types"],
@@ -79,6 +91,52 @@ export default function Embed() {
       setStep(3);
     }
   }, [brandsFetched, brands, step]);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/devices/search?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery]);
+
+  const handleSearchSelect = (device: DeviceSearchResult) => {
+    setSelectedTypeId(device.deviceTypeId);
+    setSelectedBrandId(device.brandId);
+    setSelectedDeviceId(device.id);
+    setSelectedServiceId(null);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setUsedSearch(true);
+    setStep(4);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+  };
 
   const handleTypeSelect = (typeId: string) => {
     setSelectedTypeId(typeId);
@@ -163,11 +221,74 @@ export default function Embed() {
     setOptInQuote(false);
     setQuoteResult(null);
     setSkippedBrandStep(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setUsedSearch(false);
   };
 
   return (
     <div className="min-h-screen bg-background p-4">
       <div className="max-w-xl mx-auto">
+        {step < 4 && (
+          <div className="mb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                onFocus={() => setShowSearch(true)}
+                placeholder="Search for your device model..."
+                className="pl-9 pr-9"
+                data-testid="input-device-search"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                  onClick={clearSearch}
+                  data-testid="button-clear-search"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            {showSearch && searchQuery.length >= 2 && (
+              <Card className="mt-2 max-h-64 overflow-y-auto">
+                <CardContent className="p-2">
+                  {searchLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
+                  ) : (
+                    <div className="space-y-1">
+                      {searchResults.map((device) => (
+                        <Button
+                          key={device.id}
+                          variant="ghost"
+                          className="w-full justify-start text-left h-auto py-2"
+                          onClick={() => handleSearchSelect(device)}
+                          data-testid={`button-search-result-${device.id}`}
+                        >
+                          <div>
+                            <div className="font-medium">{device.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center justify-center mb-6 gap-2">
           {[1, 2, 3, 4, 5, 6].map((s) => (
             <div key={s} className="flex items-center gap-2">
@@ -313,8 +434,8 @@ export default function Embed() {
                 <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
               ) : (
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setStep(3)} data-testid="button-back-step3">
-                    Back
+                  <Button variant="outline" className="w-full justify-start" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                    {usedSearch ? "Start Over" : "Back"}
                   </Button>
                   {deviceServices.map((ds) => (
                     <Button
