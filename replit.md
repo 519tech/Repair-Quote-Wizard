@@ -6,10 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
-- **Jan 2026**: Quote wizard now shows price immediately without requiring contact info first
-  - After selecting a service, the quote (price, repair time, warranty) is displayed immediately
-  - Optional "Send Me My Quote via Email/SMS" button reveals contact form
-  - Users can get another quote without providing contact information
+- **Jan 2026**: Quote wizard now shows ALL service options side-by-side for comparison
+  - After selecting a repair category, all available services are displayed on one page
+  - Each service shows price, repair time, warranty with individual "Send me quote" button
+  - Users can compare options easily before deciding
+  - Streamlined 4-step wizard: Type → Brand → Device → Category/Compare
 - **Jan 2026**: Added database unique constraints to prevent duplicate entries:
   - Devices: unique on (name + brand + device type) combination
   - Services: unique on name

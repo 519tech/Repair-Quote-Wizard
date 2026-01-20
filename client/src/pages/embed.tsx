@@ -41,6 +41,20 @@ export default function Embed() {
   const [showContactForm, setShowContactForm] = useState(false);
   const [quoteSent, setQuoteSent] = useState(false);
   
+  // Multiple quotes for comparison view
+  const [allQuotes, setAllQuotes] = useState<Array<{
+    serviceId: string;
+    serviceName: string;
+    serviceDescription?: string;
+    deviceName: string;
+    price: string;
+    repairTime?: string;
+    warranty?: string;
+  }>>([]);
+  const [quotesLoading, setQuotesLoading] = useState(false);
+  const [sendingQuoteFor, setSendingQuoteFor] = useState<string | null>(null);
+  const [quoteSentFor, setQuoteSentFor] = useState<Set<string>>(new Set());
+  
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -204,20 +218,65 @@ export default function Embed() {
     }
   };
 
+  const fetchAllQuotesForServices = async (services: DeviceServiceWithRelations[]) => {
+    setQuotesLoading(true);
+    setAllQuotes([]);
+    try {
+      const quotes = await Promise.all(
+        services.map(async (ds) => {
+          try {
+            const res = await fetch(`/api/calculate-quote/${ds.id}`);
+            if (res.ok) {
+              const data = await res.json();
+              return {
+                serviceId: ds.id,
+                serviceName: data.serviceName,
+                serviceDescription: data.serviceDescription,
+                deviceName: data.deviceName,
+                price: data.totalPrice,
+                repairTime: data.repairTime,
+                warranty: data.warranty,
+              };
+            }
+          } catch {
+            // Skip failed quotes
+          }
+          return null;
+        })
+      );
+      setAllQuotes(quotes.filter((q): q is NonNullable<typeof q> => q !== null));
+    } finally {
+      setQuotesLoading(false);
+    }
+  };
+
+  const handleCategorySelect = async (categoryId: string, services: DeviceServiceWithRelations[]) => {
+    setSelectedCategoryId(categoryId);
+    const filteredServices = categoryId === "other"
+      ? services.filter(ds => !ds.service.category)
+      : services.filter(ds => ds.service.category?.id === categoryId);
+    await fetchAllQuotesForServices(filteredServices);
+  };
+
+  const handleDirectServicesView = async (services: DeviceServiceWithRelations[]) => {
+    await fetchAllQuotesForServices(services);
+  };
+
   const handleSendQuote = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDeviceId || !selectedServiceId) return;
+    if (!selectedDeviceId || !sendingQuoteFor) return;
 
     submitQuoteMutation.mutate({
       customerName: contactInfo.name,
       customerEmail: contactInfo.email,
       customerPhone: contactInfo.phone || undefined,
       deviceId: selectedDeviceId,
-      deviceServiceId: selectedServiceId,
+      deviceServiceId: sendingQuoteFor,
       optIn: true,
     });
-    setQuoteSent(true);
-    setShowContactForm(false);
+    setQuoteSentFor(prev => new Set(prev).add(sendingQuoteFor));
+    setSendingQuoteFor(null);
+    setContactInfo({ name: "", email: "", phone: "" });
     toast({
       title: "Quote Sent",
       description: "Your quote has been sent to your email/phone!",
@@ -241,6 +300,9 @@ export default function Embed() {
     setUsedSearch(false);
     setShowContactForm(false);
     setQuoteSent(false);
+    setAllQuotes([]);
+    setSendingQuoteFor(null);
+    setQuoteSentFor(new Set());
   };
 
   return (
@@ -313,7 +375,7 @@ export default function Embed() {
         )}
 
         <div className="flex items-center justify-center mb-6 gap-2">
-          {[1, 2, 3, 4, 5].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
@@ -322,7 +384,7 @@ export default function Embed() {
               >
                 {step > s ? <Check className="h-3 w-3" /> : s}
               </div>
-              {s < 5 && <div className={`w-4 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
+              {s < 4 && <div className={`w-4 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
@@ -445,8 +507,8 @@ export default function Embed() {
         {step === 4 && (
           <Card>
             <CardHeader>
-              <CardTitle>{selectedCategoryId ? "Select Service Type" : "Select Repair Category"}</CardTitle>
-              <CardDescription>{selectedCategoryId ? "Choose your preferred service option" : "What needs to be fixed?"}</CardDescription>
+              <CardTitle>{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
+              <CardDescription>{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
             </CardHeader>
             <CardContent>
               {servicesLoading ? (
@@ -479,6 +541,7 @@ export default function Embed() {
                 const uncategorized = deviceServices.filter(ds => !ds.service.category);
                 const hasMultipleCategories = categories.length > 1 || (categories.length > 0 && uncategorized.length > 0);
 
+                // Show category selection if multiple categories exist and none selected
                 if (hasMultipleCategories && !selectedCategoryId) {
                   return (
                     <div className="space-y-2">
@@ -490,7 +553,7 @@ export default function Embed() {
                           key={cat.id}
                           variant="outline"
                           className="w-full justify-between hover-elevate"
-                          onClick={() => setSelectedCategoryId(cat.id)}
+                          onClick={() => handleCategorySelect(cat.id, deviceServices)}
                           data-testid={`button-category-${cat.id}`}
                         >
                           <div className="text-left">
@@ -506,7 +569,7 @@ export default function Embed() {
                         <Button
                           variant="outline"
                           className="w-full justify-between hover-elevate"
-                          onClick={() => setSelectedCategoryId("other")}
+                          onClick={() => handleCategorySelect("other", deviceServices)}
                           data-testid="button-category-other"
                         >
                           <div className="text-left">
@@ -519,20 +582,17 @@ export default function Embed() {
                   );
                 }
 
-                const filteredServices = selectedCategoryId
-                  ? selectedCategoryId === "other"
-                    ? uncategorized
-                    : deviceServices.filter(ds => ds.service.category?.id === selectedCategoryId)
-                  : deviceServices;
-
+                // Show comparison view with all quotes
                 return (
-                  <div className="space-y-2">
+                  <>
                     <Button 
                       variant="outline" 
-                      className="w-full justify-start" 
+                      className="w-full justify-start mb-4" 
                       onClick={() => {
                         if (hasMultipleCategories && selectedCategoryId) {
                           setSelectedCategoryId(null);
+                          setAllQuotes([]);
+                          setSendingQuoteFor(null);
                         } else if (usedSearch) {
                           resetForm();
                         } else {
@@ -547,156 +607,156 @@ export default function Embed() {
                           ? "Start Over" 
                           : "Back"}
                     </Button>
-                    {filteredServices.map((ds) => (
-                      <Button
-                        key={ds.id}
-                        variant="outline"
-                        className="w-full justify-start hover-elevate"
-                        onClick={() => handleServiceSelect(ds)}
-                        data-testid={`button-service-${ds.id}`}
-                      >
-                        <div className="text-left">
-                          <div className="font-medium">{ds.service.name}</div>
-                          {ds.service.description && (
-                            <div className="text-xs text-muted-foreground">{ds.service.description}</div>
-                          )}
+
+                    {quotesLoading ? (
+                      <div className="flex justify-center py-8">
+                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : allQuotes.length > 0 ? (
+                      <div className="space-y-4">
+                        {allQuotes.map((quote) => (
+                          <div 
+                            key={quote.serviceId} 
+                            className="border rounded-lg p-4 bg-card"
+                            data-testid={`quote-card-${quote.serviceId}`}
+                          >
+                            <div className="flex flex-col gap-3">
+                              <div>
+                                <h3 className="font-semibold">{quote.serviceName}</h3>
+                                {quote.serviceDescription && (
+                                  <p className="text-sm text-muted-foreground mt-1">{quote.serviceDescription}</p>
+                                )}
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                  {quote.repairTime && (
+                                    <span className="text-xs bg-muted px-2 py-1 rounded">
+                                      {quote.repairTime}
+                                    </span>
+                                  )}
+                                  {quote.warranty && (
+                                    <span className="text-xs bg-muted px-2 py-1 rounded">
+                                      {quote.warranty} warranty
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                              <div className="flex items-center justify-between gap-2">
+                                <div>
+                                  <p className="text-xl font-bold text-primary">${quote.price}</p>
+                                  <p className="text-xs text-muted-foreground">plus taxes</p>
+                                </div>
+                                {quoteSentFor.has(quote.serviceId) ? (
+                                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
+                                    <Check className="h-4 w-4" />
+                                    Sent
+                                  </div>
+                                ) : sendingQuoteFor === quote.serviceId ? (
+                                  <Button 
+                                    size="sm" 
+                                    variant="outline"
+                                    onClick={() => setSendingQuoteFor(null)}
+                                    data-testid={`button-cancel-send-${quote.serviceId}`}
+                                  >
+                                    Cancel
+                                  </Button>
+                                ) : (
+                                  <Button 
+                                    size="sm"
+                                    onClick={() => setSendingQuoteFor(quote.serviceId)}
+                                    data-testid={`button-send-quote-${quote.serviceId}`}
+                                  >
+                                    Send me quote
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+
+                            {sendingQuoteFor === quote.serviceId && (
+                              <form onSubmit={handleSendQuote} className="mt-4 pt-4 border-t space-y-3">
+                                <div className="space-y-2">
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`name-${quote.serviceId}`} className="text-xs">Name *</Label>
+                                    <Input
+                                      id={`name-${quote.serviceId}`}
+                                      value={contactInfo.name}
+                                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                                      required
+                                      className="h-9"
+                                      data-testid={`input-name-${quote.serviceId}`}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`email-${quote.serviceId}`} className="text-xs">Email *</Label>
+                                    <Input
+                                      id={`email-${quote.serviceId}`}
+                                      type="email"
+                                      value={contactInfo.email}
+                                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                                      required
+                                      className="h-9"
+                                      data-testid={`input-email-${quote.serviceId}`}
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <Label htmlFor={`phone-${quote.serviceId}`} className="text-xs">Phone</Label>
+                                    <Input
+                                      id={`phone-${quote.serviceId}`}
+                                      type="tel"
+                                      value={contactInfo.phone}
+                                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                                      className="h-9"
+                                      data-testid={`input-phone-${quote.serviceId}`}
+                                    />
+                                  </div>
+                                </div>
+                                <Button
+                                  type="submit"
+                                  size="sm"
+                                  disabled={submitQuoteMutation.isPending}
+                                  data-testid={`button-submit-${quote.serviceId}`}
+                                >
+                                  {submitQuoteMutation.isPending ? (
+                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                  ) : (
+                                    "Send My Quote"
+                                  )}
+                                </Button>
+                              </form>
+                            )}
+                          </div>
+                        ))}
+                        
+                        <div className="pt-4 border-t">
+                          <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
+                            Get Another Quote
+                          </Button>
                         </div>
-                        <ChevronRight className="h-4 w-4 ml-auto" />
-                      </Button>
-                    ))}
-                  </div>
+                      </div>
+                    ) : (
+                      // Auto-fetch quotes if none loaded yet (for single category case)
+                      (() => {
+                        const servicesToFetch = selectedCategoryId
+                          ? selectedCategoryId === "other"
+                            ? uncategorized
+                            : deviceServices.filter(ds => ds.service.category?.id === selectedCategoryId)
+                          : deviceServices;
+                        
+                        if (servicesToFetch.length > 0 && !quotesLoading) {
+                          handleDirectServicesView(servicesToFetch);
+                        }
+                        return (
+                          <div className="flex justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                          </div>
+                        );
+                      })()
+                    )}
+                  </>
                 );
               })()}
             </CardContent>
           </Card>
         )}
 
-        {step === 5 && quoteResult && (
-          <Card>
-            <CardHeader className="text-center">
-              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                <Check className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle>Your Repair Quote</CardTitle>
-              <CardDescription>Here's your estimated repair cost</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
-                <p className="text-sm text-muted-foreground mb-1">{quoteResult.deviceName}</p>
-                <p className="font-medium mb-2">{quoteResult.serviceName}</p>
-                {quoteResult.serviceDescription && (
-                  <p className="text-sm text-muted-foreground mb-3">{quoteResult.serviceDescription}</p>
-                )}
-                <p className="text-4xl font-bold text-primary">${quoteResult.price}</p>
-                <p className="text-sm text-muted-foreground mt-1">plus taxes</p>
-              </div>
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                {quoteResult.repairTime && (
-                  <div className="bg-muted rounded-lg p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Repair Time</p>
-                    <p className="font-semibold">{quoteResult.repairTime}</p>
-                  </div>
-                )}
-                {quoteResult.warranty && (
-                  <div className="bg-muted rounded-lg p-4 text-center">
-                    <p className="text-xs text-muted-foreground mb-1">Warranty</p>
-                    <p className="font-semibold">{quoteResult.warranty}</p>
-                  </div>
-                )}
-              </div>
-
-              {!showContactForm && !quoteSent && (
-                <div className="space-y-3">
-                  <Button 
-                    className="w-full" 
-                    onClick={() => setShowContactForm(true)} 
-                    data-testid="button-send-quote"
-                  >
-                    Send Me My Quote via Email/SMS
-                  </Button>
-                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Get Another Quote
-                  </Button>
-                </div>
-              )}
-
-              {showContactForm && !quoteSent && (
-                <form onSubmit={handleSendQuote} className="space-y-4 border-t pt-6">
-                  <p className="text-sm text-muted-foreground text-center mb-4">
-                    Enter your details to receive this quote via email and SMS
-                  </p>
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Name *</Label>
-                    <Input
-                      id="name"
-                      value={contactInfo.name}
-                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                      required
-                      data-testid="input-customer-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="email">Email *</Label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={contactInfo.email}
-                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                      required
-                      data-testid="input-customer-email"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="phone">Phone (for SMS)</Label>
-                    <Input
-                      id="phone"
-                      type="tel"
-                      value={contactInfo.phone}
-                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                      data-testid="input-customer-phone"
-                    />
-                  </div>
-                  <div className="flex gap-2 pt-2">
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      onClick={() => setShowContactForm(false)} 
-                      data-testid="button-cancel-send"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      className="flex-1"
-                      disabled={submitQuoteMutation.isPending}
-                      data-testid="button-submit-send"
-                    >
-                      {submitQuoteMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        "Send My Quote"
-                      )}
-                    </Button>
-                  </div>
-                </form>
-              )}
-
-              {quoteSent && (
-                <div className="space-y-3">
-                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
-                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mx-auto mb-2" />
-                    <p className="text-sm text-green-700 dark:text-green-300">Quote sent to your email/phone!</p>
-                  </div>
-                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
-                    <RotateCcw className="h-4 w-4 mr-2" />
-                    Get Another Quote
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );
