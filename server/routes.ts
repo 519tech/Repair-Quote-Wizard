@@ -11,6 +11,7 @@ import {
   insertQuoteRequestSchema,
   insertBrandSchema,
   insertBrandDeviceTypeSchema,
+  insertBrandServiceCategorySchema,
   insertMessageTemplateSchema,
 } from "@shared/schema";
 import { z } from "zod";
@@ -214,6 +215,44 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete brand-device-type link" });
+    }
+  });
+
+  // Brand-ServiceCategory Links
+  app.get("/api/brand-service-categories", async (req, res) => {
+    try {
+      const links = await storage.getBrandServiceCategories();
+      res.json(links);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch brand-service-category links" });
+    }
+  });
+
+  app.get("/api/brand-service-categories/by-brand/:brandId", async (req, res) => {
+    try {
+      const categories = await storage.getCategoriesByBrand(req.params.brandId);
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch categories for brand" });
+    }
+  });
+
+  app.post("/api/brand-service-categories", requireAdmin, async (req, res) => {
+    try {
+      const data = insertBrandServiceCategorySchema.parse(req.body);
+      const link = await storage.createBrandServiceCategory(data);
+      res.status(201).json(link);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to create brand-service-category link" });
+    }
+  });
+
+  app.delete("/api/brand-service-categories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteBrandServiceCategory(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete brand-service-category link" });
     }
   });
 
