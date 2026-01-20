@@ -1,14 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench } from "lucide-react";
+import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceType, Device, DeviceServiceWithRelations, Brand } from "@shared/schema";
+
+interface DeviceSearchResult {
+  id: string;
+  name: string;
+  deviceTypeId: string;
+  brandId: string | null;
+  brand?: { id: string; name: string } | null;
+  deviceType?: { id: string; name: string } | null;
+}
 
 const iconMap: Record<string, typeof Smartphone> = {
   smartphone: Smartphone,
@@ -32,6 +41,13 @@ export default function Home() {
   const [optInQuote, setOptInQuote] = useState(false);
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showSearch, setShowSearch] = useState(false);
+  const [usedSearch, setUsedSearch] = useState(false);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
     queryKey: ["/api/device-types"],
@@ -90,6 +106,52 @@ export default function Home() {
       setStep(3);
     }
   }, [step, brandsFetched, brandsLoading, brands.length]);
+
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    if (searchQuery.length < 2) {
+      setSearchResults([]);
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/devices/search?q=${encodeURIComponent(searchQuery)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data);
+        }
+      } catch {
+        setSearchResults([]);
+      } finally {
+        setSearchLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    };
+  }, [searchQuery]);
+
+  const handleSearchSelect = (device: DeviceSearchResult) => {
+    setSelectedTypeId(device.deviceTypeId);
+    setSelectedBrandId(device.brandId);
+    setSelectedDeviceId(device.id);
+    setSelectedServiceId(null);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setUsedSearch(true);
+    setStep(4);
+  };
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+  };
 
   const handleTypeSelect = (typeId: string) => {
     setSelectedTypeId(typeId);
@@ -182,6 +244,10 @@ export default function Home() {
     setOptInQuote(false);
     setQuoteResult(null);
     setSkippedBrandStep(false);
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+    setUsedSearch(false);
   };
 
   return (
@@ -203,6 +269,72 @@ export default function Home() {
           <h1 className="text-3xl font-bold mb-2">Get Your Repair Quote</h1>
           <p className="text-muted-foreground">Fast, transparent pricing for device repairs</p>
         </div>
+
+        {step < 4 && (
+          <Card className="mb-8 border-2 border-primary/20">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Quick Search
+              </CardTitle>
+              <CardDescription>Find your device instantly</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  value={searchQuery}
+                  onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                  onFocus={() => setShowSearch(true)}
+                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
+                  className="pl-9 pr-9 h-12 text-base"
+                  data-testid="input-device-search"
+                />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9"
+                    onClick={clearSearch}
+                    data-testid="button-clear-search"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                )}
+              </div>
+              {showSearch && searchQuery.length >= 2 && (
+                <div className="mt-3 border rounded-md max-h-64 overflow-y-auto">
+                  {searchLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
+                  ) : (
+                    <div className="p-1 space-y-1">
+                      {searchResults.map((device) => (
+                        <Button
+                          key={device.id}
+                          variant="ghost"
+                          className="w-full justify-start text-left h-auto py-3 hover-elevate"
+                          onClick={() => handleSearchSelect(device)}
+                          data-testid={`button-search-result-${device.id}`}
+                        >
+                          <div>
+                            <div className="font-medium">{device.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
 
         <div className="flex items-center justify-center mb-8 gap-2">
           {[1, 2, 3, 4, 5, 6].map((s) => (
@@ -338,8 +470,8 @@ export default function Home() {
               <CardDescription>What issue needs to be fixed?</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => setStep(3)} data-testid="button-back-step3">
-                Back to devices
+              <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                {usedSearch ? "Start Over" : "Back to devices"}
               </Button>
               {servicesLoading ? (
                 <div className="flex justify-center py-8">
