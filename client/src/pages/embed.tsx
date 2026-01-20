@@ -67,6 +67,10 @@ export default function Embed() {
     enabled: !!selectedDeviceId,
   });
 
+  const { data: brandCategoryLinks = [] } = useQuery<{ id: string; brandId: string; categoryId: string }[]>({
+    queryKey: ["/api/brand-service-categories"],
+  });
+
   const submitQuoteMutation = useMutation({
     mutationFn: async (data: {
       customerName: string;
@@ -449,13 +453,20 @@ export default function Embed() {
                   <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
                 </>
               ) : (() => {
-                const categories = Array.from(
+                const allCategories = Array.from(
                   new Map(
                     deviceServices
                       .filter(ds => ds.service.category)
                       .map(ds => [ds.service.category!.id, ds.service.category!])
                   ).values()
                 );
+                
+                const categories = allCategories.filter(cat => {
+                  const linksForCategory = brandCategoryLinks.filter(l => l.categoryId === cat.id);
+                  if (linksForCategory.length === 0) return true;
+                  return selectedBrandId ? linksForCategory.some(l => l.brandId === selectedBrandId) : true;
+                });
+                
                 const uncategorized = deviceServices.filter(ds => !ds.service.category);
                 const hasMultipleCategories = categories.length > 1 || (categories.length > 0 && uncategorized.length > 0);
 
