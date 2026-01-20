@@ -15,7 +15,7 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ImageInput } from "@/components/ImageInput";
-import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand, BrandDeviceType, MessageTemplate } from "@shared/schema";
+import type { DeviceType, Device, Part, Service, ServiceCategory, DeviceServiceWithRelations, Brand, BrandDeviceType, MessageTemplate } from "@shared/schema";
 
 export default function Admin() {
   const { toast } = useToast();
@@ -162,6 +162,7 @@ export default function Admin() {
             <TabsTrigger value="brands" data-testid="tab-brands">Brands</TabsTrigger>
             <TabsTrigger value="brand-links" data-testid="tab-brand-links">Brand Links</TabsTrigger>
             <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
+            <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
             <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
             <TabsTrigger value="links" data-testid="tab-links">Service Links</TabsTrigger>
@@ -182,6 +183,10 @@ export default function Admin() {
 
           <TabsContent value="devices">
             <DevicesTab toast={toast} />
+          </TabsContent>
+
+          <TabsContent value="categories">
+            <ServiceCategoriesTab toast={toast} />
           </TabsContent>
 
           <TabsContent value="services">
@@ -1091,12 +1096,186 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   );
 }
 
+function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editItem, setEditItem] = useState<ServiceCategory | null>(null);
+  const [name, setName] = useState("");
+  const [description, setDescription] = useState("");
+
+  const { data: categories = [], isLoading } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { name: string; description?: string }) => {
+      const res = await apiRequest("POST", "/api/service-categories", data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to create category");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
+      setOpen(false);
+      setName("");
+      setDescription("");
+      toast({ title: "Service category created" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<ServiceCategory> }) => {
+      const res = await apiRequest("PATCH", `/api/service-categories/${id}`, data);
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Failed to update category");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
+      setEditOpen(false);
+      setEditItem(null);
+      toast({ title: "Service category updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/service-categories/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
+      toast({ title: "Service category deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createMutation.mutate({ name, description: description || undefined });
+  };
+
+  const handleEdit = (category: ServiceCategory) => {
+    setEditItem(category);
+    setEditOpen(true);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editItem) return;
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, description: editItem.description || undefined } });
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+        <div>
+          <CardTitle>Service Categories</CardTitle>
+          <CardDescription>Group services by category (e.g., Battery Replacement, Screen Replacement)</CardDescription>
+        </div>
+        <Dialog open={open} onOpenChange={setOpen}>
+          <DialogTrigger asChild>
+            <Button data-testid="button-add-category"><Plus className="h-4 w-4 mr-2" />Add Category</Button>
+          </DialogTrigger>
+          <DialogContent>
+            <form onSubmit={handleSubmit}>
+              <DialogHeader>
+                <DialogTitle>Add Service Category</DialogTitle>
+                <DialogDescription>Create a new category to group related services</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Battery Replacement" required data-testid="input-category-name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description (optional)</Label>
+                  <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of this category" data-testid="input-category-description" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-category">
+                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+        ) : categories.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">No service categories yet. Add one to group your services.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="w-20">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {categories.map((category) => (
+                <TableRow key={category.id}>
+                  <TableCell className="font-medium">{category.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{category.description || "-"}</TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleEdit(category)} data-testid={`button-edit-category-${category.id}`}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(category.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+
+        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+          <DialogContent>
+            <form onSubmit={handleEditSubmit}>
+              <DialogHeader>
+                <DialogTitle>Edit Service Category</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div className="space-y-2">
+                  <Label>Name</Label>
+                  <Input value={editItem?.name || ""} onChange={(e) => setEditItem(editItem ? { ...editItem, name: e.target.value } : null)} required data-testid="input-edit-category-name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Description</Label>
+                  <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(editItem ? { ...editItem, description: e.target.value } : null)} data-testid="input-edit-category-description" />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-category">
+                  {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </CardContent>
+    </Card>
+  );
+}
+
 function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Service | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [categoryId, setCategoryId] = useState<string | null>(null);
   const [warranty, setWarranty] = useState("");
   const [repairTime, setRepairTime] = useState("");
   const [laborPrice, setLaborPrice] = useState("");
@@ -1104,9 +1283,16 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [notes, setNotes] = useState("");
 
   const { data: services = [], isLoading } = useQuery<Service[]>({ queryKey: ["/api/services"] });
+  const { data: categories = [] } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
+
+  const getCategoryName = (catId: string | null) => {
+    if (!catId) return "-";
+    const cat = categories.find(c => c.id === catId);
+    return cat?.name || "-";
+  };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -1115,6 +1301,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setOpen(false);
       setName("");
       setDescription("");
+      setCategoryId(null);
       setWarranty("");
       setRepairTime("");
       setLaborPrice("");
@@ -1158,6 +1345,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     e.preventDefault();
     createMutation.mutate({ 
       name, 
+      categoryId: categoryId || undefined,
       description: description || undefined, 
       warranty: warranty || undefined,
       repairTime: repairTime || undefined,
@@ -1179,6 +1367,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       id: editItem.id, 
       data: { 
         name: editItem.name, 
+        categoryId: editItem.categoryId || undefined,
         description: editItem.description || undefined, 
         warranty: editItem.warranty || undefined,
         repairTime: editItem.repairTime || undefined,
@@ -1209,7 +1398,20 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Screen Replacement" required data-testid="input-service-name" />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., Original OEM" required data-testid="input-service-name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={categoryId || ""} onValueChange={(v) => setCategoryId(v || null)}>
+                    <SelectTrigger data-testid="select-service-category">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label>Description (optional)</Label>
@@ -1262,6 +1464,19 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Input value={editItem?.name || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, name: e.target.value} : null)} required data-testid="input-edit-service-name" />
                 </div>
                 <div className="space-y-2">
+                  <Label>Category</Label>
+                  <Select value={editItem?.categoryId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, categoryId: v || null} : null)}>
+                    <SelectTrigger data-testid="select-edit-service-category">
+                      <SelectValue placeholder="Select a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(cat => (
+                        <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Description (optional)</Label>
                   <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, description: e.target.value} : null)} data-testid="input-edit-service-description" />
                 </div>
@@ -1308,6 +1523,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Category</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Labor</TableHead>
                 <TableHead>Markup</TableHead>
@@ -1319,6 +1535,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
             <TableBody>
               {services.map((service) => (
                 <TableRow key={service.id}>
+                  <TableCell><Badge variant="secondary">{getCategoryName(service.categoryId)}</Badge></TableCell>
                   <TableCell className="font-medium">{service.name}</TableCell>
                   <TableCell>${service.laborPrice}</TableCell>
                   <TableCell>{service.partsMarkup}x</TableCell>

@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceType, Device, DeviceServiceWithRelations, Brand } from "@shared/schema";
+import type { DeviceType, Device, DeviceServiceWithRelations, Brand, ServiceCategory } from "@shared/schema";
 
 interface DeviceSearchResult {
   id: string;
@@ -36,6 +36,7 @@ export default function Home() {
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
   const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
   const [optInQuote, setOptInQuote] = useState(false);
@@ -139,6 +140,7 @@ export default function Home() {
     setSelectedTypeId(device.deviceTypeId);
     setSelectedBrandId(device.brandId);
     setSelectedDeviceId(device.id);
+    setSelectedCategoryId(null);
     setSelectedServiceId(null);
     setSearchQuery("");
     setSearchResults([]);
@@ -180,6 +182,7 @@ export default function Home() {
 
   const handleDeviceSelect = (deviceId: string) => {
     setSelectedDeviceId(deviceId);
+    setSelectedCategoryId(null);
     setSelectedServiceId(null);
     setStep(4);
   };
@@ -239,6 +242,7 @@ export default function Home() {
     setSelectedTypeId(null);
     setSelectedBrandId(null);
     setSelectedDeviceId(null);
+    setSelectedCategoryId(null);
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
     setOptInQuote(false);
@@ -466,40 +470,124 @@ export default function Home() {
         {step === 4 && (
           <Card>
             <CardHeader>
-              <CardTitle>Select Service</CardTitle>
-              <CardDescription>What issue needs to be fixed?</CardDescription>
+              <CardTitle>{selectedCategoryId ? "Select Service Type" : "Select Repair Category"}</CardTitle>
+              <CardDescription>{selectedCategoryId ? "Choose your preferred service option" : "What needs to be fixed?"}</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
-                {usedSearch ? "Start Over" : "Back to devices"}
-              </Button>
               {servicesLoading ? (
                 <div className="flex justify-center py-8">
                   <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                 </div>
               ) : deviceServices.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
-              ) : (
-                <div className="space-y-2">
-                  {deviceServices.map((ds) => (
-                    <Button
-                      key={ds.id}
-                      variant="outline"
-                      className="w-full justify-start hover-elevate"
-                      onClick={() => handleServiceSelect(ds)}
-                      data-testid={`button-service-${ds.id}`}
-                    >
-                      <div className="text-left">
-                        <div className="font-medium">{ds.service.name}</div>
-                        {ds.service.description && (
-                          <div className="text-xs text-muted-foreground">{ds.service.description}</div>
+                <>
+                  <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                    {usedSearch ? "Start Over" : "Back to devices"}
+                  </Button>
+                  <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
+                </>
+              ) : (() => {
+                const categories = Array.from(
+                  new Map(
+                    deviceServices
+                      .filter(ds => ds.service.category)
+                      .map(ds => [ds.service.category!.id, ds.service.category!])
+                  ).values()
+                );
+                const uncategorized = deviceServices.filter(ds => !ds.service.category);
+                const hasMultipleCategories = categories.length > 1 || (categories.length > 0 && uncategorized.length > 0);
+
+                if (hasMultipleCategories && !selectedCategoryId) {
+                  return (
+                    <>
+                      <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                        {usedSearch ? "Start Over" : "Back to devices"}
+                      </Button>
+                      <div className="space-y-2">
+                        {categories.map((cat) => (
+                          <Button
+                            key={cat.id}
+                            variant="outline"
+                            className="w-full justify-between hover-elevate"
+                            onClick={() => setSelectedCategoryId(cat.id)}
+                            data-testid={`button-category-${cat.id}`}
+                          >
+                            <div className="text-left">
+                              <div className="font-medium">{cat.name}</div>
+                              {cat.description && (
+                                <div className="text-xs text-muted-foreground">{cat.description}</div>
+                              )}
+                            </div>
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
+                        ))}
+                        {uncategorized.length > 0 && (
+                          <Button
+                            variant="outline"
+                            className="w-full justify-between hover-elevate"
+                            onClick={() => setSelectedCategoryId("other")}
+                            data-testid="button-category-other"
+                          >
+                            <div className="text-left">
+                              <div className="font-medium">Other Services</div>
+                            </div>
+                            <ChevronRight className="h-4 w-4" />
+                          </Button>
                         )}
                       </div>
-                      <ChevronRight className="h-4 w-4 ml-auto" />
+                    </>
+                  );
+                }
+
+                const filteredServices = selectedCategoryId
+                  ? selectedCategoryId === "other"
+                    ? uncategorized
+                    : deviceServices.filter(ds => ds.service.category?.id === selectedCategoryId)
+                  : deviceServices;
+
+                return (
+                  <>
+                    <Button 
+                      variant="ghost" 
+                      className="mb-4" 
+                      onClick={() => {
+                        if (hasMultipleCategories && selectedCategoryId) {
+                          setSelectedCategoryId(null);
+                        } else if (usedSearch) {
+                          resetForm();
+                        } else {
+                          setStep(3);
+                        }
+                      }} 
+                      data-testid="button-back-step3"
+                    >
+                      {hasMultipleCategories && selectedCategoryId 
+                        ? "Back to categories" 
+                        : usedSearch 
+                          ? "Start Over" 
+                          : "Back to devices"}
                     </Button>
-                  ))}
-                </div>
-              )}
+                    <div className="space-y-2">
+                      {filteredServices.map((ds) => (
+                        <Button
+                          key={ds.id}
+                          variant="outline"
+                          className="w-full justify-start hover-elevate"
+                          onClick={() => handleServiceSelect(ds)}
+                          data-testid={`button-service-${ds.id}`}
+                        >
+                          <div className="text-left">
+                            <div className="font-medium">{ds.service.name}</div>
+                            {ds.service.description && (
+                              <div className="text-xs text-muted-foreground">{ds.service.description}</div>
+                            )}
+                          </div>
+                          <ChevronRight className="h-4 w-4 ml-auto" />
+                        </Button>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
             </CardContent>
           </Card>
         )}

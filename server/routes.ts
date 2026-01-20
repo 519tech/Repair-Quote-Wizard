@@ -5,6 +5,7 @@ import {
   insertDeviceTypeSchema,
   insertDeviceSchema,
   insertPartSchema,
+  insertServiceCategorySchema,
   insertServiceSchema,
   insertDeviceServiceSchema,
   insertQuoteRequestSchema,
@@ -551,6 +552,54 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error("Parts upload error:", error);
       res.status(500).json({ error: error.message || "Failed to process file" });
+    }
+  });
+
+  // Service Categories
+  app.get("/api/service-categories", async (req, res) => {
+    try {
+      const categories = await storage.getServiceCategories();
+      res.json(categories);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch service categories" });
+    }
+  });
+
+  app.post("/api/service-categories", requireAdmin, async (req, res) => {
+    try {
+      const data = insertServiceCategorySchema.parse(req.body);
+      const category = await storage.createServiceCategory(data);
+      res.status(201).json(category);
+    } catch (error: any) {
+      if (error.code === "23505") {
+        return res.status(400).json({ error: "A service category with this name already exists" });
+      }
+      res.status(400).json({ error: error.message || "Failed to create service category" });
+    }
+  });
+
+  app.patch("/api/service-categories/:id", requireAdmin, async (req, res) => {
+    try {
+      const data = insertServiceCategorySchema.partial().parse(req.body);
+      const category = await storage.updateServiceCategory(req.params.id, data);
+      if (!category) {
+        return res.status(404).json({ error: "Service category not found" });
+      }
+      res.json(category);
+    } catch (error: any) {
+      if (error.code === "23505") {
+        return res.status(400).json({ error: "A service category with this name already exists" });
+      }
+      res.status(400).json({ error: error.message || "Failed to update service category" });
+    }
+  });
+
+  app.delete("/api/service-categories/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteServiceCategory(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete service category" });
     }
   });
 

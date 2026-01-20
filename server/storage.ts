@@ -3,6 +3,7 @@ import {
   devices,
   parts,
   services,
+  serviceCategories,
   deviceServices,
   quoteRequests,
   brands,
@@ -16,6 +17,8 @@ import {
   type InsertPart,
   type Service,
   type InsertService,
+  type ServiceCategory,
+  type InsertServiceCategory,
   type DeviceService,
   type InsertDeviceService,
   type QuoteRequest,
@@ -70,6 +73,13 @@ export interface IStorage {
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
   bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
+
+  // Service Categories
+  getServiceCategories(): Promise<ServiceCategory[]>;
+  getServiceCategory(id: string): Promise<ServiceCategory | undefined>;
+  createServiceCategory(data: InsertServiceCategory): Promise<ServiceCategory>;
+  updateServiceCategory(id: string, data: Partial<InsertServiceCategory>): Promise<ServiceCategory | undefined>;
+  deleteServiceCategory(id: string): Promise<void>;
 
   // Services
   getServices(): Promise<Service[]>;
@@ -257,6 +267,30 @@ export class DatabaseStorage implements IStorage {
     return { inserted, updated };
   }
 
+  // Service Categories
+  async getServiceCategories(): Promise<ServiceCategory[]> {
+    return db.select().from(serviceCategories);
+  }
+
+  async getServiceCategory(id: string): Promise<ServiceCategory | undefined> {
+    const [category] = await db.select().from(serviceCategories).where(eq(serviceCategories.id, id));
+    return category || undefined;
+  }
+
+  async createServiceCategory(data: InsertServiceCategory): Promise<ServiceCategory> {
+    const [category] = await db.insert(serviceCategories).values(data).returning();
+    return category;
+  }
+
+  async updateServiceCategory(id: string, data: Partial<InsertServiceCategory>): Promise<ServiceCategory | undefined> {
+    const [category] = await db.update(serviceCategories).set(data).where(eq(serviceCategories.id, id)).returning();
+    return category || undefined;
+  }
+
+  async deleteServiceCategory(id: string): Promise<void> {
+    await db.delete(serviceCategories).where(eq(serviceCategories.id, id));
+  }
+
   // Services
   async getServices(): Promise<Service[]> {
     return db.select().from(services);
@@ -291,7 +325,11 @@ export class DatabaseStorage implements IStorage {
             brand: true,
           },
         },
-        service: true,
+        service: {
+          with: {
+            category: true,
+          },
+        },
         part: true,
       },
     });
@@ -308,7 +346,11 @@ export class DatabaseStorage implements IStorage {
             brand: true,
           },
         },
-        service: true,
+        service: {
+          with: {
+            category: true,
+          },
+        },
         part: true,
       },
     });
@@ -330,7 +372,11 @@ export class DatabaseStorage implements IStorage {
       where: eq(deviceServices.id, id),
       with: {
         device: true,
-        service: true,
+        service: {
+          with: {
+            category: true,
+          },
+        },
         part: true,
       },
     });

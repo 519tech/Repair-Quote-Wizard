@@ -94,17 +94,40 @@ export const insertPartSchema = createInsertSchema(parts).omit({ id: true });
 export type InsertPart = z.infer<typeof insertPartSchema>;
 export type Part = typeof parts.$inferSelect;
 
-// Services (screen replacement, battery replacement, etc.)
-export const services = pgTable("services", {
+// Service categories (Battery Replacement, Screen Replacement, etc.)
+export const serviceCategories = pgTable("service_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   description: text("description"),
+});
+
+export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
+  services: many(services),
+}));
+
+export const insertServiceCategorySchema = createInsertSchema(serviceCategories).omit({ id: true });
+export type InsertServiceCategory = z.infer<typeof insertServiceCategorySchema>;
+export type ServiceCategory = typeof serviceCategories.$inferSelect;
+
+// Services (Original, Aftermarket, Premium, Budget, etc.)
+export const services = pgTable("services", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  categoryId: varchar("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
   warranty: text("warranty"),
   repairTime: text("repair_time"),
   laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull().default("0"),
   partsMarkup: decimal("parts_markup", { precision: 5, scale: 2 }).notNull().default("1.0"),
   notes: text("notes"),
 });
+
+export const servicesRelations = relations(services, ({ one }) => ({
+  category: one(serviceCategories, {
+    fields: [services.categoryId],
+    references: [serviceCategories.id],
+  }),
+}));
 
 export const insertServiceSchema = createInsertSchema(services).omit({ id: true });
 export type InsertService = z.infer<typeof insertServiceSchema>;
@@ -178,8 +201,9 @@ export type MessageTemplate = typeof messageTemplates.$inferSelect;
 // Extended types for frontend with relations
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
 export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };
+export type ServiceWithCategory = Service & { category: ServiceCategory | null };
 export type DeviceServiceWithRelations = DeviceService & { 
   device: Device & { deviceType?: DeviceType; brand?: Brand | null }; 
-  service: Service; 
+  service: ServiceWithCategory; 
   part: Part | null;
 };
