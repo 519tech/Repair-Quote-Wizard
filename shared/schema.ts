@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -65,7 +65,9 @@ export const devices = pgTable("devices", {
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
   brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
   imageUrl: text("image_url"),
-});
+}, (table) => [
+  unique("devices_name_brand_type_unique").on(table.name, table.brandId, table.deviceTypeId),
+]);
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({
   deviceType: one(deviceTypes, {
@@ -137,7 +139,7 @@ export type BrandServiceCategoryWithRelations = BrandServiceCategory & { brand: 
 // Services (Original, Aftermarket, Premium, Budget, etc.)
 export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
   warranty: text("warranty"),
@@ -164,7 +166,9 @@ export const deviceServices = pgTable("device_services", {
   deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
   partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
-});
+}, (table) => [
+  unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
+]);
 
 export const deviceServicesRelations = relations(deviceServices, ({ one }) => ({
   device: one(devices, {
