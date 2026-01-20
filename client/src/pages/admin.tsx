@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2 } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1096,14 +1096,83 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   );
 }
 
+type BrandServiceCategoryWithRelations = {
+  id: string;
+  brandId: string;
+  categoryId: string;
+  brand: Brand;
+  category: ServiceCategory;
+};
+
 function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<ServiceCategory | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [linkCategory, setLinkCategory] = useState<ServiceCategory | null>(null);
+  const [selectedBrandId, setSelectedBrandId] = useState<string>("");
 
   const { data: categories = [], isLoading } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
+  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: brandCategoryLinks = [] } = useQuery<BrandServiceCategoryWithRelations[]>({ queryKey: ["/api/brand-service-categories"] });
+
+  const getLinkedBrands = (categoryId: string) => {
+    return brandCategoryLinks.filter(link => link.categoryId === categoryId).map(link => link.brand);
+  };
+
+  const getLinkedBrandIds = (categoryId: string) => {
+    return new Set(brandCategoryLinks.filter(link => link.categoryId === categoryId).map(link => link.brandId));
+  };
+
+  const getLinkId = (categoryId: string, brandId: string) => {
+    const link = brandCategoryLinks.find(l => l.categoryId === categoryId && l.brandId === brandId);
+    return link?.id;
+  };
+
+  const createLinkMutation = useMutation({
+    mutationFn: async (data: { brandId: string; categoryId: string }) => {
+      const res = await apiRequest("POST", "/api/brand-service-categories", data);
+      if (!res.ok) throw new Error("Failed to link brand");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-service-categories"] });
+      setSelectedBrandId("");
+      toast({ title: "Brand linked to category" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteLinkMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/brand-service-categories/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-service-categories"] });
+      toast({ title: "Brand unlinked from category" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleAddLink = () => {
+    if (!linkCategory || !selectedBrandId) return;
+    createLinkMutation.mutate({ brandId: selectedBrandId, categoryId: linkCategory.id });
+  };
+
+  const handleRemoveLink = (categoryId: string, brandId: string) => {
+    const linkId = getLinkId(categoryId, brandId);
+    if (linkId) deleteLinkMutation.mutate(linkId);
+  };
+
+  const openLinkDialog = (category: ServiceCategory) => {
+    setLinkCategory(category);
+    setSelectedBrandId("");
+    setLinkOpen(true);
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; description?: string }) => {
@@ -1220,22 +1289,38 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead className="w-20">Actions</TableHead>
+                <TableHead>Brands</TableHead>
+                <TableHead className="w-24">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {categories.map((category) => (
-                <TableRow key={category.id}>
-                  <TableCell className="font-medium">{category.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{category.description || "-"}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(category)} data-testid={`button-edit-category-${category.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(category.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {categories.map((category) => {
+                const linkedBrands = getLinkedBrands(category.id);
+                return (
+                  <TableRow key={category.id}>
+                    <TableCell className="font-medium">{category.name}</TableCell>
+                    <TableCell className="text-muted-foreground">{category.description || "-"}</TableCell>
+                    <TableCell>
+                      {linkedBrands.length === 0 ? (
+                        <span className="text-muted-foreground text-sm">All brands</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1">
+                          {linkedBrands.map(brand => (
+                            <Badge key={brand.id} variant="secondary" className="text-xs">{brand.name}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => openLinkDialog(category)} title="Manage brand links" data-testid={`button-link-brands-${category.id}`}><Link2 className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(category)} data-testid={`button-edit-category-${category.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(category.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         )}
@@ -1262,6 +1347,65 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                 </Button>
               </DialogFooter>
             </form>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Manage Brand Links</DialogTitle>
+              <DialogDescription>Link "{linkCategory?.name}" to specific brands. When linked, this category will only appear for those brands in the quote widget.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Add Brand</Label>
+                <div className="flex gap-2">
+                  <Select value={selectedBrandId} onValueChange={setSelectedBrandId}>
+                    <SelectTrigger className="flex-1" data-testid="select-link-brand">
+                      <SelectValue placeholder="Select a brand to link" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {brands.filter(b => !getLinkedBrandIds(linkCategory?.id || "").has(b.id)).map(brand => (
+                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button onClick={handleAddLink} disabled={!selectedBrandId || createLinkMutation.isPending} data-testid="button-add-brand-link">
+                    {createLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              
+              {linkCategory && getLinkedBrands(linkCategory.id).length > 0 && (
+                <div className="space-y-2">
+                  <Label>Linked Brands</Label>
+                  <div className="flex flex-wrap gap-2">
+                    {getLinkedBrands(linkCategory.id).map(brand => (
+                      <Badge key={brand.id} variant="secondary" className="flex items-center gap-1">
+                        {brand.name}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-4 w-4 p-0 hover:bg-transparent"
+                          onClick={() => handleRemoveLink(linkCategory.id, brand.id)}
+                          disabled={deleteLinkMutation.isPending}
+                          data-testid={`button-remove-brand-link-${brand.id}`}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {linkCategory && getLinkedBrands(linkCategory.id).length === 0 && (
+                <p className="text-sm text-muted-foreground">No brands linked. This category will appear for all brands.</p>
+              )}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setLinkOpen(false)}>Done</Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </CardContent>
