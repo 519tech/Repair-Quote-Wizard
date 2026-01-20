@@ -6,6 +6,10 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added Service Categories feature - services can now be grouped into categories (e.g., "Battery Replacement", "Screen Replacement")
+- **Jan 2026**: Quote wizard now shows category selection first when multiple categories exist, then service types within category
+- **Jan 2026**: Added Service Categories tab in admin panel with full CRUD (create, edit, delete categories)
+- **Jan 2026**: Services tab updated with category dropdown selector and category column in table
 - **Jan 2026**: Added device search bar to quote widget - search all models to skip step-by-step selection
 - **Jan 2026**: Search results show device name, brand, and type for easy identification
 - **Jan 2026**: Selecting a search result jumps directly to service selection (step 4)
@@ -67,7 +71,8 @@ The server uses a storage abstraction layer (`server/storage.ts`) that implement
 The application manages:
 - **Device Types**: Categories like smartphone, tablet, laptop
 - **Devices**: Specific models within each type
-- **Services**: Repair services offered
+- **Service Categories**: Hierarchical grouping for services (e.g., "Battery Replacement", "Screen Replacement")
+- **Services**: Repair services offered, optionally grouped by category
 - **Parts**: Inventory with SKU and pricing
 - **Device Services**: Links devices to services with pricing
 - **Quote Requests**: Customer quote submissions
