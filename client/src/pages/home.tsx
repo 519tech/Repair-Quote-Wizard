@@ -42,6 +42,8 @@ export default function Home() {
   const [optInQuote, setOptInQuote] = useState(false);
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
+  const [showContactForm, setShowContactForm] = useState(false);
+  const [quoteSent, setQuoteSent] = useState(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
@@ -191,18 +193,11 @@ export default function Home() {
     setStep(4);
   };
 
-  const handleServiceSelect = (service: DeviceServiceWithRelations) => {
+  const handleServiceSelect = async (service: DeviceServiceWithRelations) => {
     setSelectedServiceId(service.id);
-    setStep(5);
-  };
-
-  const handleContactSubmitAndGetQuote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDeviceId || !selectedServiceId) return;
-
     setQuoteLoading(true);
     try {
-      const res = await fetch(`/api/calculate-quote/${selectedServiceId}`);
+      const res = await fetch(`/api/calculate-quote/${service.id}`);
       if (res.ok) {
         const data = await res.json();
         setQuoteResult({ 
@@ -213,16 +208,7 @@ export default function Home() {
           repairTime: data.repairTime,
           warranty: data.warranty
         });
-
-        submitQuoteMutation.mutate({
-          customerName: contactInfo.name,
-          customerEmail: contactInfo.email,
-          customerPhone: contactInfo.phone || undefined,
-          deviceId: selectedDeviceId,
-          deviceServiceId: selectedServiceId,
-          optIn: optInQuote,
-        });
-        setStep(6);
+        setStep(5);
       } else {
         toast({
           title: "Error",
@@ -241,6 +227,26 @@ export default function Home() {
     }
   };
 
+  const handleSendQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDeviceId || !selectedServiceId) return;
+
+    submitQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceId: selectedServiceId,
+      optIn: true,
+    });
+    setQuoteSent(true);
+    setShowContactForm(false);
+    toast({
+      title: "Quote Sent",
+      description: "Your quote has been sent to your email/phone!",
+    });
+  };
+
   const resetForm = () => {
     setStep(1);
     setSelectedTypeId(null);
@@ -256,6 +262,8 @@ export default function Home() {
     setSearchResults([]);
     setShowSearch(false);
     setUsedSearch(false);
+    setShowContactForm(false);
+    setQuoteSent(false);
   };
 
   return (
@@ -345,7 +353,7 @@ export default function Home() {
         )}
 
         <div className="flex items-center justify-center mb-8 gap-2">
-          {[1, 2, 3, 4, 5, 6].map((s) => (
+          {[1, 2, 3, 4, 5].map((s) => (
             <div key={s} className="flex items-center gap-2">
               <div
                 className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
@@ -354,7 +362,7 @@ export default function Home() {
               >
                 {step > s ? <Check className="h-4 w-4" /> : s}
               </div>
-              {s < 6 && <div className={`w-6 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
+              {s < 5 && <div className={`w-6 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
             </div>
           ))}
         </div>
@@ -604,88 +612,14 @@ export default function Home() {
           </Card>
         )}
 
-        {step === 5 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Your Contact Information</CardTitle>
-              <CardDescription>Enter your details to receive your repair quote</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleContactSubmitAndGetQuote} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Name *</Label>
-                  <Input
-                    id="name"
-                    value={contactInfo.name}
-                    onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                    required
-                    data-testid="input-customer-name"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={contactInfo.email}
-                    onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                    required
-                    data-testid="input-customer-email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone (optional)</Label>
-                  <Input
-                    id="phone"
-                    type="tel"
-                    value={contactInfo.phone}
-                    onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                    data-testid="input-customer-phone"
-                  />
-                </div>
-                <div className="pt-2">
-                  <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="optInQuote" 
-                      checked={optInQuote} 
-                      onCheckedChange={(checked) => setOptInQuote(checked === true)}
-                      data-testid="checkbox-optin-quote"
-                    />
-                    <Label htmlFor="optInQuote" className="text-sm font-normal cursor-pointer">
-                      I agree to receive my quote via email and SMS
-                    </Label>
-                  </div>
-                </div>
-                <div className="flex gap-2 pt-2">
-                  <Button type="button" variant="outline" onClick={() => setStep(4)} data-testid="button-back-step4">
-                    Back
-                  </Button>
-                  <Button
-                    type="submit"
-                    className="flex-1"
-                    disabled={quoteLoading}
-                    data-testid="button-submit-quote"
-                  >
-                    {quoteLoading ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Get My Quote"
-                    )}
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        )}
-
-        {step === 6 && quoteResult && (
+        {step === 5 && quoteResult && (
           <Card>
             <CardHeader className="text-center">
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Check className="h-6 w-6 text-primary" />
               </div>
               <CardTitle>Your Repair Quote</CardTitle>
-              <CardDescription>We've received your request and will be in touch soon</CardDescription>
+              <CardDescription>Here's your estimated repair cost</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="bg-primary/10 rounded-lg p-6 mb-6 text-center">
@@ -711,9 +645,94 @@ export default function Home() {
                   </div>
                 )}
               </div>
-              <Button className="w-full" onClick={resetForm} data-testid="button-new-quote">
-                Get Another Quote
-              </Button>
+
+              {!showContactForm && !quoteSent && (
+                <div className="space-y-3">
+                  <Button 
+                    className="w-full" 
+                    onClick={() => setShowContactForm(true)} 
+                    data-testid="button-send-quote"
+                  >
+                    Send Me My Quote via Email/SMS
+                  </Button>
+                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
+                    Get Another Quote
+                  </Button>
+                </div>
+              )}
+
+              {showContactForm && !quoteSent && (
+                <form onSubmit={handleSendQuote} className="space-y-4 border-t pt-6">
+                  <p className="text-sm text-muted-foreground text-center mb-4">
+                    Enter your details to receive this quote via email and SMS
+                  </p>
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                      id="name"
+                      value={contactInfo.name}
+                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                      required
+                      data-testid="input-customer-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={contactInfo.email}
+                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                      required
+                      data-testid="input-customer-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Phone (for SMS)</Label>
+                    <Input
+                      id="phone"
+                      type="tel"
+                      value={contactInfo.phone}
+                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                      data-testid="input-customer-phone"
+                    />
+                  </div>
+                  <div className="flex gap-2 pt-2">
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => setShowContactForm(false)} 
+                      data-testid="button-cancel-send"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="submit"
+                      className="flex-1"
+                      disabled={submitQuoteMutation.isPending}
+                      data-testid="button-submit-send"
+                    >
+                      {submitQuoteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        "Send My Quote"
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              )}
+
+              {quoteSent && (
+                <div className="space-y-3">
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4 text-center">
+                    <Check className="h-5 w-5 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                    <p className="text-sm text-green-700 dark:text-green-300">Quote sent to your email/phone!</p>
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
+                    Get Another Quote
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
