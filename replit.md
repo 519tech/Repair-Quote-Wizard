@@ -6,6 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added database unique constraints to prevent duplicate entries:
+  - Devices: unique on (name + brand + device type) combination
+  - Services: unique on name
+  - Device-Service Links: unique on (device + service) combination - prevents linking same device-service pair twice
+  - Note: Brands, Device Types, Service Categories, and Parts SKU already had unique constraints
 - **Jan 2026**: Added brand-service-category linking - service categories can be restricted to specific brands
 - **Jan 2026**: Service Categories tab now shows linked brands column and "Manage Brand Links" dialog
 - **Jan 2026**: Quote wizard filters categories by selected brand (categories with no links appear for all brands)
