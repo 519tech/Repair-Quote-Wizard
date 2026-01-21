@@ -728,9 +728,54 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResults, setBulkResults] = useState<{ created: number; errors: string[] } | null>(null);
 
+  // Service links management state
+  const [linksOpen, setLinksOpen] = useState(false);
+  const [linksDevice, setLinksDevice] = useState<Device | null>(null);
+  const [addLinkOpen, setAddLinkOpen] = useState(false);
+  const [editLinkOpen, setEditLinkOpen] = useState(false);
+  const [editLinkItem, setEditLinkItem] = useState<DeviceServiceWithRelations | null>(null);
+  const [linkServiceId, setLinkServiceId] = useState("");
+  const [linkPartSku, setLinkPartSku] = useState("");
+  const [linkPartSearch, setLinkPartSearch] = useState("");
+  const [linkPartId, setLinkPartId] = useState<string | undefined>();
+  const [debouncedLinkPartSearch, setDebouncedLinkPartSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedLinkPartSearch(linkPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [linkPartSearch]);
+
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
+  const { data: allDeviceServices = [] } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
+
+  // Parts search for link dialog
+  const linkPartSearchUrl = useMemo(() => {
+    if (!debouncedLinkPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedLinkPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedLinkPartSearch]);
+
+  const { data: linkSearchedParts } = useQuery<{ parts: Part[]; total: number }>({
+    queryKey: [linkPartSearchUrl || "/api/parts-disabled-link"],
+    enabled: !!linkPartSearchUrl
+  });
+
+  const linkFilteredParts = linkSearchedParts?.parts || [];
+
+  // Get service links for the current device
+  const deviceServiceLinks = useMemo(() => {
+    if (!linksDevice) return [];
+    return allDeviceServices.filter(ds => ds.deviceId === linksDevice.id);
+  }, [allDeviceServices, linksDevice]);
+
+  // SKU lookup for link dialog
+  const { data: linkSkuPart } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(linkPartSku)}`],
+    enabled: linkPartSku.length > 0
+  });
 
   const filteredDevices = devices.filter((device) => {
     if (filterTypeId !== "all" && device.deviceTypeId !== filterTypeId) return false;
@@ -816,6 +861,96 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Service link mutations
+  const createLinkMutation = useMutation({
+    mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
+      const res = await apiRequest("POST", "/api/device-services", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      setAddLinkOpen(false);
+      setLinkServiceId("");
+      setLinkPartSku("");
+      setLinkPartSearch("");
+      setLinkPartId(undefined);
+      toast({ title: "Service link created" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateLinkMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string } }) => {
+      const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      setEditLinkOpen(false);
+      setEditLinkItem(null);
+      toast({ title: "Service link updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteLinkMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/device-services/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      toast({ title: "Service link deleted" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleManageLinks = (device: Device) => {
+    setLinksDevice(device);
+    setLinksOpen(true);
+  };
+
+  const handleAddLink = () => {
+    setLinkServiceId("");
+    setLinkPartSku("");
+    setLinkPartSearch("");
+    setLinkPartId(undefined);
+    setAddLinkOpen(true);
+  };
+
+  const handleAddLinkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!linksDevice) return;
+    createLinkMutation.mutate({
+      deviceId: linksDevice.id,
+      serviceId: linkServiceId,
+      partSku: linkPartSku || undefined,
+      partId: linkPartId === "none" ? undefined : linkPartId,
+    });
+  };
+
+  const handleEditLink = (link: DeviceServiceWithRelations) => {
+    setEditLinkItem(link);
+    setLinkPartSku(link.part?.sku || link.partSku || "");
+    setLinkPartSearch("");
+    setEditLinkOpen(true);
+  };
+
+  const handleEditLinkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editLinkItem) return;
+    updateLinkMutation.mutate({
+      id: editLinkItem.id,
+      data: {
+        serviceId: editLinkItem.serviceId,
+        partSku: linkPartSku || undefined,
+      },
+    });
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1201,11 +1336,14 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 <TableHead>Name</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead>Brand</TableHead>
+                <TableHead className="w-[50px]">Links</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredDevices.map((device) => (
+              {filteredDevices.map((device) => {
+                const linkCount = allDeviceServices.filter(ds => ds.deviceId === device.id).length;
+                return (
                 <TableRow key={device.id}>
                   <TableCell>
                     {device.imageUrl ? (
@@ -1218,17 +1356,166 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   <TableCell><Badge variant="secondary">{getTypeName(device.deviceTypeId)}</Badge></TableCell>
                   <TableCell>{getBrandName(device.brandId)}</TableCell>
                   <TableCell>
+                    <Button variant="ghost" size="sm" onClick={() => handleManageLinks(device)} data-testid={`button-manage-links-${device.id}`}>
+                      {linkCount}
+                    </Button>
+                  </TableCell>
+                  <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(device)} data-testid={`button-edit-device-${device.id}`}><Pencil className="h-4 w-4" /></Button>
                       <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(device.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-device-${device.id}`}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
+                );
+              })}
             </TableBody>
           </Table>
         )}
       </CardContent>
+
+      {/* Manage Service Links Dialog */}
+      <Dialog open={linksOpen} onOpenChange={setLinksOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Service Links for {linksDevice?.name}</DialogTitle>
+            <DialogDescription>Manage which services are available for this device</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className="flex justify-end mb-4">
+              <Button onClick={handleAddLink} data-testid="button-add-device-link">
+                <Plus className="h-4 w-4 mr-2" />Add Service Link
+              </Button>
+            </div>
+            {deviceServiceLinks.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No service links yet. Add one to enable quotes for this device.</p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Part SKU</TableHead>
+                    <TableHead>Price</TableHead>
+                    <TableHead className="w-[100px]">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {deviceServiceLinks.map((link) => {
+                    const service = services.find(s => s.id === link.serviceId);
+                    const partPrice = link.part?.price || 0;
+                    const totalPrice = service ? (Number(service.laborPrice) + Number(partPrice) * Number(service.partsMarkup)).toFixed(2) : "N/A";
+                    return (
+                      <TableRow key={link.id}>
+                        <TableCell className="font-medium">{link.service?.name || "Unknown"}</TableCell>
+                        <TableCell>
+                          {link.part?.sku || link.partSku || <span className="text-muted-foreground">-</span>}
+                          {!link.part && link.partSku && <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">missing</Badge>}
+                        </TableCell>
+                        <TableCell>
+                          {link.part || service?.labourOnly ? `$${totalPrice}` : <span className="text-muted-foreground">Not Available</span>}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEditLink(link)} data-testid={`button-edit-link-${link.id}`}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteLinkMutation.mutate(link.id)} disabled={deleteLinkMutation.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLinksOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Service Link Dialog */}
+      <Dialog open={addLinkOpen} onOpenChange={setAddLinkOpen}>
+        <DialogContent>
+          <form onSubmit={handleAddLinkSubmit}>
+            <DialogHeader>
+              <DialogTitle>Add Service Link</DialogTitle>
+              <DialogDescription>Link a service to {linksDevice?.name}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Select value={linkServiceId} onValueChange={setLinkServiceId} required>
+                  <SelectTrigger data-testid="select-add-link-service"><SelectValue placeholder="Select service" /></SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice} + {service.partsMarkup}x)</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Part SKU (optional)</Label>
+                <Input value={linkPartSku} onChange={(e) => { setLinkPartSku(e.target.value); setLinkPartId(undefined); }} placeholder="Enter SKU" data-testid="input-add-link-sku" />
+                {linkPartSku && linkSkuPart && (
+                  <p className="text-sm text-green-600">Found: {linkSkuPart.name} (${linkSkuPart.price})</p>
+                )}
+                {linkPartSku && !linkSkuPart && linkPartSku.length > 0 && (
+                  <p className="text-sm text-destructive">SKU not found</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Or Search Part by Name</Label>
+                <Input value={linkPartSearch} onChange={(e) => setLinkPartSearch(e.target.value)} placeholder="Type to search parts..." data-testid="input-add-link-part-search" />
+                {linkPartSearch.length > 0 && (
+                  <Select value={linkPartId} onValueChange={(v) => { setLinkPartId(v); setLinkPartSku(""); }}>
+                    <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No part required</SelectItem>
+                      {linkFilteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={createLinkMutation.isPending || !linkServiceId} data-testid="button-save-add-link">
+                {createLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Service Link Dialog */}
+      <Dialog open={editLinkOpen} onOpenChange={setEditLinkOpen}>
+        <DialogContent>
+          <form onSubmit={handleEditLinkSubmit}>
+            <DialogHeader>
+              <DialogTitle>Edit Service Link</DialogTitle>
+              <DialogDescription>Update part for {editLinkItem?.service?.name}</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Input value={editLinkItem?.service?.name || ""} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>Part SKU</Label>
+                <Input value={linkPartSku} onChange={(e) => setLinkPartSku(e.target.value)} placeholder="Enter SKU" data-testid="input-edit-link-sku" />
+                {linkPartSku && linkSkuPart && (
+                  <p className="text-sm text-green-600">Found: {linkSkuPart.name} (${linkSkuPart.price})</p>
+                )}
+                {linkPartSku && !linkSkuPart && linkPartSku.length > 0 && (
+                  <p className="text-sm text-destructive">SKU not found</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={updateLinkMutation.isPending} data-testid="button-save-edit-link">
+                {updateLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
