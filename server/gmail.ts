@@ -124,3 +124,76 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
     return false;
   }
 }
+
+// Combined multi-service quote email
+interface CombinedQuoteEmailData {
+  customerName: string;
+  customerEmail: string;
+  deviceName: string;
+  services: Array<{
+    serviceName: string;
+    price: string;
+    repairTime?: string;
+    warranty?: string;
+  }>;
+  grandTotal: string;
+}
+
+export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+    
+    const servicesList = data.services.map(s => 
+      `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
+    ).join('\n');
+
+    const subject = `Your Combined Repair Quote - $${data.grandTotal} plus taxes`;
+    const emailBody = `Dear ${data.customerName},
+
+Thank you for requesting a repair quote from RepairQuote!
+
+Here are your quote details:
+
+Device: ${data.deviceName}
+
+Selected Services:
+${servicesList}
+
+-------------------
+Grand Total: $${data.grandTotal} plus taxes
+
+To proceed with these repairs, please reply to this email or visit our store.
+
+Thank you for choosing RepairQuote!
+
+Best regards,
+The RepairQuote Team`;
+
+    const message = [
+      `To: ${data.customerEmail}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`Combined quote email sent to ${data.customerEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send combined quote email:', error);
+    return false;
+  }
+}

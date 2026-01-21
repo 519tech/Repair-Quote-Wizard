@@ -17,8 +17,8 @@ import {
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { sendQuoteEmail } from "./gmail";
-import { sendQuoteSms } from "./sms";
+import { sendQuoteEmail, sendCombinedQuoteEmail } from "./gmail";
+import { sendQuoteSms, sendCombinedQuoteSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 // Admin authentication middleware
@@ -1071,6 +1071,94 @@ export async function registerRoutes(
       res.status(201).json(quote);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create quote request" });
+    }
+  });
+
+  // Combined Quote Request (multiple services)
+  const combinedQuoteRequestSchema = z.object({
+    customerName: z.string().min(1),
+    customerEmail: z.string().email(),
+    customerPhone: z.string().optional(),
+    deviceId: z.string(),
+    deviceServiceIds: z.array(z.string()).min(1),
+  });
+
+  app.post("/api/quote-requests/combined", async (req, res) => {
+    try {
+      const input = combinedQuoteRequestSchema.parse(req.body);
+      
+      // Fetch all device services and calculate prices
+      const servicesData: Array<{
+        serviceName: string;
+        price: string;
+        repairTime?: string;
+        warranty?: string;
+      }> = [];
+      let grandTotal = 0;
+      let deviceName = '';
+
+      for (const deviceServiceId of input.deviceServiceIds) {
+        const deviceService = await storage.getDeviceServiceWithRelations(deviceServiceId);
+        if (!deviceService) {
+          return res.status(400).json({ error: `Device service ${deviceServiceId} not found` });
+        }
+        
+        deviceName = deviceService.device.name;
+        const service = deviceService.service;
+        const laborPrice = parseFloat(service.laborPrice || "0");
+        const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+        const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+        const markedUpPartCost = partCost * partsMarkup;
+        const rawTotal = laborPrice + markedUpPartCost;
+        const quotedPrice = roundToNearestFiveMinus1(rawTotal);
+        
+        servicesData.push({
+          serviceName: service.name,
+          price: quotedPrice.toFixed(2),
+          repairTime: service.repairTime || undefined,
+          warranty: service.warranty || undefined,
+        });
+        
+        grandTotal += quotedPrice;
+        
+        // Create individual quote request record
+        await storage.createQuoteRequest({
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          customerPhone: input.customerPhone,
+          deviceId: input.deviceId,
+          deviceServiceId: deviceServiceId,
+          quotedPrice: quotedPrice.toFixed(2),
+        });
+      }
+
+      // Send combined email
+      sendCombinedQuoteEmail({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        deviceName,
+        services: servicesData,
+        grandTotal: grandTotal.toFixed(2),
+      }).catch(err => console.error('Combined email send error:', err));
+
+      // Send combined SMS if phone provided
+      if (input.customerPhone) {
+        sendCombinedQuoteSms({
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          deviceName,
+          services: servicesData,
+          grandTotal: grandTotal.toFixed(2),
+        }).catch(err => console.error('Combined SMS send error:', err));
+      }
+
+      res.status(201).json({ 
+        success: true, 
+        servicesCount: servicesData.length,
+        grandTotal: grandTotal.toFixed(2)
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to create combined quote request" });
     }
   });
 

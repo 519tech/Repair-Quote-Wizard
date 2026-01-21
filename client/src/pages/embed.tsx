@@ -50,10 +50,16 @@ export default function Embed() {
     price: string;
     repairTime?: string;
     warranty?: string;
+    isAvailable: boolean;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [sendingQuoteFor, setSendingQuoteFor] = useState<string | null>(null);
   const [quoteSentFor, setQuoteSentFor] = useState<Set<string>>(new Set());
+  
+  // Multi-select for combined quotes
+  const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
+  const [showCombinedQuoteForm, setShowCombinedQuoteForm] = useState(false);
+  const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
@@ -255,6 +261,7 @@ export default function Embed() {
                 price: data.totalPrice,
                 repairTime: data.repairTime,
                 warranty: data.warranty,
+                isAvailable: data.isAvailable ?? true,
               };
             }
           } catch {
@@ -302,6 +309,67 @@ export default function Embed() {
     });
   };
 
+  // Multi-select helpers
+  const toggleServiceSelection = (serviceId: string) => {
+    setSelectedServices(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
+
+  const getSelectedQuotes = () => allQuotes.filter(q => selectedServices.has(q.serviceId) && q.isAvailable);
+  
+  const getGrandTotal = () => {
+    return getSelectedQuotes().reduce((sum, q) => sum + parseFloat(q.price), 0);
+  };
+
+  const submitCombinedQuoteMutation = useMutation({
+    mutationFn: async (data: {
+      customerName: string;
+      customerEmail: string;
+      customerPhone?: string;
+      deviceId: string;
+      deviceServiceIds: string[];
+    }) => {
+      const res = await apiRequest("POST", "/api/quote-requests/combined", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/quote-requests"] });
+      setCombinedQuoteSent(true);
+      setShowCombinedQuoteForm(false);
+      toast({
+        title: "Quote Sent",
+        description: "Your combined quote has been sent!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSendCombinedQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDeviceId || selectedServices.size === 0) return;
+
+    submitCombinedQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceIds: Array.from(selectedServices),
+    });
+  };
+
   const resetForm = () => {
     setStep(1);
     setSelectedTypeId(null);
@@ -322,6 +390,9 @@ export default function Embed() {
     setAllQuotes([]);
     setSendingQuoteFor(null);
     setQuoteSentFor(new Set());
+    setSelectedServices(new Set());
+    setShowCombinedQuoteForm(false);
+    setCombinedQuoteSent(false);
   };
 
   return (
@@ -632,116 +703,175 @@ export default function Embed() {
                       </div>
                     ) : allQuotes.length > 0 ? (
                       <div className="space-y-4">
-                        {[...allQuotes].sort((a, b) => parseFloat(a.price) - parseFloat(b.price)).map((quote) => (
+                        {[...allQuotes].sort((a, b) => {
+                          if (a.isAvailable !== b.isAvailable) {
+                            return a.isAvailable ? -1 : 1;
+                          }
+                          return parseFloat(a.price) - parseFloat(b.price);
+                        }).map((quote) => (
                           <div 
                             key={quote.serviceId} 
-                            className="border rounded-lg p-4 bg-card"
+                            className={`border rounded-lg p-4 bg-card ${!quote.isAvailable ? 'opacity-60' : ''} ${selectedServices.has(quote.serviceId) ? 'ring-2 ring-primary border-primary' : ''}`}
                             data-testid={`quote-card-${quote.serviceId}`}
                           >
-                            <div className="flex flex-col gap-3">
-                              <div>
-                                <h3 className="font-semibold">{quote.serviceName}</h3>
+                            <div className="flex gap-3">
+                              {quote.isAvailable && (
+                                <div className="flex items-start pt-1">
+                                  <Checkbox
+                                    id={`select-${quote.serviceId}`}
+                                    checked={selectedServices.has(quote.serviceId)}
+                                    onCheckedChange={() => toggleServiceSelection(quote.serviceId)}
+                                    data-testid={`checkbox-select-${quote.serviceId}`}
+                                  />
+                                </div>
+                              )}
+                              <div className="flex-1">
+                                <label 
+                                  htmlFor={`select-${quote.serviceId}`}
+                                  className={`font-semibold ${quote.isAvailable ? 'cursor-pointer' : ''}`}
+                                >
+                                  {quote.serviceName}
+                                </label>
                                 {quote.serviceDescription && (
                                   <p className="text-sm text-muted-foreground mt-1">{quote.serviceDescription}</p>
                                 )}
-                                <div className="flex flex-wrap gap-2 mt-2">
-                                  {quote.repairTime && (
-                                    <span className="text-xs bg-muted px-2 py-1 rounded">
-                                      {quote.repairTime}
-                                    </span>
-                                  )}
-                                  {quote.warranty && (
-                                    <span className="text-xs bg-muted px-2 py-1 rounded">
-                                      {quote.warranty} warranty
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                              <div className="flex items-center justify-between gap-2">
-                                <div>
-                                  <p className="text-xl font-bold text-primary">${quote.price}</p>
-                                  <p className="text-xs text-muted-foreground">plus taxes</p>
-                                </div>
-                                {quoteSentFor.has(quote.serviceId) ? (
-                                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
-                                    <Check className="h-4 w-4" />
-                                    Sent
+                                {quote.isAvailable && (
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {quote.repairTime && (
+                                      <span className="text-xs bg-muted px-2 py-1 rounded">
+                                        {quote.repairTime}
+                                      </span>
+                                    )}
+                                    {quote.warranty && (
+                                      <span className="text-xs bg-muted px-2 py-1 rounded">
+                                        {quote.warranty} warranty
+                                      </span>
+                                    )}
                                   </div>
-                                ) : sendingQuoteFor === quote.serviceId ? (
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => setSendingQuoteFor(null)}
-                                    data-testid={`button-cancel-send-${quote.serviceId}`}
-                                  >
-                                    Cancel
-                                  </Button>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                {quote.isAvailable ? (
+                                  <>
+                                    <p className="text-xl font-bold text-primary">${quote.price}</p>
+                                    <p className="text-xs text-muted-foreground">plus taxes</p>
+                                  </>
                                 ) : (
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => setSendingQuoteFor(quote.serviceId)}
-                                    data-testid={`button-send-quote-${quote.serviceId}`}
-                                  >
-                                    Send me quote
-                                  </Button>
+                                  <p className="text-sm font-medium text-muted-foreground">Not Available</p>
                                 )}
                               </div>
                             </div>
-
-                            {sendingQuoteFor === quote.serviceId && (
-                              <form onSubmit={handleSendQuote} className="mt-4 pt-4 border-t space-y-3">
-                                <div className="space-y-2">
-                                  <div className="space-y-1">
-                                    <Label htmlFor={`name-${quote.serviceId}`} className="text-xs">Name *</Label>
-                                    <Input
-                                      id={`name-${quote.serviceId}`}
-                                      value={contactInfo.name}
-                                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                                      required
-                                      className="h-9"
-                                      data-testid={`input-name-${quote.serviceId}`}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label htmlFor={`email-${quote.serviceId}`} className="text-xs">Email *</Label>
-                                    <Input
-                                      id={`email-${quote.serviceId}`}
-                                      type="email"
-                                      value={contactInfo.email}
-                                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                                      required
-                                      className="h-9"
-                                      data-testid={`input-email-${quote.serviceId}`}
-                                    />
-                                  </div>
-                                  <div className="space-y-1">
-                                    <Label htmlFor={`phone-${quote.serviceId}`} className="text-xs">Phone</Label>
-                                    <Input
-                                      id={`phone-${quote.serviceId}`}
-                                      type="tel"
-                                      value={contactInfo.phone}
-                                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                                      className="h-9"
-                                      data-testid={`input-phone-${quote.serviceId}`}
-                                    />
-                                  </div>
-                                </div>
-                                <Button
-                                  type="submit"
-                                  size="sm"
-                                  disabled={submitQuoteMutation.isPending}
-                                  data-testid={`button-submit-${quote.serviceId}`}
-                                >
-                                  {submitQuoteMutation.isPending ? (
-                                    <Loader2 className="h-4 w-4 animate-spin" />
-                                  ) : (
-                                    "Send My Quote"
-                                  )}
-                                </Button>
-                              </form>
-                            )}
                           </div>
                         ))}
+
+                        {/* Selected Services Summary */}
+                        {selectedServices.size > 0 && !combinedQuoteSent && (
+                          <div className="sticky bottom-2">
+                            <Card className="shadow-lg border-primary/20">
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between gap-4 mb-3">
+                                  <div>
+                                    <p className="text-sm text-muted-foreground">
+                                      {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
+                                    </p>
+                                    <p className="text-xl font-bold text-primary">
+                                      Total: ${getGrandTotal().toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">plus taxes</p>
+                                  </div>
+                                  {showCombinedQuoteForm ? (
+                                    <Button size="sm" variant="outline" onClick={() => setShowCombinedQuoteForm(false)} data-testid="button-cancel-combined">
+                                      Cancel
+                                    </Button>
+                                  ) : (
+                                    <Button size="sm" onClick={() => setShowCombinedQuoteForm(true)} data-testid="button-send-combined-quote">
+                                      Send Me Quote
+                                    </Button>
+                                  )}
+                                </div>
+
+                                {showCombinedQuoteForm && (
+                                  <form onSubmit={handleSendCombinedQuote} className="pt-3 border-t space-y-3">
+                                    <div className="space-y-2 mb-3">
+                                      <p className="text-sm font-medium">Selected:</p>
+                                      {getSelectedQuotes().map(q => (
+                                        <div key={q.serviceId} className="flex justify-between text-sm">
+                                          <span>{q.serviceName}</span>
+                                          <span className="font-medium">${q.price}</span>
+                                        </div>
+                                      ))}
+                                      <div className="flex justify-between text-sm font-bold border-t pt-2">
+                                        <span>Grand Total</span>
+                                        <span>${getGrandTotal().toFixed(2)}</span>
+                                      </div>
+                                    </div>
+                                    <div className="space-y-2">
+                                      <div className="space-y-1">
+                                        <Label htmlFor="combined-name" className="text-xs">Name *</Label>
+                                        <Input
+                                          id="combined-name"
+                                          value={contactInfo.name}
+                                          onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                                          required
+                                          className="h-9"
+                                          data-testid="input-combined-name"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="combined-email" className="text-xs">Email *</Label>
+                                        <Input
+                                          id="combined-email"
+                                          type="email"
+                                          value={contactInfo.email}
+                                          onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                                          required
+                                          className="h-9"
+                                          data-testid="input-combined-email"
+                                        />
+                                      </div>
+                                      <div className="space-y-1">
+                                        <Label htmlFor="combined-phone" className="text-xs">Phone</Label>
+                                        <Input
+                                          id="combined-phone"
+                                          type="tel"
+                                          value={contactInfo.phone}
+                                          onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                                          className="h-9"
+                                          data-testid="input-combined-phone"
+                                        />
+                                      </div>
+                                    </div>
+                                    <Button
+                                      type="submit"
+                                      size="sm"
+                                      className="w-full"
+                                      disabled={submitCombinedQuoteMutation.isPending}
+                                      data-testid="button-submit-combined"
+                                    >
+                                      {submitCombinedQuoteMutation.isPending ? (
+                                        <Loader2 className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        "Send Combined Quote"
+                                      )}
+                                    </Button>
+                                  </form>
+                                )}
+                              </CardContent>
+                            </Card>
+                          </div>
+                        )}
+
+                        {combinedQuoteSent && (
+                          <div className="p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
+                            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                              <Check className="h-5 w-5" />
+                              <span className="font-medium">Quote sent!</span>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Check your email/phone for your combined quote.
+                            </p>
+                          </div>
+                        )}
                         
                         <div className="pt-4 border-t">
                           <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
