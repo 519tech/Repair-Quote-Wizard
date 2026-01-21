@@ -807,9 +807,18 @@ export default function Embed() {
                                   <div className="mb-3 pb-3 border-b">
                                     <p className="text-xs text-muted-foreground mb-2">Previously selected:</p>
                                     {otherCategorySelectedQuotes.map(q => (
-                                      <div key={q.serviceId} className="flex justify-between text-sm py-1">
-                                        <span className="text-muted-foreground">{q.serviceName}</span>
+                                      <div key={q.serviceId} className="flex items-center justify-between text-sm py-1 gap-2">
+                                        <span className="text-muted-foreground flex-1">{q.serviceName}</span>
                                         <span className="font-medium">${q.price}</span>
+                                        <Button 
+                                          variant="ghost" 
+                                          size="icon" 
+                                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                                          onClick={() => toggleServiceSelection(q.serviceId)}
+                                          data-testid={`button-remove-${q.serviceId}`}
+                                        >
+                                          <X className="h-4 w-4" />
+                                        </Button>
                                       </div>
                                     ))}
                                   </div>
