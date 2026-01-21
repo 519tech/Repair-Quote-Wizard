@@ -55,6 +55,7 @@ export default function Home() {
     repairTime?: string;
     warranty?: string;
     isAvailable: boolean;
+    categoryId?: string;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [sendingQuoteFor, setSendingQuoteFor] = useState<string | null>(null);
@@ -266,9 +267,11 @@ export default function Home() {
     }
   };
 
-  const fetchAllQuotesForServices = async (services: DeviceServiceWithRelations[]) => {
+  const fetchAllQuotesForServices = async (services: DeviceServiceWithRelations[], append = false) => {
     setQuotesLoading(true);
-    setAllQuotes([]);
+    if (!append) {
+      setAllQuotes([]);
+    }
     try {
       const quotes = await Promise.all(
         services.map(async (ds) => {
@@ -285,6 +288,7 @@ export default function Home() {
                 repairTime: data.repairTime,
                 warranty: data.warranty,
                 isAvailable: data.isAvailable ?? true,
+                categoryId: ds.service.category?.id || "uncategorized",
               };
             }
           } catch {
@@ -293,7 +297,17 @@ export default function Home() {
           return null;
         })
       );
-      setAllQuotes(quotes.filter((q): q is NonNullable<typeof q> => q !== null));
+      const newQuotes = quotes.filter((q): q is NonNullable<typeof q> => q !== null);
+      if (append) {
+        // Merge new quotes with existing, avoiding duplicates
+        setAllQuotes(prev => {
+          const existingIds = new Set(prev.map(q => q.serviceId));
+          const uniqueNew = newQuotes.filter(q => !existingIds.has(q.serviceId));
+          return [...prev, ...uniqueNew];
+        });
+      } else {
+        setAllQuotes(newQuotes);
+      }
     } finally {
       setQuotesLoading(false);
     }
@@ -304,7 +318,8 @@ export default function Home() {
     const filteredServices = categoryId === "other"
       ? services.filter(ds => !ds.service.category)
       : services.filter(ds => ds.service.category?.id === categoryId);
-    await fetchAllQuotesForServices(filteredServices);
+    // Append quotes so selections from other categories are preserved
+    await fetchAllQuotesForServices(filteredServices, true);
   };
 
   const handleDirectServicesView = async (services: DeviceServiceWithRelations[]) => {
@@ -335,11 +350,19 @@ export default function Home() {
 
   // Multi-select helpers
   const toggleServiceSelection = (serviceId: string) => {
+    const quote = allQuotes.find(q => q.serviceId === serviceId);
+    if (!quote) return;
+
     setSelectedServices(prev => {
       const next = new Set(prev);
       if (next.has(serviceId)) {
+        // Deselecting - just remove it
         next.delete(serviceId);
       } else {
+        // Selecting - remove any other selection from the same category first
+        // (categoryId now always has a value - either the real ID or "uncategorized")
+        const sameCategory = allQuotes.filter(q => q.categoryId === quote.categoryId);
+        sameCategory.forEach(q => next.delete(q.serviceId));
         next.add(serviceId);
       }
       return next;
@@ -720,7 +743,7 @@ export default function Home() {
                       onClick={() => {
                         if (hasMultipleCategories && selectedCategoryId) {
                           setSelectedCategoryId(null);
-                          setAllQuotes([]);
+                          // Don't clear allQuotes - preserve them for multi-category selections
                           setSendingQuoteFor(null);
                         } else if (usedSearch) {
                           resetForm();

@@ -12,6 +12,9 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
   - Running total displayed at bottom showing selected services and grand total
   - Combined quotes sent via email and SMS with itemized list
   - Works on both main site and embeddable widget
+  - Single selection per category: only one service can be selected within each category (e.g., can't select both aftermarket AND original screen)
+  - Back button preserves selections when navigating between categories
+  - Selections accumulate across categories for multi-category quotes
 - **Jan 2026**: Internal counter lookup page at /internal
   - Barebones interface with search bar only (no step-by-step device picker)
   - Search for device, then view ALL services at once
