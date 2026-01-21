@@ -29,6 +29,11 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Trust proxy for production (needed for secure cookies behind reverse proxy)
+if (process.env.NODE_ENV === "production") {
+  app.set("trust proxy", 1);
+}
+
 if (!process.env.SESSION_SECRET) {
   console.error("WARNING: SESSION_SECRET not set - using a default for development only");
 }
