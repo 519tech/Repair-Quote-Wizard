@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1909,15 +1909,32 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [uploading, setUploading] = useState(false);
+  const PARTS_PER_PAGE = 100;
 
-  const { data: parts = [], isLoading } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  const filteredParts = useMemo(() => 
-    parts.filter(part => 
-      part.sku.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      part.name.toLowerCase().includes(searchQuery.toLowerCase())
-    ), [parts, searchQuery]);
+  const partsQueryUrl = useMemo(() => {
+    const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString() });
+    if (debouncedSearch) params.append('search', debouncedSearch);
+    return `/api/parts?${params}`;
+  }, [page, debouncedSearch]);
+  
+  const { data: partsData, isLoading } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: [partsQueryUrl]
+  });
+
+  const parts = partsData?.parts || [];
+  const totalParts = partsData?.total || 0;
+  const totalPages = Math.ceil(totalParts / PARTS_PER_PAGE);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1940,10 +1957,10 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       const data = await res.json();
       
       if (res.ok) {
-        queryClient.invalidateQueries({ queryKey: ["/api/parts"] });
+        queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
         toast({ 
           title: "Upload successful", 
-          description: `${data.inserted} new parts added, ${data.updated} parts updated` 
+          description: `${data.inserted} parts imported (previous parts replaced)` 
         });
       } else {
         toast({ title: "Upload failed", description: data.error, variant: "destructive" });
@@ -1962,7 +1979,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/parts"] });
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
       setOpen(false);
       setSku("");
       setName("");
@@ -1980,7 +1997,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/parts"] });
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
       setEditOpen(false);
       setEditItem(null);
       toast({ title: "Part updated" });
@@ -1993,7 +2010,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/parts/${id}`); },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/parts"] });
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
       toast({ title: "Part deleted" });
     },
     onError: (error: Error) => {
@@ -2118,34 +2135,66 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : filteredParts.length === 0 ? (
+        ) : parts.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">{searchQuery ? "No parts match your search" : "No parts yet. Add your first one!"}</p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>SKU</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead className="w-[120px]">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredParts.map((part) => (
-                <TableRow key={part.id}>
-                  <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
-                  <TableCell className="font-medium">{part.name}</TableCell>
-                  <TableCell>${part.price}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {parts.map((part) => (
+                  <TableRow key={part.id}>
+                    <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
+                    <TableCell className="font-medium">{part.name}</TableCell>
+                    <TableCell>${part.price}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-4 px-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalParts)} of {totalParts.toLocaleString()} parts
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPage(p => Math.max(1, p - 1))} 
+                    disabled={page === 1}
+                    data-testid="button-parts-prev-page"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </Button>
+                  <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                    disabled={page === totalPages}
+                    data-testid="button-parts-next-page"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>
@@ -2163,6 +2212,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [partId, setPartId] = useState<string | undefined>();
   const [editPartSku, setEditPartSku] = useState("");
   const [editPartSearch, setEditPartSearch] = useState("");
+  const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
+  const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedPartSearch(partSearch), 300);
+    return () => clearTimeout(timer);
+  }, [partSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedEditPartSearch(editPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [editPartSearch]);
 
   const [filterBrand, setFilterBrand] = useState<string>("all");
   const [filterDevice, setFilterDevice] = useState<string>("all");
@@ -2183,8 +2244,29 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
-  const { data: parts = [] } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  
+  const partSearchUrl = useMemo(() => {
+    if (!debouncedPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedPartSearch]);
+  
+  const { data: searchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: [partSearchUrl || "/api/parts-disabled"],
+    enabled: !!partSearchUrl
+  });
+  
+  const editPartSearchUrl = useMemo(() => {
+    if (!debouncedEditPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedEditPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedEditPartSearch]);
+  
+  const { data: editSearchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: [editPartSearchUrl || "/api/parts-disabled-edit"],
+    enabled: !!editPartSearchUrl
+  });
 
   const uniqueBrands = useMemo(() => {
     const brandSet = new Set<string>();
@@ -2230,25 +2312,20 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     });
   }, [deviceServices, filterBrand, filterDevice, filterService, serviceLinkSearch]);
 
-  const filteredParts = useMemo(() => 
-    parts.filter(p => 
-      p.sku.toLowerCase().includes(partSearch.toLowerCase()) ||
-      p.name.toLowerCase().includes(partSearch.toLowerCase())
-    ), [parts, partSearch]);
+  const filteredParts = searchedParts?.parts || [];
+  const editFilteredParts = editSearchedParts?.parts || [];
 
-  const editFilteredParts = useMemo(() => 
-    parts.filter(p => 
-      p.sku.toLowerCase().includes(editPartSearch.toLowerCase()) ||
-      p.name.toLowerCase().includes(editPartSearch.toLowerCase())
-    ), [parts, editPartSearch]);
+  const { data: editSkuPartData } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(editPartSku)}`],
+    enabled: editPartSku.length > 0
+  });
+  const editSkuPart = editSkuPartData || undefined;
 
-  const editSkuPart = useMemo(() => 
-    parts.find(p => p.sku.toLowerCase() === editPartSku.toLowerCase()), 
-    [parts, editPartSku]);
-
-  const inlineSkuPart = useMemo(() => 
-    parts.find(p => p.sku.toLowerCase() === inlineEditSku.toLowerCase()), 
-    [parts, inlineEditSku]);
+  const { data: inlineSkuPartData } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(inlineEditSku)}`],
+    enabled: inlineEditSku.length > 0
+  });
+  const inlineSkuPart = inlineSkuPartData || undefined;
 
   // Compute devices for bulk add based on selected filters
   const bulkDevices = useMemo(() => {
@@ -2401,8 +2478,12 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     });
   };
 
-  const selectedPart = parts.find((p) => p.id === partId);
-  const skuPart = parts.find((p) => p.sku === partSku);
+  const selectedPart = filteredParts.find((p) => p.id === partId);
+  
+  const { data: skuPart } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(partSku)}`],
+    enabled: partSku.length > 0
+  });
 
   return (
     <Card>
@@ -2459,8 +2540,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                       <SelectTrigger data-testid="select-link-part"><SelectValue placeholder="Select from results" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">No part required</SelectItem>
-                        {filteredParts.slice(0, 50).map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
-                        {filteredParts.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results...</p>}
+                        {filteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                        {(searchedParts?.total || 0) > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results. Refine your search.</p>}
                       </SelectContent>
                     </Select>
                   )}
@@ -2542,8 +2623,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                       <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="none">No part required</SelectItem>
-                        {editFilteredParts.slice(0, 50).map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
-                        {editFilteredParts.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results...</p>}
+                        {editFilteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                        {(editSearchedParts?.total || 0) > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results. Refine your search.</p>}
                       </SelectContent>
                     </Select>
                   )}

@@ -6,6 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Parts management improvements for 100k+ parts
+  - Bulk upload now replaces all existing parts (not upsert) to identify removed supplier items
+  - Server-side pagination with 100 parts per page
+  - Server-side search by SKU or name with debounced input
+  - Pagination controls with Previous/Next buttons and page info
 - **Jan 2026**: Quote widget footer with disclaimer and price update timestamp
   - Footer displays: "All prices are estimates only and subject to change. In-store verification required."
   - Shows "Prices last updated: [date]" based on last parts import

@@ -37,7 +37,7 @@ import {
   type InsertMessageTemplate,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, ilike, sql } from "drizzle-orm";
 
 export interface IStorage {
   // Device Types
@@ -77,8 +77,10 @@ export interface IStorage {
 
   // Parts
   getParts(): Promise<Part[]>;
+  getPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: Part[]; total: number }>;
   getPart(id: string): Promise<Part | undefined>;
   getPartBySku(sku: string): Promise<Part | undefined>;
+  deleteAllParts(): Promise<void>;
   createPart(data: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
@@ -263,6 +265,37 @@ export class DatabaseStorage implements IStorage {
   // Parts
   async getParts(): Promise<Part[]> {
     return db.select().from(parts);
+  }
+
+  async getPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: Part[]; total: number }> {
+    const { page, limit, search } = options;
+    const offset = (page - 1) * limit;
+    
+    let query = db.select().from(parts);
+    let countQuery = db.select({ count: sql<number>`count(*)` }).from(parts);
+    
+    if (search) {
+      const searchPattern = `%${search}%`;
+      query = query.where(or(
+        ilike(parts.sku, searchPattern),
+        ilike(parts.name, searchPattern)
+      )) as typeof query;
+      countQuery = countQuery.where(or(
+        ilike(parts.sku, searchPattern),
+        ilike(parts.name, searchPattern)
+      )) as typeof countQuery;
+    }
+    
+    const [countResult] = await countQuery;
+    const total = Number(countResult?.count || 0);
+    
+    const result = await query.orderBy(parts.sku).limit(limit).offset(offset);
+    
+    return { parts: result, total };
+  }
+
+  async deleteAllParts(): Promise<void> {
+    await db.delete(parts);
   }
 
   async getPart(id: string): Promise<Part | undefined> {

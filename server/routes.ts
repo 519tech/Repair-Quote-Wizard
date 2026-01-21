@@ -439,8 +439,19 @@ export async function registerRoutes(
   // Parts
   app.get("/api/parts", async (req, res) => {
     try {
-      const parts = await storage.getParts();
-      res.json(parts);
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 100;
+      const search = req.query.search as string | undefined;
+      
+      // If pagination params provided, use paginated query
+      if (req.query.page || req.query.limit || req.query.search) {
+        const result = await storage.getPartsPaginated({ page, limit, search });
+        res.json(result);
+      } else {
+        // Legacy: return all parts (for backwards compatibility with other parts of the app)
+        const parts = await storage.getParts();
+        res.json(parts);
+      }
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch parts" });
     }
@@ -579,6 +590,9 @@ export async function registerRoutes(
         });
       }
 
+      // Delete all existing parts before inserting new ones
+      await storage.deleteAllParts();
+      
       const result = await storage.bulkUpsertParts(partsToUpsert);
 
       // Update the parts_last_updated timestamp
@@ -590,7 +604,7 @@ export async function registerRoutes(
       res.json({
         success: true,
         inserted: result.inserted,
-        updated: result.updated,
+        deleted: true,
         total: partsToUpsert.length,
         errors: errors.length > 0 ? errors : undefined
       });
