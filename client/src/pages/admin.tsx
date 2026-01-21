@@ -1469,6 +1469,9 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [notes, setNotes] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
 
+  // Inline editing state
+  const [inlineEditingService, setInlineEditingService] = useState<{ id: string; field: string; value: string } | null>(null);
+
   const { data: services = [], isLoading } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: categories = [] } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
 
@@ -1551,6 +1554,42 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const handleEdit = (service: Service) => {
     setEditItem(service);
     setEditOpen(true);
+  };
+
+  // Inline editing handlers
+  const inlineUpdateMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Service> }) => {
+      const res = await apiRequest("PATCH", `/api/services/${id}`, data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/services"] });
+      setInlineEditingService(null);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const startInlineEdit = (service: Service, field: string) => {
+    const value = String(service[field as keyof Service] || "");
+    setInlineEditingService({ id: service.id, field, value });
+  };
+
+  const handleInlineChange = (value: string) => {
+    if (inlineEditingService) {
+      setInlineEditingService({ ...inlineEditingService, value });
+    }
+  };
+
+  const saveInlineEdit = () => {
+    if (!inlineEditingService) return;
+    const { id, field, value } = inlineEditingService;
+    inlineUpdateMutation.mutate({ id, data: { [field]: value } });
+  };
+
+  const cancelInlineEdit = () => {
+    setInlineEditingService(null);
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -1742,10 +1781,110 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 <TableRow key={service.id}>
                   <TableCell><Badge variant="secondary">{getCategoryName(service.categoryId)}</Badge></TableCell>
                   <TableCell className="font-medium">{service.name}</TableCell>
-                  <TableCell>${service.laborPrice}</TableCell>
-                  <TableCell>{service.partsMarkup}x</TableCell>
-                  <TableCell>{service.warranty || "-"}</TableCell>
-                  <TableCell>{service.repairTime || "-"}</TableCell>
+                  <TableCell>
+                    {inlineEditingService?.id === service.id && inlineEditingService?.field === "laborPrice" ? (
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={inlineEditingService.value}
+                        onChange={(e) => handleInlineChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveInlineEdit();
+                          else if (e.key === "Escape") cancelInlineEdit();
+                        }}
+                        onBlur={saveInlineEdit}
+                        className="h-8 w-20"
+                        autoFocus
+                        data-testid={`input-inline-labor-${service.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[60px]"
+                        onClick={() => startInlineEdit(service, "laborPrice")}
+                        data-testid={`cell-labor-${service.id}`}
+                      >
+                        ${service.laborPrice}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {inlineEditingService?.id === service.id && inlineEditingService?.field === "partsMarkup" ? (
+                      <Input
+                        type="number"
+                        step="0.1"
+                        min="0"
+                        value={inlineEditingService.value}
+                        onChange={(e) => handleInlineChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveInlineEdit();
+                          else if (e.key === "Escape") cancelInlineEdit();
+                        }}
+                        onBlur={saveInlineEdit}
+                        className="h-8 w-16"
+                        autoFocus
+                        data-testid={`input-inline-markup-${service.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[40px]"
+                        onClick={() => startInlineEdit(service, "partsMarkup")}
+                        data-testid={`cell-markup-${service.id}`}
+                      >
+                        {service.partsMarkup}x
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {inlineEditingService?.id === service.id && inlineEditingService?.field === "warranty" ? (
+                      <Input
+                        value={inlineEditingService.value}
+                        onChange={(e) => handleInlineChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveInlineEdit();
+                          else if (e.key === "Escape") cancelInlineEdit();
+                        }}
+                        onBlur={saveInlineEdit}
+                        className="h-8 w-24"
+                        placeholder="e.g. 90 days"
+                        autoFocus
+                        data-testid={`input-inline-warranty-${service.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[60px]"
+                        onClick={() => startInlineEdit(service, "warranty")}
+                        data-testid={`cell-warranty-${service.id}`}
+                      >
+                        {service.warranty || <span className="text-muted-foreground italic">Click to add</span>}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {inlineEditingService?.id === service.id && inlineEditingService?.field === "repairTime" ? (
+                      <Input
+                        value={inlineEditingService.value}
+                        onChange={(e) => handleInlineChange(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") saveInlineEdit();
+                          else if (e.key === "Escape") cancelInlineEdit();
+                        }}
+                        onBlur={saveInlineEdit}
+                        className="h-8 w-24"
+                        placeholder="e.g. 1-2 hours"
+                        autoFocus
+                        data-testid={`input-inline-repairtime-${service.id}`}
+                      />
+                    ) : (
+                      <div
+                        className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[60px]"
+                        onClick={() => startInlineEdit(service, "repairTime")}
+                        data-testid={`cell-repairtime-${service.id}`}
+                      >
+                        {service.repairTime || <span className="text-muted-foreground italic">Click to add</span>}
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} data-testid={`button-edit-service-${service.id}`}><Pencil className="h-4 w-4" /></Button>
@@ -2594,6 +2733,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                             <Input 
                               value={inlineEditSku} 
                               onChange={(e) => setInlineEditSku(e.target.value)} 
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" && (inlineEditSku.length === 0 || inlineSkuPart)) {
+                                  handleInlineSave(ds.id);
+                                } else if (e.key === "Escape") {
+                                  handleInlineCancel();
+                                }
+                              }}
+                              onBlur={() => {
+                                if (inlineEditSku.length === 0 || inlineSkuPart) {
+                                  handleInlineSave(ds.id);
+                                }
+                              }}
                               className="h-8 w-32"
                               placeholder="Enter SKU"
                               autoFocus
