@@ -723,9 +723,20 @@ export default function Embed() {
                       <div className="flex justify-center py-8">
                         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
                       </div>
-                    ) : allQuotes.length > 0 ? (
+                    ) : allQuotes.length > 0 ? (() => {
+                      // Filter to only show quotes from the current category
+                      const currentCategoryQuotes = selectedCategoryId 
+                        ? allQuotes.filter(q => q.categoryId === selectedCategoryId || q.categoryId === "uncategorized" && selectedCategoryId === "other")
+                        : allQuotes;
+                      
+                      // Get selected quotes from OTHER categories (not the current one)
+                      const otherCategorySelectedQuotes = selectedCategoryId
+                        ? getSelectedQuotes().filter(q => q.categoryId !== selectedCategoryId && !(q.categoryId === "uncategorized" && selectedCategoryId === "other"))
+                        : [];
+                      
+                      return (
                       <div className="space-y-4">
-                        {[...allQuotes].sort((a, b) => {
+                        {[...currentCategoryQuotes].sort((a, b) => {
                           if (a.isAvailable !== b.isAvailable) {
                             return a.isAvailable ? -1 : 1;
                           }
@@ -791,6 +802,18 @@ export default function Embed() {
                           <div className="sticky bottom-2">
                             <Card className="shadow-lg border-primary/20">
                               <CardContent className="p-4">
+                                {/* Show previously selected services from other categories */}
+                                {otherCategorySelectedQuotes.length > 0 && (
+                                  <div className="mb-3 pb-3 border-b">
+                                    <p className="text-xs text-muted-foreground mb-2">Previously selected:</p>
+                                    {otherCategorySelectedQuotes.map(q => (
+                                      <div key={q.serviceId} className="flex justify-between text-sm py-1">
+                                        <span className="text-muted-foreground">{q.serviceName}</span>
+                                        <span className="font-medium">${q.price}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                                 <div className="flex items-center justify-between gap-4 mb-3">
                                   <div>
                                     <p className="text-sm text-muted-foreground">
@@ -901,7 +924,8 @@ export default function Embed() {
                           </Button>
                         </div>
                       </div>
-                    ) : (
+                      )
+                    })() : (
                       // Auto-fetch quotes if none loaded yet (for single category case)
                       (() => {
                         const servicesToFetch = selectedCategoryId
