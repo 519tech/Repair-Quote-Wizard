@@ -855,7 +855,7 @@ export default function Embed() {
                                         </div>
                                       ))}
                                       <div className="flex justify-between text-sm font-bold border-t pt-2">
-                                        <span>Grand Total</span>
+                                        <span>Grand Total <span className="text-muted-foreground font-normal">+ taxes</span></span>
                                         <span>${getGrandTotal().toFixed(2)}</span>
                                       </div>
                                     </div>
