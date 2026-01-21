@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -147,6 +147,7 @@ export const services = pgTable("services", {
   laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull().default("0"),
   partsMarkup: decimal("parts_markup", { precision: 5, scale: 2 }).notNull().default("1.0"),
   notes: text("notes"),
+  labourOnly: boolean("labour_only").notNull().default(false),
 });
 
 export const servicesRelations = relations(services, ({ one }) => ({
