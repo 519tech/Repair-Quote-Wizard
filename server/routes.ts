@@ -782,7 +782,7 @@ export async function registerRoutes(
   app.post("/api/device-services/bulk", requireAdmin, async (req, res) => {
     try {
       const schema = z.object({
-        serviceId: z.string(),
+        serviceIds: z.array(z.string()),
         deviceIds: z.array(z.string()),
         partSku: z.string().optional(),
         partId: z.string().optional(),
@@ -808,21 +808,23 @@ export async function registerRoutes(
       const created: any[] = [];
       const skipped: string[] = [];
       
-      for (const deviceId of input.deviceIds) {
-        try {
-          const deviceService = await storage.createDeviceService({
-            deviceId,
-            serviceId: input.serviceId,
-            partId,
-            partSku,
-          });
-          created.push(deviceService);
-        } catch (error: any) {
-          // Skip duplicates
-          if (error.message?.includes("duplicate") || error.code === '23505') {
-            skipped.push(deviceId);
-          } else {
-            throw error;
+      for (const serviceId of input.serviceIds) {
+        for (const deviceId of input.deviceIds) {
+          try {
+            const deviceService = await storage.createDeviceService({
+              deviceId,
+              serviceId,
+              partId,
+              partSku,
+            });
+            created.push(deviceService);
+          } catch (error: any) {
+            // Skip duplicates
+            if (error.message?.includes("duplicate") || error.code === '23505') {
+              skipped.push(`${deviceId}-${serviceId}`);
+            } else {
+              throw error;
+            }
           }
         }
       }
@@ -830,7 +832,7 @@ export async function registerRoutes(
       res.status(201).json({ 
         created: created.length, 
         skipped: skipped.length,
-        total: input.deviceIds.length 
+        total: input.deviceIds.length * input.serviceIds.length
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to bulk create device services" });

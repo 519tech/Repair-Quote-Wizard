@@ -2801,10 +2801,22 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
 
   // Bulk add state
   const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkServiceId, setBulkServiceId] = useState("");
+  const [bulkSelectedServices, setBulkSelectedServices] = useState<Set<string>>(new Set());
   const [bulkTypeId, setBulkTypeId] = useState("all");
   const [bulkBrandId, setBulkBrandId] = useState("all");
   const [bulkPartSku, setBulkPartSku] = useState("");
+
+  const toggleBulkService = (serviceId: string) => {
+    setBulkSelectedServices(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
 
   const { data: deviceServices = [], isLoading } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
@@ -2942,14 +2954,14 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   }, [devices, bulkTypeId, bulkBrandId]);
 
   const bulkMutation = useMutation({
-    mutationFn: async (data: { serviceId: string; deviceIds: string[]; partSku?: string }) => {
+    mutationFn: async (data: { serviceIds: string[]; deviceIds: string[]; partSku?: string }) => {
       const res = await apiRequest("POST", "/api/device-services/bulk", data);
       return res.json();
     },
     onSuccess: (result: { created: number; skipped: number; total: number }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
       setBulkOpen(false);
-      setBulkServiceId("");
+      setBulkSelectedServices(new Set());
       setBulkTypeId("all");
       setBulkBrandId("all");
       setBulkPartSku("");
@@ -2965,9 +2977,9 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
 
   const handleBulkSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!bulkServiceId || bulkDevices.length === 0) return;
+    if (bulkSelectedServices.size === 0 || bulkDevices.length === 0) return;
     bulkMutation.mutate({
-      serviceId: bulkServiceId,
+      serviceIds: Array.from(bulkSelectedServices),
       deviceIds: bulkDevices.map(d => d.id),
       partSku: bulkPartSku || undefined,
     });
@@ -3276,15 +3288,6 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   <DialogDescription>Link a service to multiple devices at once. Filter by device type and/or brand.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Service *</Label>
-                    <Select value={bulkServiceId} onValueChange={setBulkServiceId}>
-                      <SelectTrigger data-testid="select-bulk-service"><SelectValue placeholder="Select a service" /></SelectTrigger>
-                      <SelectContent>
-                        {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice})</SelectItem>))}
-                      </SelectContent>
-                    </Select>
-                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Device Type</Label>
@@ -3307,21 +3310,55 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                       </Select>
                     </div>
                   </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm font-medium mb-1">Target Devices: {bulkDevices.length}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {bulkTypeId !== "all" && `Type: ${deviceTypes.find(t => t.id === bulkTypeId)?.name}`}
+                      {bulkTypeId !== "all" && bulkBrandId !== "all" && " / "}
+                      {bulkBrandId !== "all" && `Brand: ${brands.find(b => b.id === bulkBrandId)?.name}`}
+                      {bulkTypeId === "all" && bulkBrandId === "all" && "All devices"}
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Select Services to Link</Label>
+                    <div className="border rounded-md max-h-60 overflow-y-auto">
+                      {services.map((service) => (
+                        <div
+                          key={service.id}
+                          className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 hover-elevate cursor-pointer"
+                          onClick={() => toggleBulkService(service.id)}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={bulkSelectedServices.has(service.id)}
+                            onChange={() => toggleBulkService(service.id)}
+                            className="h-4 w-4"
+                            data-testid={`checkbox-bulk-service-${service.id}`}
+                          />
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{service.name}</p>
+                            <p className="text-xs text-muted-foreground">${service.laborPrice} + {service.partsMarkup}x markup</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm text-muted-foreground">{bulkSelectedServices.size} service(s) selected</p>
+                  </div>
                   <div className="space-y-2">
                     <Label>Part SKU (optional)</Label>
                     <Input value={bulkPartSku} onChange={(e) => setBulkPartSku(e.target.value)} placeholder="Enter SKU if parts are needed" data-testid="input-bulk-part-sku" />
                   </div>
-                  <div className="p-3 bg-muted rounded-md">
-                    <p className="text-sm">
-                      <span className="font-medium">{bulkDevices.length}</span> device{bulkDevices.length !== 1 ? 's' : ''} will be linked to this service
-                      {bulkTypeId !== "all" && ` (${deviceTypes.find(t => t.id === bulkTypeId)?.name || ''})`}
-                      {bulkBrandId !== "all" && ` ${bulkTypeId !== "all" ? '/ ' : '('}${brands.find(b => b.id === bulkBrandId)?.name || ''}${bulkTypeId === "all" ? ')' : ''}`}
+                  <div className="p-3 bg-primary/10 rounded-md">
+                    <p className="text-sm font-medium">
+                      This will create up to {bulkDevices.length * bulkSelectedServices.size} links
                     </p>
+                    <p className="text-xs text-muted-foreground">Existing links will be skipped automatically</p>
                   </div>
                 </div>
                 <DialogFooter>
-                  <Button type="submit" disabled={bulkMutation.isPending || !bulkServiceId || bulkDevices.length === 0} data-testid="button-bulk-submit">
-                    {bulkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Link to ${bulkDevices.length} Devices`}
+                  <Button variant="outline" type="button" onClick={() => setBulkOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={bulkMutation.isPending || bulkSelectedServices.size === 0 || bulkDevices.length === 0} data-testid="button-bulk-submit">
+                    {bulkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Create ${bulkDevices.length * bulkSelectedServices.size} Links`}
                   </Button>
                 </DialogFooter>
               </form>
