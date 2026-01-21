@@ -162,24 +162,25 @@ export function ImageInput({
       )}
 
       {value && (
-        <div className="relative mt-2 rounded-md border bg-muted/20 p-2">
+        <div className="relative mt-2 rounded-md border bg-muted/20 p-2 overflow-hidden">
           <div className="flex items-center gap-2">
             <img
               src={getDisplayUrl(value)}
               alt="Preview"
-              className="h-16 w-16 object-contain rounded-md bg-background"
+              className="h-16 w-16 object-contain rounded-md bg-background flex-shrink-0"
               onError={(e) => {
                 (e.target as HTMLImageElement).style.display = "none";
               }}
             />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-muted-foreground truncate">{value}</p>
+            <div className="flex-1 min-w-0 overflow-hidden">
+              <p className="text-sm text-muted-foreground break-all line-clamp-2">{value}</p>
             </div>
             <Button
               type="button"
               variant="ghost"
               size="icon"
               onClick={clearImage}
+              className="flex-shrink-0"
               data-testid={`${testIdPrefix}-clear`}
             >
               <X className="h-4 w-4" />

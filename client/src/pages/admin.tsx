@@ -2321,12 +2321,14 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<DeviceServiceWithRelations | null>(null);
   const [deviceId, setDeviceId] = useState("");
+  const [deviceSearch, setDeviceSearch] = useState("");
   const [serviceId, setServiceId] = useState("");
   const [partSku, setPartSku] = useState("");
   const [partSearch, setPartSearch] = useState("");
   const [partId, setPartId] = useState<string | undefined>();
   const [editPartSku, setEditPartSku] = useState("");
   const [editPartSearch, setEditPartSearch] = useState("");
+  const [editDeviceSearch, setEditDeviceSearch] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
 
@@ -2360,6 +2362,19 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+
+  // Filter devices based on search
+  const filteredDevices = useMemo(() => {
+    if (!deviceSearch.trim()) return devices;
+    const search = deviceSearch.toLowerCase();
+    return devices.filter(d => d.name.toLowerCase().includes(search));
+  }, [devices, deviceSearch]);
+
+  const editFilteredDevices = useMemo(() => {
+    if (!editDeviceSearch.trim()) return devices;
+    const search = editDeviceSearch.toLowerCase();
+    return devices.filter(d => d.name.toLowerCase().includes(search));
+  }, [devices, editDeviceSearch]);
   
   const partSearchUrl = useMemo(() => {
     if (!debouncedPartSearch) return null;
@@ -2518,6 +2533,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
       setOpen(false);
       setDeviceId("");
+      setDeviceSearch("");
       setServiceId("");
       setPartSku("");
       setPartSearch("");
@@ -2602,6 +2618,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     setEditItem(ds);
     setEditPartSku(ds.part?.sku || ds.partSku || "");
     setEditPartSearch("");
+    setEditDeviceSearch("");
     setEditOpen(true);
   };
 
@@ -2647,10 +2664,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Model (Device)</Label>
+                  <Input 
+                    value={deviceSearch} 
+                    onChange={(e) => setDeviceSearch(e.target.value)} 
+                    placeholder="Search devices..." 
+                    data-testid="input-device-search-link"
+                  />
                   <Select value={deviceId} onValueChange={setDeviceId} required>
                     <SelectTrigger data-testid="select-link-device"><SelectValue placeholder="Select device model" /></SelectTrigger>
                     <SelectContent>
-                      {devices.map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                      {filteredDevices.slice(0, 50).map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                      {filteredDevices.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50. Refine search.</p>}
+                      {filteredDevices.length === 0 && <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>}
                     </SelectContent>
                   </Select>
                 </div>
@@ -2711,10 +2736,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Model (Device)</Label>
+                  <Input 
+                    value={editDeviceSearch} 
+                    onChange={(e) => setEditDeviceSearch(e.target.value)} 
+                    placeholder="Search devices..." 
+                    data-testid="input-edit-device-search-link"
+                  />
                   <Select value={editItem?.deviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, deviceId: v} : null)}>
                     <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
                     <SelectContent>
-                      {devices.map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                      {editFilteredDevices.slice(0, 50).map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                      {editFilteredDevices.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50. Refine search.</p>}
+                      {editFilteredDevices.length === 0 && <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>}
                     </SelectContent>
                   </Select>
                 </div>
