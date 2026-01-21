@@ -740,6 +740,12 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [linkPartId, setLinkPartId] = useState<string | undefined>();
   const [debouncedLinkPartSearch, setDebouncedLinkPartSearch] = useState("");
 
+  // Bulk add links state
+  const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
+  const [bulkLinkTypeId, setBulkLinkTypeId] = useState("all");
+  const [bulkLinkBrandId, setBulkLinkBrandId] = useState("all");
+  const [bulkLinkSelectedServices, setBulkLinkSelectedServices] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedLinkPartSearch(linkPartSearch), 300);
     return () => clearTimeout(timer);
@@ -792,6 +798,15 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     }
     return true;
   });
+
+  // Devices for bulk link adding
+  const bulkLinkDevices = useMemo(() => {
+    return devices.filter(device => {
+      if (bulkLinkTypeId !== "all" && device.deviceTypeId !== bulkLinkTypeId) return false;
+      if (bulkLinkBrandId !== "all" && device.brandId !== bulkLinkBrandId) return false;
+      return true;
+    });
+  }, [devices, bulkLinkTypeId, bulkLinkBrandId]);
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string; cloneFromDeviceId?: string }) => {
@@ -908,6 +923,68 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  const bulkLinkMutation = useMutation({
+    mutationFn: async (data: { deviceIds: string[]; serviceIds: string[] }) => {
+      const results = { created: 0, skipped: 0, errors: [] as string[] };
+      for (const deviceId of data.deviceIds) {
+        for (const serviceId of data.serviceIds) {
+          try {
+            await apiRequest("POST", "/api/device-services", { deviceId, serviceId });
+            results.created++;
+          } catch (error: any) {
+            if (error.message?.includes("already exists")) {
+              results.skipped++;
+            } else {
+              results.errors.push(error.message);
+            }
+          }
+        }
+      }
+      return results;
+    },
+    onSuccess: (results) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      setBulkLinkOpen(false);
+      setBulkLinkSelectedServices(new Set());
+      setBulkLinkTypeId("all");
+      setBulkLinkBrandId("all");
+      toast({
+        title: "Bulk links created",
+        description: `Created ${results.created} links${results.skipped > 0 ? `, ${results.skipped} already existed` : ""}${results.errors.length > 0 ? `, ${results.errors.length} errors` : ""}`
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleBulkLinkOpen = () => {
+    setBulkLinkTypeId("all");
+    setBulkLinkBrandId("all");
+    setBulkLinkSelectedServices(new Set());
+    setBulkLinkOpen(true);
+  };
+
+  const toggleBulkLinkService = (serviceId: string) => {
+    setBulkLinkSelectedServices(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
+
+  const handleBulkLinkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    bulkLinkMutation.mutate({
+      deviceIds: bulkLinkDevices.map(d => d.id),
+      serviceIds: Array.from(bulkLinkSelectedServices)
+    });
+  };
 
   const handleManageLinks = (device: Device) => {
     setLinksDevice(device);
@@ -1071,6 +1148,9 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             <CardDescription>Manage specific device models</CardDescription>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={handleBulkLinkOpen} data-testid="button-bulk-add-links">
+              <Layers className="h-4 w-4 mr-2" />Bulk Add Links
+            </Button>
             <Dialog open={bulkOpen} onOpenChange={(o) => { setBulkOpen(o); if (!o) setBulkResults(null); }}>
               <DialogTrigger asChild>
                 <Button variant="outline" data-testid="button-bulk-import-device"><Upload className="h-4 w-4 mr-2" />Bulk Import</Button>
@@ -1511,6 +1591,88 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             <DialogFooter>
               <Button type="submit" disabled={updateLinkMutation.isPending} data-testid="button-save-edit-link">
                 {updateLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Add Service Links Dialog */}
+      <Dialog open={bulkLinkOpen} onOpenChange={setBulkLinkOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <form onSubmit={handleBulkLinkSubmit}>
+            <DialogHeader>
+              <DialogTitle>Bulk Add Service Links</DialogTitle>
+              <DialogDescription>Link multiple services to multiple devices at once. No parts will be attached.</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Device Type</Label>
+                  <Select value={bulkLinkTypeId} onValueChange={setBulkLinkTypeId}>
+                    <SelectTrigger data-testid="select-bulk-link-type"><SelectValue placeholder="All Types" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {deviceTypes.map((type) => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Brand</Label>
+                  <Select value={bulkLinkBrandId} onValueChange={setBulkLinkBrandId}>
+                    <SelectTrigger data-testid="select-bulk-link-brand"><SelectValue placeholder="All Brands" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Brands</SelectItem>
+                      {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="p-3 bg-muted rounded-md">
+                <p className="text-sm font-medium mb-1">Target Devices: {bulkLinkDevices.length}</p>
+                <p className="text-xs text-muted-foreground">
+                  {bulkLinkTypeId !== "all" && `Type: ${deviceTypes.find(t => t.id === bulkLinkTypeId)?.name}`}
+                  {bulkLinkTypeId !== "all" && bulkLinkBrandId !== "all" && " / "}
+                  {bulkLinkBrandId !== "all" && `Brand: ${brands.find(b => b.id === bulkLinkBrandId)?.name}`}
+                  {bulkLinkTypeId === "all" && bulkLinkBrandId === "all" && "All devices"}
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Select Services to Link</Label>
+                <div className="border rounded-md max-h-60 overflow-y-auto">
+                  {services.map((service) => (
+                    <div
+                      key={service.id}
+                      className="flex items-center gap-3 px-3 py-2 border-b last:border-b-0 hover-elevate cursor-pointer"
+                      onClick={() => toggleBulkLinkService(service.id)}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={bulkLinkSelectedServices.has(service.id)}
+                        onChange={() => toggleBulkLinkService(service.id)}
+                        className="h-4 w-4"
+                        data-testid={`checkbox-bulk-service-${service.id}`}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{service.name}</p>
+                        <p className="text-xs text-muted-foreground">${service.laborPrice} + {service.partsMarkup}x markup</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="text-sm text-muted-foreground">{bulkLinkSelectedServices.size} service(s) selected</p>
+              </div>
+              <div className="p-3 bg-primary/10 rounded-md">
+                <p className="text-sm font-medium">
+                  This will create up to {bulkLinkDevices.length * bulkLinkSelectedServices.size} links
+                </p>
+                <p className="text-xs text-muted-foreground">Existing links will be skipped automatically</p>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" type="button" onClick={() => setBulkLinkOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={bulkLinkMutation.isPending || bulkLinkSelectedServices.size === 0 || bulkLinkDevices.length === 0} data-testid="button-bulk-link-submit">
+                {bulkLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Create ${bulkLinkDevices.length * bulkLinkSelectedServices.size} Links`}
               </Button>
             </DialogFooter>
           </form>
