@@ -6,6 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Error highlighting for service links with missing parts
+  - Service Links tab shows error section at top when links have issues
+  - Error: service link has no part assigned AND service is not marked as "Labour only"
+  - Each error displays device, brand, and service name with "Assign Part" quick action
+  - Helps identify service links that will show as "Not Available" in the quote widget
 - **Jan 2026**: Service availability and "Labour only" feature
   - Services without parts assigned now show "Not Available" instead of price
   - Warranty and repair time are hidden for unavailable services

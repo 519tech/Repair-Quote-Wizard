@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -2430,6 +2430,16 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const filteredParts = searchedParts?.parts || [];
   const editFilteredParts = editSearchedParts?.parts || [];
 
+  // Compute service links with errors (no part assigned and service is not labour-only)
+  const errorLinks = useMemo(() => {
+    return deviceServices.filter(ds => {
+      // Error if: no part assigned AND service is NOT labour-only
+      const hasPart = ds.part !== null;
+      const isLabourOnly = ds.service?.labourOnly === true;
+      return !hasPart && !isLabourOnly;
+    });
+  }, [deviceServices]);
+
   const { data: editSkuPartData } = useQuery<Part | null>({
     queryKey: [`/api/parts/sku/${encodeURIComponent(editPartSku)}`],
     enabled: editPartSku.length > 0
@@ -2891,6 +2901,45 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             </Button>
           )}
         </div>
+
+        {/* Error section for service links with missing parts */}
+        {errorLinks.length > 0 && (
+          <div className="mb-4 border border-destructive/50 bg-destructive/5 rounded-md p-4" data-testid="section-error-links">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <h4 className="font-semibold text-destructive">
+                {errorLinks.length} Service Link{errorLinks.length !== 1 ? "s" : ""} Missing Parts
+              </h4>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              These service links have no part assigned and the service is not marked as "Labour only". They will show as "Not Available" in the quote widget.
+            </p>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {errorLinks.map((ds) => (
+                <div 
+                  key={ds.id} 
+                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border"
+                  data-testid={`error-link-${ds.id}`}
+                >
+                  <span>
+                    <span className="font-medium">{ds.device?.name || "Unknown"}</span>
+                    <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
+                    <span className="mx-2">→</span>
+                    <span>{ds.service?.name || "Unknown"}</span>
+                  </span>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEdit(ds)}
+                    data-testid={`button-fix-link-${ds.id}`}
+                  >
+                    Assign Part
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
