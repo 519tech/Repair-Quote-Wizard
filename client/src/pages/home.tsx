@@ -473,7 +473,7 @@ export default function Home() {
               <CardDescription>Choose the brand of your device</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => setStep(1)} data-testid="button-back-step1">
+              <Button variant="secondary" className="mb-4" onClick={() => setStep(1)} data-testid="button-back-step1">
                 Back to device types
               </Button>
               {brandsLoading ? (
@@ -513,7 +513,7 @@ export default function Home() {
               <CardDescription>Choose your specific model</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="ghost" className="mb-4" onClick={() => setStep(skippedBrandStep ? 1 : 2)} data-testid="button-back-step2">
+              <Button variant="secondary" className="mb-4" onClick={() => setStep(skippedBrandStep ? 1 : 2)} data-testid="button-back-step2">
                 {skippedBrandStep ? "Back to device types" : "Back to brands"}
               </Button>
               {devicesLoading ? (
@@ -555,7 +555,7 @@ export default function Home() {
                 </div>
               ) : deviceServices.length === 0 ? (
                 <>
-                  <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                  <Button variant="secondary" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
                     {usedSearch ? "Start Over" : "Back to devices"}
                   </Button>
                   <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
@@ -583,7 +583,7 @@ export default function Home() {
                 if (hasMultipleCategories && !selectedCategoryId) {
                   return (
                     <>
-                      <Button variant="ghost" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                      <Button variant="secondary" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
                         {usedSearch ? "Start Over" : "Back to devices"}
                       </Button>
                       <div className="space-y-2">
@@ -626,7 +626,7 @@ export default function Home() {
                 return (
                   <>
                     <Button 
-                      variant="ghost" 
+                      variant="secondary" 
                       className="mb-4" 
                       onClick={() => {
                         if (hasMultipleCategories && selectedCategoryId) {

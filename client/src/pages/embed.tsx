@@ -442,7 +442,7 @@ export default function Embed() {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  <Button variant="outline" className="w-full justify-start" onClick={() => setStep(1)} data-testid="button-back-step1">
+                  <Button variant="secondary" className="w-full justify-start" onClick={() => setStep(1)} data-testid="button-back-step1">
                     Back
                   </Button>
                   {brands.map((brand) => (
@@ -517,7 +517,7 @@ export default function Embed() {
                 </div>
               ) : deviceServices.length === 0 ? (
                 <>
-                  <Button variant="outline" className="w-full justify-start mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                  <Button variant="secondary" className="w-full justify-start mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
                     {usedSearch ? "Start Over" : "Back"}
                   </Button>
                   <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
@@ -545,7 +545,7 @@ export default function Embed() {
                 if (hasMultipleCategories && !selectedCategoryId) {
                   return (
                     <div className="space-y-2">
-                      <Button variant="outline" className="w-full justify-start" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
+                      <Button variant="secondary" className="w-full justify-start" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
                         {usedSearch ? "Start Over" : "Back"}
                       </Button>
                       {categories.map((cat) => (
@@ -586,7 +586,7 @@ export default function Embed() {
                 return (
                   <>
                     <Button 
-                      variant="outline" 
+                      variant="secondary" 
                       className="w-full justify-start mb-4" 
                       onClick={() => {
                         if (hasMultipleCategories && selectedCategoryId) {
