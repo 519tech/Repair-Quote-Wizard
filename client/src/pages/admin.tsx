@@ -1786,9 +1786,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <TableCell>
                     {inlineEditingService?.id === service.id && inlineEditingService?.field === "laborPrice" ? (
                       <Input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         value={inlineEditingService.value}
                         onChange={(e) => handleInlineChange(e.target.value)}
                         onKeyDown={(e) => {
@@ -1813,9 +1812,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <TableCell>
                     {inlineEditingService?.id === service.id && inlineEditingService?.field === "partsMarkup" ? (
                       <Input
-                        type="number"
-                        step="0.1"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         value={inlineEditingService.value}
                         onChange={(e) => handleInlineChange(e.target.value)}
                         onKeyDown={(e) => {
