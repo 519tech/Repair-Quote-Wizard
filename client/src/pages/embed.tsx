@@ -348,15 +348,14 @@ export default function Embed() {
                   data-testid="input-device-search"
                 />
                 {searchQuery && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-9 w-9"
+                  <button
+                    type="button"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                     onClick={clearSearch}
                     data-testid="button-clear-search"
                   >
                     <X className="h-4 w-4" />
-                  </Button>
+                  </button>
                 )}
               </div>
               {showSearch && searchQuery.length >= 2 && (
