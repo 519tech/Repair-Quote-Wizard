@@ -6,6 +6,10 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Quote widget footer with disclaimer and price update timestamp
+  - Footer displays: "All prices are estimates only and subject to change. In-store verification required."
+  - Shows "Prices last updated: [date]" based on last parts import
+- **Jan 2026**: Services in comparison view now sorted by price (lowest first)
 - **Jan 2026**: Added bulk add feature for service links
   - Click "Bulk Add" in Service Links tab to link a service to multiple devices at once
   - Filter by device type (e.g., all smartphones) and/or brand (e.g., all Samsung devices)

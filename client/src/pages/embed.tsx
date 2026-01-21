@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, RotateCcw, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceType, Device, DeviceServiceWithRelations, Brand, ServiceCategory } from "@shared/schema";
+import type { DeviceType, Device, DeviceServiceWithRelations, Brand, ServiceCategory, MessageTemplate } from "@shared/schema";
 
 type DeviceSearchResult = Device & {
   brand?: Brand | null;
@@ -86,6 +86,25 @@ export default function Embed() {
   const { data: brandCategoryLinks = [] } = useQuery<{ id: string; brandId: string; categoryId: string }[]>({
     queryKey: ["/api/brand-service-categories"],
   });
+
+  // Get the last time parts were updated
+  const { data: partsLastUpdated } = useQuery<MessageTemplate>({
+    queryKey: ["/api/message-templates", "parts_last_updated"],
+  });
+
+  const formatLastUpdated = (isoDate: string | undefined) => {
+    if (!isoDate) return null;
+    try {
+      const date = new Date(isoDate);
+      return date.toLocaleDateString("en-US", { 
+        year: "numeric", 
+        month: "long", 
+        day: "numeric" 
+      });
+    } catch {
+      return null;
+    }
+  };
 
   const submitQuoteMutation = useMutation({
     mutationFn: async (data: {
@@ -614,7 +633,7 @@ export default function Embed() {
                       </div>
                     ) : allQuotes.length > 0 ? (
                       <div className="space-y-4">
-                        {allQuotes.map((quote) => (
+                        {[...allQuotes].sort((a, b) => parseFloat(a.price) - parseFloat(b.price)).map((quote) => (
                           <div 
                             key={quote.serviceId} 
                             className="border rounded-lg p-4 bg-card"
@@ -757,6 +776,13 @@ export default function Embed() {
           </Card>
         )}
 
+        {/* Footer with disclaimer */}
+        <div className="mt-6 pt-4 border-t text-xs text-muted-foreground text-center space-y-1">
+          <p>All prices are estimates only and subject to change. In-store verification of issues required.</p>
+          {partsLastUpdated?.content && (
+            <p>Prices last updated: {formatLastUpdated(partsLastUpdated.content)}</p>
+          )}
+        </div>
       </div>
     </div>
   );

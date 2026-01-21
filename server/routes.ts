@@ -581,6 +581,12 @@ export async function registerRoutes(
 
       const result = await storage.bulkUpsertParts(partsToUpsert);
 
+      // Update the parts_last_updated timestamp
+      await storage.upsertMessageTemplate({ 
+        type: "parts_last_updated", 
+        content: new Date().toISOString() 
+      });
+
       res.json({
         success: true,
         inserted: result.inserted,
