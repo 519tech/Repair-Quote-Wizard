@@ -721,6 +721,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [imageUrl, setImageUrl] = useState("");
   const [filterTypeId, setFilterTypeId] = useState("all");
   const [filterBrandId, setFilterBrandId] = useState("all");
+  const [deviceSearch, setDeviceSearch] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
   const [bulkResults, setBulkResults] = useState<{ created: number; errors: string[] } | null>(null);
 
@@ -733,6 +734,13 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     if (filterBrandId !== "all") {
       if (filterBrandId === "none" && device.brandId !== null) return false;
       if (filterBrandId !== "none" && device.brandId !== filterBrandId) return false;
+    }
+    if (deviceSearch) {
+      const search = deviceSearch.toLowerCase();
+      const brand = brands.find(b => b.id === device.brandId);
+      const deviceType = deviceTypes.find(t => t.id === device.deviceTypeId);
+      const searchText = `${device.name} ${brand?.name || ""} ${deviceType?.name || ""}`.toLowerCase();
+      if (!searchText.includes(search)) return false;
     }
     return true;
   });
@@ -1043,7 +1051,17 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
             </form>
           </DialogContent>
         </Dialog>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-4 items-center">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search devices..."
+              value={deviceSearch}
+              onChange={(e) => setDeviceSearch(e.target.value)}
+              className="pl-8 w-[200px]"
+              data-testid="input-device-search"
+            />
+          </div>
           <Select value={filterTypeId} onValueChange={setFilterTypeId}>
             <SelectTrigger className="w-[180px]" data-testid="select-filter-type">
               <SelectValue placeholder="Filter by type" />
@@ -1063,6 +1081,16 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
             </SelectContent>
           </Select>
+          {(deviceSearch || filterTypeId !== "all" || filterBrandId !== "all") && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => { setDeviceSearch(""); setFilterTypeId("all"); setFilterBrandId("all"); }}
+              data-testid="button-clear-device-filters"
+            >
+              <X className="h-4 w-4 mr-1" /> Clear
+            </Button>
+          )}
         </div>
       </CardHeader>
       <CardContent>
@@ -2000,6 +2028,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [filterBrand, setFilterBrand] = useState<string>("all");
   const [filterDevice, setFilterDevice] = useState<string>("all");
   const [filterService, setFilterService] = useState<string>("all");
+  const [serviceLinkSearch, setServiceLinkSearch] = useState("");
 
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineEditSku, setInlineEditSku] = useState("");
@@ -2047,9 +2076,14 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       if (filterBrand !== "all" && ds.device?.brand?.name !== filterBrand) return false;
       if (filterDevice !== "all" && ds.device?.name !== filterDevice) return false;
       if (filterService !== "all" && ds.service?.name !== filterService) return false;
+      if (serviceLinkSearch) {
+        const search = serviceLinkSearch.toLowerCase();
+        const searchText = `${ds.device?.name || ""} ${ds.device?.brand?.name || ""} ${ds.service?.name || ""} ${ds.part?.sku || ""} ${ds.part?.name || ""}`.toLowerCase();
+        if (!searchText.includes(search)) return false;
+      }
       return true;
     });
-  }, [deviceServices, filterBrand, filterDevice, filterService]);
+  }, [deviceServices, filterBrand, filterDevice, filterService, serviceLinkSearch]);
 
   const filteredParts = useMemo(() => 
     parts.filter(p => 
@@ -2448,6 +2482,16 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-3 mb-4 items-end">
+          <div className="relative">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search service links..."
+              value={serviceLinkSearch}
+              onChange={(e) => setServiceLinkSearch(e.target.value)}
+              className="pl-8 w-[200px]"
+              data-testid="input-service-link-search"
+            />
+          </div>
           <div className="flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Filters:</span>
@@ -2494,11 +2538,11 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               </SelectContent>
             </Select>
           </div>
-          {(filterBrand !== "all" || filterDevice !== "all" || filterService !== "all") && (
+          {(serviceLinkSearch || filterBrand !== "all" || filterDevice !== "all" || filterService !== "all") && (
             <Button 
               variant="ghost" 
               size="sm" 
-              onClick={() => { setFilterBrand("all"); setFilterDevice("all"); setFilterService("all"); }}
+              onClick={() => { setServiceLinkSearch(""); setFilterBrand("all"); setFilterDevice("all"); setFilterService("all"); }}
               data-testid="button-clear-filters"
             >
               <X className="h-4 w-4 mr-1" />
