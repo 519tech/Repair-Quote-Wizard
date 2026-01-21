@@ -862,8 +862,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     }
   };
 
-  const downloadTemplate = () => {
-    window.open("/api/devices/template", "_blank");
+  const downloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/devices/template", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to download template");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "device-import-template.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to download template", variant: "destructive" });
+    }
   };
 
   return (

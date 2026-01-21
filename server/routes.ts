@@ -350,7 +350,7 @@ export async function registerRoutes(
   });
 
   // Device bulk import template
-  app.get("/api/devices/template", async (req, res) => {
+  app.get("/api/devices/template", requireAdmin, async (req, res) => {
     try {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
