@@ -747,18 +747,28 @@ export async function registerRoutes(
       const input = deviceServiceWithSkuSchema.parse(req.body);
       
       let partId = input.partId;
+      let partSku = input.partSku || null;
+      
       if (input.partSku && !partId) {
         const part = await storage.getPartBySku(input.partSku);
         if (!part) {
           return res.status(400).json({ error: `Part with SKU '${input.partSku}' not found` });
         }
         partId = part.id;
+        partSku = part.sku; // Store the SKU
+      } else if (partId && !partSku) {
+        // If partId provided but no SKU, look up the SKU
+        const part = await storage.getPart(partId);
+        if (part) {
+          partSku = part.sku;
+        }
       }
       
       const data = {
         deviceId: input.deviceId,
         serviceId: input.serviceId,
         partId: partId || null,
+        partSku: partSku,
       };
       
       const deviceService = await storage.createDeviceService(data);
@@ -780,10 +790,18 @@ export async function registerRoutes(
       const input = schema.parse(req.body);
       
       let partId = input.partId || null;
+      let partSku = input.partSku || null;
+      
       if (input.partSku && !partId) {
         const part = await storage.getPartBySku(input.partSku);
         if (part) {
           partId = part.id;
+          partSku = part.sku;
+        }
+      } else if (partId && !partSku) {
+        const part = await storage.getPart(partId);
+        if (part) {
+          partSku = part.sku;
         }
       }
       
@@ -796,6 +814,7 @@ export async function registerRoutes(
             deviceId,
             serviceId: input.serviceId,
             partId,
+            partSku,
           });
           created.push(deviceService);
         } catch (error: any) {
@@ -889,18 +908,28 @@ export async function registerRoutes(
       const input = deviceServiceWithSkuSchema.partial().parse(req.body);
       
       let partId = input.partId;
+      let partSku = input.partSku;
+      
       if (input.partSku && !partId) {
         const part = await storage.getPartBySku(input.partSku);
         if (!part) {
           return res.status(400).json({ error: `Part with SKU '${input.partSku}' not found` });
         }
         partId = part.id;
+        partSku = part.sku;
+      } else if (partId && !partSku) {
+        // If partId provided but no SKU, look up the SKU
+        const part = await storage.getPart(partId);
+        if (part) {
+          partSku = part.sku;
+        }
       }
       
       const data: any = {};
       if (input.deviceId) data.deviceId = input.deviceId;
       if (input.serviceId) data.serviceId = input.serviceId;
       if (partId !== undefined) data.partId = partId || null;
+      if (partSku !== undefined) data.partSku = partSku || null;
       
       const deviceService = await storage.updateDeviceService(req.params.id, data);
       if (!deviceService) {

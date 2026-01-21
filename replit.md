@@ -11,6 +11,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
   - Error: service link has no part assigned AND service is not marked as "Labour only"
   - Each error displays device, brand, and service name with "Assign Part" quick action
   - Helps identify service links that will show as "Not Available" in the quote widget
+- **Jan 2026**: Part SKU preservation when parts are deleted
+  - Service links now store partSku separately from partId
+  - When a part is deleted from the parts list, the SKU is preserved in the service link
+  - Orphaned SKUs (part deleted but SKU preserved) are highlighted in orange
+  - Easy to re-link when new parts list is uploaded - SKU is pre-filled in edit dialog
+  - Table shows "(missing)" badge for orphaned SKUs
 - **Jan 2026**: Service availability and "Labour only" feature
   - Services without parts assigned now show "Not Available" instead of price
   - Warranty and repair time are hidden for unavailable services

@@ -2430,13 +2430,29 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const filteredParts = searchedParts?.parts || [];
   const editFilteredParts = editSearchedParts?.parts || [];
 
-  // Compute service links with errors (no part assigned and service is not labour-only)
+  // Compute service links with errors:
+  // 1. Orphaned SKU: partSku exists but part was deleted (partId is null but partSku is set)
+  // 2. Missing part: no part assigned AND service is NOT labour-only
   const errorLinks = useMemo(() => {
     return deviceServices.filter(ds => {
-      // Error if: no part assigned AND service is NOT labour-only
+      const hasPart = ds.part !== null;
+      const hasOrphanedSku = ds.partSku && !hasPart; // SKU was set but part was deleted
+      const isLabourOnly = ds.service?.labourOnly === true;
+      const needsPartButMissing = !hasPart && !isLabourOnly && !ds.partSku;
+      return hasOrphanedSku || needsPartButMissing;
+    });
+  }, [deviceServices]);
+  
+  // Separate orphaned SKU errors from missing part errors for better messaging
+  const orphanedSkuLinks = useMemo(() => {
+    return deviceServices.filter(ds => ds.partSku && !ds.part);
+  }, [deviceServices]);
+  
+  const missingPartLinks = useMemo(() => {
+    return deviceServices.filter(ds => {
       const hasPart = ds.part !== null;
       const isLabourOnly = ds.service?.labourOnly === true;
-      return !hasPart && !isLabourOnly;
+      return !hasPart && !isLabourOnly && !ds.partSku;
     });
   }, [deviceServices]);
 
@@ -2560,7 +2576,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
 
   const handleInlineEdit = (ds: DeviceServiceWithRelations) => {
     setInlineEditId(ds.id);
-    setInlineEditSku(ds.part?.sku || "");
+    setInlineEditSku(ds.part?.sku || ds.partSku || "");
   };
 
   const handleInlineSave = (id: string) => {
@@ -2584,7 +2600,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
 
   const handleEdit = (ds: DeviceServiceWithRelations) => {
     setEditItem(ds);
-    setEditPartSku(ds.part?.sku || "");
+    setEditPartSku(ds.part?.sku || ds.partSku || "");
     setEditPartSearch("");
     setEditOpen(true);
   };
@@ -2902,20 +2918,60 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
           )}
         </div>
 
-        {/* Error section for service links with missing parts */}
-        {errorLinks.length > 0 && (
-          <div className="mb-4 border border-destructive/50 bg-destructive/5 rounded-md p-4" data-testid="section-error-links">
+        {/* Error section for orphaned SKUs (part was deleted but SKU is preserved) */}
+        {orphanedSkuLinks.length > 0 && (
+          <div className="mb-4 border border-orange-500/50 bg-orange-500/5 rounded-md p-4" data-testid="section-orphaned-sku-links">
+            <div className="flex items-center gap-2 mb-3">
+              <AlertTriangle className="h-5 w-5 text-orange-600" />
+              <h4 className="font-semibold text-orange-600">
+                {orphanedSkuLinks.length} Service Link{orphanedSkuLinks.length !== 1 ? "s" : ""} with Missing Parts (SKU Preserved)
+              </h4>
+            </div>
+            <p className="text-sm text-muted-foreground mb-3">
+              These service links have a saved SKU but the part no longer exists in your parts list. Re-upload parts or assign a new part to fix.
+            </p>
+            <div className="max-h-48 overflow-y-auto space-y-1">
+              {orphanedSkuLinks.map((ds) => (
+                <div 
+                  key={ds.id} 
+                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border gap-2"
+                  data-testid={`orphaned-link-${ds.id}`}
+                >
+                  <span className="flex-1">
+                    <span className="font-medium">{ds.device?.name || "Unknown"}</span>
+                    <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
+                    <span className="mx-2">→</span>
+                    <span>{ds.service?.name || "Unknown"}</span>
+                  </span>
+                  <Badge variant="outline" className="font-mono text-xs">{ds.partSku}</Badge>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => handleEdit(ds)}
+                    data-testid={`button-fix-orphaned-${ds.id}`}
+                  >
+                    Reassign Part
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Error section for service links with missing parts (no SKU at all) */}
+        {missingPartLinks.length > 0 && (
+          <div className="mb-4 border border-destructive/50 bg-destructive/5 rounded-md p-4" data-testid="section-missing-part-links">
             <div className="flex items-center gap-2 mb-3">
               <AlertTriangle className="h-5 w-5 text-destructive" />
               <h4 className="font-semibold text-destructive">
-                {errorLinks.length} Service Link{errorLinks.length !== 1 ? "s" : ""} Missing Parts
+                {missingPartLinks.length} Service Link{missingPartLinks.length !== 1 ? "s" : ""} Missing Parts
               </h4>
             </div>
             <p className="text-sm text-muted-foreground mb-3">
               These service links have no part assigned and the service is not marked as "Labour only". They will show as "Not Available" in the quote widget.
             </p>
             <div className="max-h-48 overflow-y-auto space-y-1">
-              {errorLinks.map((ds) => (
+              {missingPartLinks.map((ds) => (
                 <div 
                   key={ds.id} 
                   className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border"
@@ -3029,12 +3085,16 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                           </div>
                         ) : (
                           <div 
-                            className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[80px] min-h-[28px] flex items-center"
+                            className="cursor-pointer hover:bg-muted/50 px-2 py-1 rounded min-w-[80px] min-h-[28px] flex items-center gap-1"
                             onClick={() => handleInlineEdit(ds)}
                             data-testid={`cell-sku-${ds.id}`}
                           >
                             {ds.part ? (
                               <Badge variant="outline" className="font-mono">{ds.part.sku}</Badge>
+                            ) : ds.partSku ? (
+                              <Badge variant="outline" className="font-mono text-orange-600 border-orange-500/50">
+                                {ds.partSku} <span className="text-xs ml-1">(missing)</span>
+                              </Badge>
                             ) : (
                               <span className="text-muted-foreground text-sm italic">Click to add</span>
                             )}
