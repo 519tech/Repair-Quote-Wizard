@@ -748,6 +748,56 @@ export async function registerRoutes(
     }
   });
 
+  // Bulk create device-services (link a service to multiple devices)
+  app.post("/api/device-services/bulk", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        serviceId: z.string(),
+        deviceIds: z.array(z.string()),
+        partSku: z.string().optional(),
+        partId: z.string().optional(),
+      });
+      const input = schema.parse(req.body);
+      
+      let partId = input.partId || null;
+      if (input.partSku && !partId) {
+        const part = await storage.getPartBySku(input.partSku);
+        if (part) {
+          partId = part.id;
+        }
+      }
+      
+      const created: any[] = [];
+      const skipped: string[] = [];
+      
+      for (const deviceId of input.deviceIds) {
+        try {
+          const deviceService = await storage.createDeviceService({
+            deviceId,
+            serviceId: input.serviceId,
+            partId,
+          });
+          created.push(deviceService);
+        } catch (error: any) {
+          // Skip duplicates
+          if (error.message?.includes("duplicate") || error.code === '23505') {
+            skipped.push(deviceId);
+          } else {
+            throw error;
+          }
+        }
+      }
+      
+      res.status(201).json({ 
+        created: created.length, 
+        skipped: skipped.length,
+        total: input.deviceIds.length 
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to bulk create device services" });
+    }
+  });
+
   app.patch("/api/device-services/:id", requireAdmin, async (req, res) => {
     try {
       const input = deviceServiceWithSkuSchema.partial().parse(req.body);

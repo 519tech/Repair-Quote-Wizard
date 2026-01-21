@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Added bulk add feature for service links
+  - Click "Bulk Add" in Service Links tab to link a service to multiple devices at once
+  - Filter by device type (e.g., all smartphones) and/or brand (e.g., all Samsung devices)
+  - Use case: Add diagnostic service to all smartphones or all Samsung tablets
+  - Shows preview of how many devices will be linked before submitting
+- **Jan 2026**: Added filtering to Services tab - filter by category (like Devices tab)
 - **Jan 2026**: Quote wizard now shows ALL service options side-by-side for comparison
   - After selecting a repair category, all available services are displayed on one page
   - Each service shows price, repair time, warranty with individual "Send me quote" button

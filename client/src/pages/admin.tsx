@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -1425,9 +1425,16 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [laborPrice, setLaborPrice] = useState("");
   const [partsMarkup, setPartsMarkup] = useState("1.0");
   const [notes, setNotes] = useState("");
+  const [filterCategoryId, setFilterCategoryId] = useState("all");
 
   const { data: services = [], isLoading } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: categories = [] } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
+
+  const filteredServices = useMemo(() => {
+    if (filterCategoryId === "all") return services;
+    if (filterCategoryId === "none") return services.filter(s => !s.categoryId);
+    return services.filter(s => s.categoryId === filterCategoryId);
+  }, [services, filterCategoryId]);
 
   const getCategoryName = (catId: string | null) => {
     if (!catId) return "-";
@@ -1657,12 +1664,24 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
             </form>
           </DialogContent>
         </Dialog>
+        <div className="flex flex-wrap gap-4">
+          <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-category">
+              <SelectValue placeholder="Filter by category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              <SelectItem value="none">No Category</SelectItem>
+              {categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : services.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">No services yet. Add your first one!</p>
+        ) : filteredServices.length === 0 ? (
+          <p className="text-center py-8 text-muted-foreground">{services.length === 0 ? "No services yet. Add your first one!" : "No services match your filter."}</p>
         ) : (
           <Table>
             <TableHeader>
@@ -1677,7 +1696,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
               </TableRow>
             </TableHeader>
             <TableBody>
-              {services.map((service) => (
+              {filteredServices.map((service) => (
                 <TableRow key={service.id}>
                   <TableCell><Badge variant="secondary">{getCategoryName(service.categoryId)}</Badge></TableCell>
                   <TableCell className="font-medium">{service.name}</TableCell>
@@ -1971,9 +1990,17 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [inlineEditId, setInlineEditId] = useState<string | null>(null);
   const [inlineEditSku, setInlineEditSku] = useState("");
 
+  // Bulk add state
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkServiceId, setBulkServiceId] = useState("");
+  const [bulkTypeId, setBulkTypeId] = useState("all");
+  const [bulkBrandId, setBulkBrandId] = useState("all");
+  const [bulkPartSku, setBulkPartSku] = useState("");
+
   const { data: deviceServices = [], isLoading } = useQuery<DeviceServiceWithRelations[]>({ queryKey: ["/api/device-services"] });
   const { data: devices = [] } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
+  const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
   const { data: parts = [] } = useQuery<Part[]>({ queryKey: ["/api/parts"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
 
@@ -2029,6 +2056,47 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const inlineSkuPart = useMemo(() => 
     parts.find(p => p.sku.toLowerCase() === inlineEditSku.toLowerCase()), 
     [parts, inlineEditSku]);
+
+  // Compute devices for bulk add based on selected filters
+  const bulkDevices = useMemo(() => {
+    return devices.filter(d => {
+      if (bulkTypeId !== "all" && d.deviceTypeId !== bulkTypeId) return false;
+      if (bulkBrandId !== "all" && d.brandId !== bulkBrandId) return false;
+      return true;
+    });
+  }, [devices, bulkTypeId, bulkBrandId]);
+
+  const bulkMutation = useMutation({
+    mutationFn: async (data: { serviceId: string; deviceIds: string[]; partSku?: string }) => {
+      const res = await apiRequest("POST", "/api/device-services/bulk", data);
+      return res.json();
+    },
+    onSuccess: (result: { created: number; skipped: number; total: number }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
+      setBulkOpen(false);
+      setBulkServiceId("");
+      setBulkTypeId("all");
+      setBulkBrandId("all");
+      setBulkPartSku("");
+      toast({ 
+        title: "Bulk add complete",
+        description: `Created ${result.created} links, skipped ${result.skipped} duplicates`
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleBulkSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkServiceId || bulkDevices.length === 0) return;
+    bulkMutation.mutate({
+      serviceId: bulkServiceId,
+      deviceIds: bulkDevices.map(d => d.id),
+      partSku: bulkPartSku || undefined,
+    });
+  };
 
   const createMutation = useMutation({
     mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
@@ -2150,10 +2218,11 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
           <CardTitle>Device-Service Links</CardTitle>
           <CardDescription>Link devices to services with optional parts. Labor and markup come from the Service.</CardDescription>
         </div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-add-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
+            </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
               <DialogHeader>
@@ -2298,6 +2367,70 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             </form>
           </DialogContent>
         </Dialog>
+
+          <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" data-testid="button-bulk-add"><Layers className="h-4 w-4 mr-2" />Bulk Add</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleBulkSubmit}>
+                <DialogHeader>
+                  <DialogTitle>Bulk Add Service Links</DialogTitle>
+                  <DialogDescription>Link a service to multiple devices at once. Filter by device type and/or brand.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4 py-4">
+                  <div className="space-y-2">
+                    <Label>Service *</Label>
+                    <Select value={bulkServiceId} onValueChange={setBulkServiceId}>
+                      <SelectTrigger data-testid="select-bulk-service"><SelectValue placeholder="Select a service" /></SelectTrigger>
+                      <SelectContent>
+                        {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice})</SelectItem>))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>Device Type</Label>
+                      <Select value={bulkTypeId} onValueChange={setBulkTypeId}>
+                        <SelectTrigger data-testid="select-bulk-type"><SelectValue placeholder="All Types" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Types</SelectItem>
+                          {deviceTypes.map((type) => (<SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Brand</Label>
+                      <Select value={bulkBrandId} onValueChange={setBulkBrandId}>
+                        <SelectTrigger data-testid="select-bulk-brand"><SelectValue placeholder="All Brands" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Brands</SelectItem>
+                          {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Part SKU (optional)</Label>
+                    <Input value={bulkPartSku} onChange={(e) => setBulkPartSku(e.target.value)} placeholder="Enter SKU if parts are needed" data-testid="input-bulk-part-sku" />
+                  </div>
+                  <div className="p-3 bg-muted rounded-md">
+                    <p className="text-sm">
+                      <span className="font-medium">{bulkDevices.length}</span> device{bulkDevices.length !== 1 ? 's' : ''} will be linked to this service
+                      {bulkTypeId !== "all" && ` (${deviceTypes.find(t => t.id === bulkTypeId)?.name || ''})`}
+                      {bulkBrandId !== "all" && ` ${bulkTypeId !== "all" ? '/ ' : '('}${brands.find(b => b.id === bulkBrandId)?.name || ''}${bulkTypeId === "all" ? ')' : ''}`}
+                    </p>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit" disabled={bulkMutation.isPending || !bulkServiceId || bulkDevices.length === 0} data-testid="button-bulk-submit">
+                    {bulkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : `Link to ${bulkDevices.length} Devices`}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="flex flex-wrap gap-3 mb-4 items-end">
