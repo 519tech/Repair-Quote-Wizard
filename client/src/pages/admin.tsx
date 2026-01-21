@@ -719,6 +719,8 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [deviceTypeId, setDeviceTypeId] = useState("");
   const [brandId, setBrandId] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  const [cloneFromDeviceId, setCloneFromDeviceId] = useState("");
+  const [cloneDeviceSearch, setCloneDeviceSearch] = useState("");
   const [filterTypeId, setFilterTypeId] = useState("all");
   const [filterBrandId, setFilterBrandId] = useState("all");
   const [deviceSearch, setDeviceSearch] = useState("");
@@ -746,18 +748,41 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string }) => {
-      const res = await apiRequest("POST", "/api/devices", data);
-      return res.json();
+    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string; cloneFromDeviceId?: string }) => {
+      const { cloneFromDeviceId, ...deviceData } = data;
+      const res = await apiRequest("POST", "/api/devices", deviceData);
+      const newDevice = await res.json();
+      
+      // Clone service links if a source device was selected
+      let cloneResult = null;
+      if (cloneFromDeviceId) {
+        const cloneRes = await apiRequest("POST", "/api/device-services/clone", {
+          sourceDeviceId: cloneFromDeviceId,
+          targetDeviceId: newDevice.id
+        });
+        cloneResult = await cloneRes.json();
+      }
+      
+      return { device: newDevice, cloneResult };
     },
-    onSuccess: () => {
+    onSuccess: (result, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
       setOpen(false);
       setName("");
       setDeviceTypeId("");
       setBrandId("");
       setImageUrl("");
-      toast({ title: "Device created" });
+      setCloneFromDeviceId("");
+      setCloneDeviceSearch("");
+      if (variables.cloneFromDeviceId && result.cloneResult) {
+        toast({ 
+          title: "Device created with cloned service links",
+          description: `Cloned ${result.cloneResult.created} service links${result.cloneResult.skipped > 0 ? ` (${result.cloneResult.skipped} skipped)` : ""}`
+        });
+      } else {
+        toast({ title: "Device created" });
+      }
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -797,9 +822,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       name, 
       deviceTypeId, 
       brandId: brandId && brandId !== "none" ? brandId : undefined,
-      imageUrl: imageUrl || undefined 
+      imageUrl: imageUrl || undefined,
+      cloneFromDeviceId: cloneFromDeviceId || undefined
     });
   };
+
+  // Filter devices for the clone dropdown based on search
+  const cloneSourceDevices = useMemo(() => {
+    if (!cloneDeviceSearch) return [];
+    const search = cloneDeviceSearch.toLowerCase();
+    return devices.filter(d => {
+      const brand = brands.find(b => b.id === d.brandId);
+      const deviceType = deviceTypes.find(t => t.id === d.deviceTypeId);
+      const searchText = `${d.name} ${brand?.name || ""} ${deviceType?.name || ""}`.toLowerCase();
+      return searchText.includes(search);
+    }).slice(0, 20);
+  }, [devices, brands, deviceTypes, cloneDeviceSearch]);
 
   const handleEdit = (device: Device) => {
     setEditItem(device);
@@ -992,6 +1030,62 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   placeholder="Enter image URL"
                   testIdPrefix="device-image"
                 />
+                <div className="space-y-2 pt-2 border-t">
+                  <Label>Clone Service Links From (Optional)</Label>
+                  <p className="text-xs text-muted-foreground">Copy all service links from an existing device. Parts will need to be assigned separately.</p>
+                  <Input 
+                    value={cloneDeviceSearch} 
+                    onChange={(e) => {
+                      setCloneDeviceSearch(e.target.value);
+                      if (!e.target.value) setCloneFromDeviceId("");
+                    }} 
+                    placeholder="Search for a device to clone from..." 
+                    data-testid="input-clone-device-search" 
+                  />
+                  {cloneDeviceSearch && cloneSourceDevices.length > 0 && !cloneFromDeviceId && (
+                    <div className="border rounded-md max-h-40 overflow-y-auto">
+                      {cloneSourceDevices.map((device) => {
+                        const brand = brands.find(b => b.id === device.brandId);
+                        const deviceType = deviceTypes.find(t => t.id === device.deviceTypeId);
+                        return (
+                          <div 
+                            key={device.id} 
+                            className="px-3 py-2 cursor-pointer hover-elevate"
+                            onClick={() => {
+                              setCloneFromDeviceId(device.id);
+                              setCloneDeviceSearch(`${brand?.name || ""} ${device.name}`.trim());
+                            }}
+                            data-testid={`clone-option-${device.id}`}
+                          >
+                            <span className="font-medium">{device.name}</span>
+                            {brand && <span className="text-muted-foreground"> - {brand.name}</span>}
+                            <span className="text-xs text-muted-foreground ml-2">({deviceType?.name})</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {cloneFromDeviceId && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Badge variant="secondary">
+                        {(() => {
+                          const device = devices.find(d => d.id === cloneFromDeviceId);
+                          const brand = brands.find(b => b.id === device?.brandId);
+                          return `${brand?.name || ""} ${device?.name || ""}`.trim();
+                        })()}
+                      </Badge>
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => { setCloneFromDeviceId(""); setCloneDeviceSearch(""); }}
+                        data-testid="button-clear-clone"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending || !deviceTypeId} data-testid="button-save-device">

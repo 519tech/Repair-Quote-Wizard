@@ -6,6 +6,10 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Clone service links when adding new device
+  - When adding a new device, search for an existing device to clone service links from
+  - All service links are copied except parts (parts SKU must be assigned separately)
+  - Saves time when new device models are released with similar repair services
 - **Jan 2026**: Parts management improvements for 100k+ parts
   - Bulk upload now replaces all existing parts (not upsert) to identify removed supplier items
   - Server-side pagination with 100 parts per page

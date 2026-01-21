@@ -818,6 +818,72 @@ export async function registerRoutes(
     }
   });
 
+  // Clone service links from one device to another (without parts)
+  app.post("/api/device-services/clone", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        sourceDeviceId: z.string(),
+        targetDeviceId: z.string(),
+      });
+      const input = schema.parse(req.body);
+      
+      // Validate source and target are different
+      if (input.sourceDeviceId === input.targetDeviceId) {
+        return res.status(400).json({ error: "Source and target device cannot be the same" });
+      }
+      
+      // Validate source device exists
+      const sourceDevice = await storage.getDevice(input.sourceDeviceId);
+      if (!sourceDevice) {
+        return res.status(400).json({ error: "Source device not found" });
+      }
+      
+      // Validate target device exists
+      const targetDevice = await storage.getDevice(input.targetDeviceId);
+      if (!targetDevice) {
+        return res.status(400).json({ error: "Target device not found" });
+      }
+      
+      // Get all service links from source device
+      const sourceLinks = await storage.getDeviceServicesByDevice(input.sourceDeviceId);
+      
+      if (sourceLinks.length === 0) {
+        return res.json({ created: 0, skipped: 0, message: "Source device has no service links to clone" });
+      }
+      
+      let created = 0;
+      let skipped = 0;
+      
+      for (const link of sourceLinks) {
+        try {
+          // Clone link without part ID (user will need to assign parts separately)
+          await storage.createDeviceService({
+            deviceId: input.targetDeviceId,
+            serviceId: link.serviceId,
+            partId: null, // Don't copy parts
+          });
+          created++;
+        } catch (error: any) {
+          // Skip duplicates
+          if (error.message?.includes("duplicate") || error.code === '23505') {
+            skipped++;
+          } else {
+            throw error;
+          }
+        }
+      }
+      
+      res.status(201).json({ 
+        created, 
+        skipped,
+        total: sourceLinks.length,
+        message: `Cloned ${created} service links (${skipped} already existed)`
+      });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to clone device services" });
+    }
+  });
+
   app.patch("/api/device-services/:id", requireAdmin, async (req, res) => {
     try {
       const input = deviceServiceWithSkuSchema.partial().parse(req.body);
