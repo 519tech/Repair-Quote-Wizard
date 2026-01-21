@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1561,6 +1562,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [laborPrice, setLaborPrice] = useState("");
   const [partsMarkup, setPartsMarkup] = useState("1.0");
   const [notes, setNotes] = useState("");
+  const [labourOnly, setLabourOnly] = useState(false);
   const [filterCategoryId, setFilterCategoryId] = useState("all");
 
   // Inline editing state
@@ -1584,7 +1586,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string; labourOnly?: boolean }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -1599,6 +1601,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setLaborPrice("");
       setPartsMarkup("1.0");
       setNotes("");
+      setLabourOnly(false);
       toast({ title: "Service created" });
     },
     onError: (error: Error) => {
@@ -1643,7 +1646,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       repairTime: repairTime || undefined,
       laborPrice, 
       partsMarkup,
-      notes: notes || undefined
+      notes: notes || undefined,
+      labourOnly
     });
   };
 
@@ -1701,7 +1705,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         repairTime: editItem.repairTime || undefined,
         laborPrice: editItem.laborPrice,
         partsMarkup: editItem.partsMarkup,
-        notes: editItem.notes || undefined
+        notes: editItem.notes || undefined,
+        labourOnly: editItem.labourOnly
       } 
     });
   };
@@ -1769,6 +1774,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Notes (optional)</Label>
                   <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Internal notes about this service" data-testid="input-service-notes" />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="labour-only" checked={labourOnly} onCheckedChange={(checked) => setLabourOnly(checked === true)} data-testid="checkbox-labour-only" />
+                  <Label htmlFor="labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-service">
@@ -1832,6 +1841,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Notes (optional)</Label>
                   <Textarea value={editItem?.notes || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, notes: e.target.value} : null)} data-testid="input-edit-service-notes" />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox id="edit-labour-only" checked={editItem?.labourOnly || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, labourOnly: checked === true} : null)} data-testid="checkbox-edit-labour-only" />
+                  <Label htmlFor="edit-labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-service">
@@ -1869,6 +1882,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 <TableHead>Markup</TableHead>
                 <TableHead>Warranty</TableHead>
                 <TableHead>Repair Time</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -1977,6 +1991,13 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                       >
                         {service.repairTime || <span className="text-muted-foreground italic">Click to add</span>}
                       </div>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {service.labourOnly ? (
+                      <Badge variant="outline" data-testid={`badge-labour-only-${service.id}`}>Labour Only</Badge>
+                    ) : (
+                      <span className="text-muted-foreground text-sm">Parts Required</span>
                     )}
                   </TableCell>
                   <TableCell>

@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Service availability and "Labour only" feature
+  - Services without parts assigned now show "Not Available" instead of price
+  - Warranty and repair time are hidden for unavailable services
+  - New "Labour only" checkbox for services that don't require parts (e.g., diagnostics, software services)
+  - Labour-only services will show their price even without parts attached
+  - Unavailable services are sorted to the end of the comparison list and dimmed
 - **Jan 2026**: Clone service links when adding new device
   - When adding a new device, search for an existing device to clone service links from
   - All service links are copied except parts (parts SKU must be assigned separately)

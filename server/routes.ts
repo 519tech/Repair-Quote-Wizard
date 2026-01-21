@@ -944,6 +944,12 @@ export async function registerRoutes(
       const rawTotal = laborPrice + markedUpPartCost;
       const totalPrice = roundToNearestFiveMinus1(rawTotal);
       
+      // Check if service has parts or is labour-only
+      const hasPart = !!deviceService.part;
+      const isLabourOnly = service.labourOnly === true;
+      // Service is available if it has parts OR is marked as labour-only
+      const isAvailable = hasPart || isLabourOnly;
+      
       res.json({
         deviceServiceId: deviceService.id,
         deviceName: deviceService.device.name,
@@ -957,6 +963,9 @@ export async function registerRoutes(
         partSku: deviceService.part?.sku || null,
         partName: deviceService.part?.name || null,
         totalPrice: totalPrice.toFixed(2),
+        hasPart,
+        isLabourOnly,
+        isAvailable,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to calculate quote" });

@@ -54,6 +54,7 @@ export default function Home() {
     price: string;
     repairTime?: string;
     warranty?: string;
+    isAvailable: boolean;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [sendingQuoteFor, setSendingQuoteFor] = useState<string | null>(null);
@@ -278,6 +279,7 @@ export default function Home() {
                 price: data.totalPrice,
                 repairTime: data.repairTime,
                 warranty: data.warranty,
+                isAvailable: data.isAvailable ?? true,
               };
             }
           } catch {
@@ -673,10 +675,17 @@ export default function Home() {
                       </div>
                     ) : allQuotes.length > 0 ? (
                       <div className="space-y-4">
-                        {[...allQuotes].sort((a, b) => parseFloat(a.price) - parseFloat(b.price)).map((quote) => (
+                        {[...allQuotes].sort((a, b) => {
+                          // Sort unavailable quotes to the end
+                          if (a.isAvailable !== b.isAvailable) {
+                            return a.isAvailable ? -1 : 1;
+                          }
+                          // Then sort by price (lowest first)
+                          return parseFloat(a.price) - parseFloat(b.price);
+                        }).map((quote) => (
                           <div 
                             key={quote.serviceId} 
-                            className="border rounded-lg p-4 bg-card"
+                            className={`border rounded-lg p-4 bg-card ${!quote.isAvailable ? 'opacity-60' : ''}`}
                             data-testid={`quote-card-${quote.serviceId}`}
                           >
                             <div className="flex flex-col sm:flex-row sm:items-start gap-4">
@@ -685,44 +694,52 @@ export default function Home() {
                                 {quote.serviceDescription && (
                                   <p className="text-sm text-muted-foreground mt-1">{quote.serviceDescription}</p>
                                 )}
-                                <div className="flex flex-wrap gap-3 mt-3">
-                                  {quote.repairTime && (
-                                    <span className="text-xs bg-muted px-2 py-1 rounded">
-                                      {quote.repairTime}
-                                    </span>
-                                  )}
-                                  {quote.warranty && (
-                                    <span className="text-xs bg-muted px-2 py-1 rounded">
-                                      {quote.warranty} warranty
-                                    </span>
-                                  )}
-                                </div>
+                                {quote.isAvailable && (
+                                  <div className="flex flex-wrap gap-3 mt-3">
+                                    {quote.repairTime && (
+                                      <span className="text-xs bg-muted px-2 py-1 rounded">
+                                        {quote.repairTime}
+                                      </span>
+                                    )}
+                                    {quote.warranty && (
+                                      <span className="text-xs bg-muted px-2 py-1 rounded">
+                                        {quote.warranty} warranty
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                               <div className="flex flex-col items-end gap-2 min-w-[140px]">
-                                <p className="text-2xl font-bold text-primary">${quote.price}</p>
-                                <p className="text-xs text-muted-foreground">plus taxes</p>
-                                {quoteSentFor.has(quote.serviceId) ? (
-                                  <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
-                                    <Check className="h-4 w-4" />
-                                    Quote Sent
-                                  </div>
-                                ) : sendingQuoteFor === quote.serviceId ? (
-                                  <Button 
-                                    size="sm" 
-                                    variant="outline"
-                                    onClick={() => setSendingQuoteFor(null)}
-                                    data-testid={`button-cancel-send-${quote.serviceId}`}
-                                  >
-                                    Cancel
-                                  </Button>
+                                {quote.isAvailable ? (
+                                  <>
+                                    <p className="text-2xl font-bold text-primary">${quote.price}</p>
+                                    <p className="text-xs text-muted-foreground">plus taxes</p>
+                                    {quoteSentFor.has(quote.serviceId) ? (
+                                      <div className="flex items-center gap-1 text-green-600 dark:text-green-400 text-sm">
+                                        <Check className="h-4 w-4" />
+                                        Quote Sent
+                                      </div>
+                                    ) : sendingQuoteFor === quote.serviceId ? (
+                                      <Button 
+                                        size="sm" 
+                                        variant="outline"
+                                        onClick={() => setSendingQuoteFor(null)}
+                                        data-testid={`button-cancel-send-${quote.serviceId}`}
+                                      >
+                                        Cancel
+                                      </Button>
+                                    ) : (
+                                      <Button 
+                                        size="sm"
+                                        onClick={() => setSendingQuoteFor(quote.serviceId)}
+                                        data-testid={`button-send-quote-${quote.serviceId}`}
+                                      >
+                                        Send me quote
+                                      </Button>
+                                    )}
+                                  </>
                                 ) : (
-                                  <Button 
-                                    size="sm"
-                                    onClick={() => setSendingQuoteFor(quote.serviceId)}
-                                    data-testid={`button-send-quote-${quote.serviceId}`}
-                                  >
-                                    Send me quote
-                                  </Button>
+                                  <p className="text-lg font-semibold text-muted-foreground">Not Available</p>
                                 )}
                               </div>
                             </div>
