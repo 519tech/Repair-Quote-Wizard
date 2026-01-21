@@ -1476,9 +1476,11 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const { data: categories = [] } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
 
   const filteredServices = useMemo(() => {
-    if (filterCategoryId === "all") return services;
-    if (filterCategoryId === "none") return services.filter(s => !s.categoryId);
-    return services.filter(s => s.categoryId === filterCategoryId);
+    let result = services;
+    if (filterCategoryId === "none") result = services.filter(s => !s.categoryId);
+    else if (filterCategoryId !== "all") result = services.filter(s => s.categoryId === filterCategoryId);
+    // Sort by name to maintain consistent order
+    return [...result].sort((a, b) => a.name.localeCompare(b.name));
   }, [services, filterCategoryId]);
 
   const getCategoryName = (catId: string | null) => {
