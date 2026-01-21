@@ -7,6 +7,7 @@ import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import Admin from "@/pages/admin";
 import Embed from "@/pages/embed";
+import Internal from "@/pages/internal";
 
 function Router() {
   return (
@@ -14,6 +15,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/admin" component={Admin} />
       <Route path="/embed" component={Embed} />
+      <Route path="/internal" component={Internal} />
       <Route component={NotFound} />
     </Switch>
   );

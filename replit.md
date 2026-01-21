@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Internal counter lookup page at /internal
+  - Barebones interface with search bar only (no step-by-step device picker)
+  - Search for device, then view ALL services at once
+  - Services grouped by Service Category, sorted by price (lowest first)
+  - Priority ordering: "Screen Replacement" and "Battery Replacement" categories appear first
+  - Quick lookup for counter staff
 - **Jan 2026**: Error highlighting for service links with missing parts
   - Service Links tab shows error section at top when links have issues
   - Error: service link has no part assigned AND service is not marked as "Labour only"
