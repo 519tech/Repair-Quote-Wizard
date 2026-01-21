@@ -2213,7 +2213,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   }, [deviceServices]);
 
   const filteredDeviceServices = useMemo(() => {
-    return deviceServices.filter(ds => {
+    const filtered = deviceServices.filter(ds => {
       if (filterBrand !== "all" && ds.device?.brand?.name !== filterBrand) return false;
       if (filterDevice !== "all" && ds.device?.name !== filterDevice) return false;
       if (filterService !== "all" && ds.service?.name !== filterService) return false;
@@ -2223,6 +2223,12 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         if (!searchText.includes(search)) return false;
       }
       return true;
+    });
+    // Sort by device name, then service name to maintain consistent order
+    return filtered.sort((a, b) => {
+      const deviceCompare = (a.device?.name || "").localeCompare(b.device?.name || "");
+      if (deviceCompare !== 0) return deviceCompare;
+      return (a.service?.name || "").localeCompare(b.service?.name || "");
     });
   }, [deviceServices, filterBrand, filterDevice, filterService, serviceLinkSearch]);
 
