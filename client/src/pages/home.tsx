@@ -790,7 +790,7 @@ export default function Home() {
                       data-testid="button-back-step3"
                     >
                       {hasMultipleCategories && selectedCategoryId 
-                        ? "Back to categories" 
+                        ? "Add another service" 
                         : usedSearch 
                           ? "Start Over" 
                           : "Back to devices"}

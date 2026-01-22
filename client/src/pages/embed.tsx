@@ -444,7 +444,7 @@ export default function Embed() {
                 }}
                 data-testid="button-back-services"
               >
-                {selectedCategoryId ? "Back to categories" : "Search again"}
+                {selectedCategoryId ? "Add another service" : "Search again"}
               </Button>
 
               {servicesLoading || quotesLoading ? (
