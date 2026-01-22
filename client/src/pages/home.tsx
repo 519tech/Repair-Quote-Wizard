@@ -6,48 +6,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench, Search, X } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import type { DeviceType, Device, DeviceServiceWithRelations, Brand, ServiceCategory, MessageTemplate } from "@shared/schema";
+import { Link } from "wouter";
+import type { Device, DeviceServiceWithRelations, Brand, DeviceType, MessageTemplate } from "@shared/schema";
 
-interface DeviceSearchResult {
-  id: string;
-  name: string;
-  deviceTypeId: string;
-  brandId: string | null;
-  brand?: { id: string; name: string } | null;
-  deviceType?: { id: string; name: string } | null;
-}
-
-const iconMap: Record<string, typeof Smartphone> = {
-  smartphone: Smartphone,
-  tablet: Tablet,
-  laptop: Laptop,
-  desktop: Monitor,
-  gaming: Gamepad2,
-  watch: Watch,
-  headphones: Headphones,
-  camera: Camera,
+type DeviceSearchResult = Device & {
+  brand?: Brand | null;
+  deviceType?: DeviceType;
 };
 
 export default function Home() {
   const { toast } = useToast();
-  const [step, setStep] = useState(1);
-  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
-  const [selectedBrandId, setSelectedBrandId] = useState<string | null>(null);
-  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
-  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
-  const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
-  const [notes, setNotes] = useState("");
-  const [optInQuote, setOptInQuote] = useState(false);
-  const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
-  const [quoteLoading, setQuoteLoading] = useState(false);
-  const [showContactForm, setShowContactForm] = useState(false);
-  const [quoteSent, setQuoteSent] = useState(false);
   
-  // Multiple quotes for comparison view
+  // Main flow: 'search' | 'services' | 'quote' | 'unknown' | 'success'
+  const [view, setView] = useState<'search' | 'services' | 'quote' | 'unknown' | 'success'>('search');
+  
+  // Device search
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Selected device data
+  const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
+  const [selectedDevice, setSelectedDevice] = useState<DeviceSearchResult | null>(null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
+  
+  // Quote data
   const [allQuotes, setAllQuotes] = useState<Array<{
     serviceId: string;
     serviceName: string;
@@ -60,39 +48,25 @@ export default function Home() {
     categoryId?: string;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
-  const [sendingQuoteFor, setSendingQuoteFor] = useState<string | null>(null);
-  const [quoteSentFor, setQuoteSentFor] = useState<Set<string>>(new Set());
-  
-  // Multi-select for combined quotes
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
-  const [showCombinedQuoteForm, setShowCombinedQuoteForm] = useState(false);
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
-  const [searchLoading, setSearchLoading] = useState(false);
-  const [showSearch, setShowSearch] = useState(false);
-  const [usedSearch, setUsedSearch] = useState(false);
-  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const { data: deviceTypes = [], isLoading: typesLoading } = useQuery<DeviceType[]>({
-    queryKey: ["/api/device-types"],
+  
+  // Contact info
+  const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
+  const [notes, setNotes] = useState("");
+  
+  // Unknown device form
+  const [unknownDeviceInfo, setUnknownDeviceInfo] = useState({ 
+    name: "", 
+    email: "", 
+    phone: "",
+    deviceDescription: "", 
+    issueDescription: "" 
   });
+  const [unknownQuoteSent, setUnknownQuoteSent] = useState(false);
 
   const { data: adminAuth } = useQuery<{ isAdmin: boolean }>({
     queryKey: ["/api/admin/auth"],
-  });
-
-  const { data: brands = [], isLoading: brandsLoading, isFetched: brandsFetched } = useQuery<Brand[]>({
-    queryKey: [`/api/brands/by-type/${selectedTypeId}`],
-    enabled: !!selectedTypeId,
-  });
-
-  const { data: devices = [], isLoading: devicesLoading } = useQuery<Device[]>({
-    queryKey: selectedBrandId 
-      ? [`/api/devices?typeId=${selectedTypeId}&brandId=${selectedBrandId}`]
-      : [`/api/devices?typeId=${selectedTypeId}`],
-    enabled: !!selectedTypeId && (brandsFetched && brands.length === 0 ? true : !!selectedBrandId),
   });
 
   const { data: deviceServices = [], isLoading: servicesLoading } = useQuery<DeviceServiceWithRelations[]>({
@@ -104,7 +78,6 @@ export default function Home() {
     queryKey: ["/api/brand-service-categories"],
   });
 
-  // Get the last time parts were updated
   const { data: partsLastUpdated } = useQuery<MessageTemplate>({
     queryKey: ["/api/message-templates", "parts_last_updated"],
   });
@@ -123,48 +96,7 @@ export default function Home() {
     }
   };
 
-  // Computed selected device and brand for display
-  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
-  const selectedBrand = brands.find(b => b.id === selectedBrandId);
-
-  const submitQuoteMutation = useMutation({
-    mutationFn: async (data: {
-      customerName: string;
-      customerEmail: string;
-      customerPhone?: string;
-      deviceId: string;
-      deviceServiceId: string;
-      optIn?: boolean;
-      notes?: string;
-    }) => {
-      const res = await apiRequest("POST", "/api/quote-requests", data);
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/quote-requests"] });
-      toast({
-        title: "Quote Request Submitted",
-        description: "We'll be in touch soon!",
-      });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
-
-  const [skippedBrandStep, setSkippedBrandStep] = useState(false);
-
-  useEffect(() => {
-    if (step === 2 && brandsFetched && !brandsLoading && brands.length === 0) {
-      setSkippedBrandStep(true);
-      setStep(3);
-    }
-  }, [step, brandsFetched, brandsLoading, brands.length]);
-
+  // Search effect
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -179,214 +111,23 @@ export default function Home() {
       try {
         const res = await fetch(`/api/devices/search?q=${encodeURIComponent(searchQuery)}`);
         if (res.ok) {
-          const data = await res.json();
-          setSearchResults(data);
+          const results = await res.json();
+          setSearchResults(results);
         }
-      } catch {
-        setSearchResults([]);
+      } catch (error) {
+        console.error('Search failed:', error);
       } finally {
         setSearchLoading(false);
       }
     }, 300);
     return () => {
-      if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
     };
   }, [searchQuery]);
 
-  const handleSearchSelect = (device: DeviceSearchResult) => {
-    setSelectedTypeId(device.deviceTypeId);
-    setSelectedBrandId(device.brandId);
-    setSelectedDeviceId(device.id);
-    setSelectedCategoryId(null);
-    setSelectedServiceId(null);
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowSearch(false);
-    setUsedSearch(true);
-    setStep(4);
-  };
-
-  const clearSearch = () => {
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowSearch(false);
-  };
-
-  const handleTypeSelect = (typeId: string) => {
-    setSelectedTypeId(typeId);
-    setSelectedBrandId(null);
-    setSelectedDeviceId(null);
-    setSelectedServiceId(null);
-    setSkippedBrandStep(false);
-    setStep(2);
-  };
-
-  const handleSkipBrand = () => {
-    setSelectedBrandId(null);
-    setSelectedDeviceId(null);
-    setSelectedServiceId(null);
-    setSkippedBrandStep(true);
-    setStep(3);
-  };
-
-  const handleBrandSelect = (brandId: string) => {
-    setSelectedBrandId(brandId);
-    setSelectedDeviceId(null);
-    setSelectedServiceId(null);
-    setSkippedBrandStep(false);
-    setStep(3);
-  };
-
-  const handleDeviceSelect = (deviceId: string) => {
-    setSelectedDeviceId(deviceId);
-    setSelectedCategoryId(null);
-    setSelectedServiceId(null);
-    setStep(4);
-  };
-
-  const handleServiceSelect = async (service: DeviceServiceWithRelations) => {
-    setSelectedServiceId(service.id);
-    setQuoteLoading(true);
-    try {
-      const res = await fetch(`/api/calculate-quote/${service.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        setQuoteResult({ 
-          price: data.totalPrice, 
-          serviceName: data.serviceName,
-          deviceName: data.deviceName,
-          serviceDescription: data.serviceDescription,
-          repairTime: data.repairTime,
-          warranty: data.warranty
-        });
-        setStep(5);
-      } else {
-        toast({
-          title: "Error",
-          description: "Failed to calculate quote. Please try again.",
-          variant: "destructive",
-        });
-      }
-    } catch {
-      toast({
-        title: "Error",
-        description: "Failed to calculate quote. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setQuoteLoading(false);
-    }
-  };
-
-  const fetchAllQuotesForServices = async (services: DeviceServiceWithRelations[], append = false) => {
-    setQuotesLoading(true);
-    if (!append) {
-      setAllQuotes([]);
-    }
-    try {
-      const quotes = await Promise.all(
-        services.map(async (ds) => {
-          try {
-            const res = await fetch(`/api/calculate-quote/${ds.id}`);
-            if (res.ok) {
-              const data = await res.json();
-              return {
-                serviceId: ds.id,
-                serviceName: data.serviceName,
-                serviceDescription: data.serviceDescription,
-                deviceName: data.deviceName,
-                price: data.totalPrice,
-                repairTime: data.repairTime,
-                warranty: data.warranty,
-                isAvailable: data.isAvailable ?? true,
-                categoryId: ds.service.category?.id || "uncategorized",
-              };
-            }
-          } catch {
-            // Skip failed quotes
-          }
-          return null;
-        })
-      );
-      const newQuotes = quotes.filter((q): q is NonNullable<typeof q> => q !== null);
-      if (append) {
-        // Merge new quotes with existing, avoiding duplicates
-        setAllQuotes(prev => {
-          const existingIds = new Set(prev.map(q => q.serviceId));
-          const uniqueNew = newQuotes.filter(q => !existingIds.has(q.serviceId));
-          return [...prev, ...uniqueNew];
-        });
-      } else {
-        setAllQuotes(newQuotes);
-      }
-    } finally {
-      setQuotesLoading(false);
-    }
-  };
-
-  const handleCategorySelect = async (categoryId: string, services: DeviceServiceWithRelations[]) => {
-    setSelectedCategoryId(categoryId);
-    const filteredServices = categoryId === "other"
-      ? services.filter(ds => !ds.service.category)
-      : services.filter(ds => ds.service.category?.id === categoryId);
-    // Append quotes so selections from other categories are preserved
-    await fetchAllQuotesForServices(filteredServices, true);
-  };
-
-  const handleDirectServicesView = async (services: DeviceServiceWithRelations[]) => {
-    // When there's only one category or no categories, show all services with quotes
-    await fetchAllQuotesForServices(services);
-  };
-
-  const handleSendQuote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedDeviceId || !sendingQuoteFor) return;
-
-    submitQuoteMutation.mutate({
-      customerName: contactInfo.name,
-      customerEmail: contactInfo.email,
-      customerPhone: contactInfo.phone || undefined,
-      deviceId: selectedDeviceId,
-      deviceServiceId: sendingQuoteFor,
-      optIn: true,
-      notes: notes || undefined,
-    });
-    setQuoteSentFor(prev => new Set(prev).add(sendingQuoteFor));
-    setSendingQuoteFor(null);
-    setContactInfo({ name: "", email: "", phone: "" });
-    toast({
-      title: "Quote Sent",
-      description: "Your quote has been sent to your email/phone!",
-    });
-  };
-
-  // Multi-select helpers
-  const toggleServiceSelection = (serviceId: string) => {
-    const quote = allQuotes.find(q => q.serviceId === serviceId);
-    if (!quote) return;
-
-    setSelectedServices(prev => {
-      const next = new Set(prev);
-      if (next.has(serviceId)) {
-        // Deselecting - just remove it
-        next.delete(serviceId);
-      } else {
-        // Selecting - remove any other selection from the same category first
-        // (categoryId now always has a value - either the real ID or "uncategorized")
-        const sameCategory = allQuotes.filter(q => q.categoryId === quote.categoryId);
-        sameCategory.forEach(q => next.delete(q.serviceId));
-        next.add(serviceId);
-      }
-      return next;
-    });
-  };
-
-  const getSelectedQuotes = () => allQuotes.filter(q => selectedServices.has(q.serviceId) && q.isAvailable);
-  
-  const getGrandTotal = () => {
-    return getSelectedQuotes().reduce((sum, q) => sum + parseFloat(q.price), 0);
-  };
-
+  // Combined quote mutation
   const submitCombinedQuoteMutation = useMutation({
     mutationFn: async (data: {
       customerName: string;
@@ -394,6 +135,7 @@ export default function Home() {
       customerPhone?: string;
       deviceId: string;
       deviceServiceIds: string[];
+      notes?: string;
     }) => {
       const res = await apiRequest("POST", "/api/quote-requests/combined", data);
       return res.json();
@@ -401,11 +143,7 @@ export default function Home() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quote-requests"] });
       setCombinedQuoteSent(true);
-      setShowCombinedQuoteForm(false);
-      toast({
-        title: "Quote Sent",
-        description: "Your combined quote has been sent!",
-      });
+      setView('success');
     },
     onError: (error: Error) => {
       toast({
@@ -416,90 +154,220 @@ export default function Home() {
     },
   });
 
-  const handleSendCombinedQuote = async (e: React.FormEvent) => {
+  // Unknown device quote mutation
+  const submitUnknownDeviceMutation = useMutation({
+    mutationFn: async (data: {
+      customerName: string;
+      customerEmail: string;
+      customerPhone?: string;
+      deviceDescription: string;
+      issueDescription: string;
+    }) => {
+      const res = await apiRequest("POST", "/api/unknown-device-quotes", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      setUnknownQuoteSent(true);
+      setView('success');
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+  };
+
+  const handleSelectDevice = async (device: DeviceSearchResult) => {
+    setSelectedDevice(device);
+    setSelectedDeviceId(device.id);
+    clearSearch();
+    setView('services');
+  };
+
+  const handleDirectServicesView = async (services: DeviceServiceWithRelations[]) => {
+    setQuotesLoading(true);
+    try {
+      const quotes = await Promise.all(
+        services.map(async (ds) => {
+          try {
+            const res = await fetch(`/api/calculate-quote/${ds.id}`);
+            if (!res.ok) throw new Error('Quote calculation failed');
+            const quote = await res.json();
+            return {
+              serviceId: ds.service.id,
+              serviceName: ds.service.name,
+              serviceDescription: ds.service.description || undefined,
+              deviceName: ds.device.name,
+              price: quote.totalPrice,
+              repairTime: ds.service.repairTime || undefined,
+              warranty: ds.service.warranty || undefined,
+              isAvailable: quote.isAvailable,
+              categoryId: ds.service.category?.id,
+            };
+          } catch {
+            return {
+              serviceId: ds.service.id,
+              serviceName: ds.service.name,
+              serviceDescription: ds.service.description || undefined,
+              deviceName: ds.device.name,
+              price: "0.00",
+              repairTime: ds.service.repairTime || undefined,
+              warranty: ds.service.warranty || undefined,
+              isAvailable: false,
+              categoryId: ds.service.category?.id,
+            };
+          }
+        })
+      );
+      setAllQuotes(quotes);
+    } finally {
+      setQuotesLoading(false);
+    }
+  };
+
+  // Load quotes when device services are ready
+  useEffect(() => {
+    if (deviceServices.length > 0 && view === 'services' && allQuotes.length === 0) {
+      handleDirectServicesView(deviceServices);
+    }
+  }, [deviceServices, view]);
+
+  const toggleServiceSelection = (serviceId: string) => {
+    const quote = allQuotes.find(q => q.serviceId === serviceId);
+    if (!quote || !quote.isAvailable) return;
+    
+    setSelectedServices(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        // Single selection per category
+        const quoteCategoryId = quote.categoryId;
+        if (quoteCategoryId) {
+          allQuotes.forEach(q => {
+            if (q.categoryId === quoteCategoryId && q.serviceId !== serviceId) {
+              next.delete(q.serviceId);
+            }
+          });
+        }
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
+
+  const getSelectedQuotes = () => {
+    return allQuotes.filter(q => selectedServices.has(q.serviceId));
+  };
+
+  const getGrandTotal = () => {
+    return getSelectedQuotes().reduce((sum, q) => sum + parseFloat(q.price), 0);
+  };
+
+  const handleSendCombinedQuote = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedDeviceId || selectedServices.size === 0) return;
+    
+    const deviceServiceIds = deviceServices
+      .filter(ds => selectedServices.has(ds.service.id))
+      .map(ds => ds.id);
 
     submitCombinedQuoteMutation.mutate({
       customerName: contactInfo.name,
       customerEmail: contactInfo.email,
       customerPhone: contactInfo.phone || undefined,
       deviceId: selectedDeviceId,
-      deviceServiceIds: Array.from(selectedServices),
+      deviceServiceIds,
       notes: notes || undefined,
     });
   };
 
-  const resetForm = () => {
-    setStep(1);
-    setSelectedTypeId(null);
-    setSelectedBrandId(null);
-    setSelectedDeviceId(null);
-    setSelectedCategoryId(null);
-    setSelectedServiceId(null);
-    setContactInfo({ name: "", email: "", phone: "" });
-    setNotes("");
-    setOptInQuote(false);
-    setQuoteResult(null);
-    setSkippedBrandStep(false);
-    setSearchQuery("");
-    setSearchResults([]);
-    setShowSearch(false);
-    setUsedSearch(false);
-    setShowContactForm(false);
-    setQuoteSent(false);
-    setAllQuotes([]);
-    setSendingQuoteFor(null);
-    setQuoteSentFor(new Set());
-    setSelectedServices(new Set());
-    setShowCombinedQuoteForm(false);
-    setCombinedQuoteSent(false);
+  const handleSubmitUnknownDevice = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitUnknownDeviceMutation.mutate({
+      customerName: unknownDeviceInfo.name,
+      customerEmail: unknownDeviceInfo.email,
+      customerPhone: unknownDeviceInfo.phone || undefined,
+      deviceDescription: unknownDeviceInfo.deviceDescription,
+      issueDescription: unknownDeviceInfo.issueDescription,
+    });
   };
 
+  const resetForm = () => {
+    setView('search');
+    setSearchQuery("");
+    setSearchResults([]);
+    setSelectedDeviceId(null);
+    setSelectedDevice(null);
+    setSelectedCategoryId(null);
+    setAllQuotes([]);
+    setSelectedServices(new Set());
+    setCombinedQuoteSent(false);
+    setContactInfo({ name: "", email: "", phone: "" });
+    setNotes("");
+    setUnknownDeviceInfo({ name: "", email: "", phone: "", deviceDescription: "", issueDescription: "" });
+    setUnknownQuoteSent(false);
+  };
+
+  // Get categories for filtering
+  const categories = Array.from(
+    new Map(
+      allQuotes
+        .filter(q => q.categoryId)
+        .map(q => [q.categoryId, q.categoryId])
+    ).values()
+  );
+
+  const currentCategoryQuotes = selectedCategoryId 
+    ? allQuotes.filter(q => q.categoryId === selectedCategoryId)
+    : allQuotes.filter(q => !q.categoryId);
+
+  const sortedQuotes = [...currentCategoryQuotes].sort((a, b) => {
+    if (a.isAvailable && !b.isAvailable) return -1;
+    if (!a.isAvailable && b.isAvailable) return 1;
+    return parseFloat(a.price) - parseFloat(b.price);
+  });
+
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-6 w-6 text-primary" />
-            <span className="text-xl font-semibold">RepairQuote</span>
+    <div className="min-h-screen bg-background p-4">
+      <div className="max-w-md mx-auto space-y-4">
+        
+        {/* Admin Button */}
+        {adminAuth?.isAdmin && (
+          <div className="flex justify-end">
+            <Link href="/admin">
+              <Button variant="outline" size="sm" data-testid="button-admin">
+                <Settings className="h-4 w-4 mr-2" />
+                Admin
+              </Button>
+            </Link>
           </div>
-          <div className="flex items-center gap-4">
-            {adminAuth?.isAdmin && (
-              <a href="/internal" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-internal">
-                Internal
-              </a>
-            )}
-            <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-admin">
-              Admin
-            </a>
-          </div>
-        </div>
-      </header>
+        )}
 
-      <main className="container mx-auto px-4 py-8 max-w-3xl">
-        <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold mb-2">Get Your Repair Quote</h1>
-          <p className="text-muted-foreground">Fast, transparent pricing for device repairs</p>
-        </div>
-
-        {step < 4 && (
-          <Card className="mb-8 border-2 border-primary/20">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Quick Search
-              </CardTitle>
-              <CardDescription>Find your device instantly</CardDescription>
+        {/* Search View */}
+        {view === 'search' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Get a Repair Quote</CardTitle>
+              <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
+              {/* Search Bar */}
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
+                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
                   onFocus={() => setShowSearch(true)}
-                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
                   className="pl-9 pr-9 h-12 text-base"
                   data-testid="input-device-search"
                 />
@@ -516,8 +384,10 @@ export default function Home() {
                   </Button>
                 )}
               </div>
+
+              {/* Search Results */}
               {showSearch && searchQuery.length >= 2 && (
-                <div className="mt-3 border rounded-md max-h-64 overflow-y-auto">
+                <div className="border rounded-md max-h-64 overflow-y-auto">
                   {searchLoading ? (
                     <div className="flex justify-center py-4">
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -526,13 +396,13 @@ export default function Home() {
                     <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
                   ) : (
                     <div className="p-1 space-y-1">
-                      {searchResults.map((device) => (
+                      {searchResults.map(device => (
                         <Button
                           key={device.id}
                           variant="ghost"
                           className="w-full justify-start text-left h-auto py-3 hover-elevate"
-                          onClick={() => handleSearchSelect(device)}
-                          data-testid={`button-search-result-${device.id}`}
+                          onClick={() => handleSelectDevice(device)}
+                          data-testid={`device-result-${device.id}`}
                         >
                           <div>
                             <div className="font-medium">{device.name}</div>
@@ -546,612 +416,492 @@ export default function Home() {
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
-        )}
 
-        <div className="flex items-center justify-center mb-8 gap-2">
-          {[1, 2, 3, 4].map((s) => (
-            <div key={s} className="flex items-center gap-2">
-              <div
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                  step >= s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
-                }`}
-              >
-                {step > s ? <Check className="h-4 w-4" /> : s}
+              {/* I don't know my device button */}
+              <div className="pt-4 border-t">
+                <Button 
+                  variant="outline" 
+                  className="w-full" 
+                  onClick={() => setView('unknown')}
+                  data-testid="button-unknown-device"
+                >
+                  <HelpCircle className="h-4 w-4 mr-2" />
+                  I don't know what device I have
+                </Button>
               </div>
-              {s < 4 && <div className={`w-6 h-0.5 ${step > s ? "bg-primary" : "bg-muted"}`} />}
-            </div>
-          ))}
-        </div>
-
-        {step === 1 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Select Device Type</CardTitle>
-              <CardDescription>What type of device needs repair?</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {typesLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : deviceTypes.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No device types available. Please contact admin.</p>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {deviceTypes.map((type) => {
-                    const Icon = iconMap[type.icon] || Smartphone;
-                    return (
-                      <Button
-                        key={type.id}
-                        variant="outline"
-                        className="h-24 flex-col gap-2 hover-elevate"
-                        onClick={() => handleTypeSelect(type.id)}
-                        data-testid={`button-type-${type.id}`}
-                      >
-                        <Icon className="h-6 w-6" />
-                        <span>{type.name}</span>
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
             </CardContent>
           </Card>
         )}
 
-        {step === 2 && (
+        {/* Services View */}
+        {view === 'services' && (
           <Card>
-            <CardHeader>
-              <CardTitle>Select Brand</CardTitle>
-              <CardDescription>Choose the brand of your device</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="secondary" className="mb-4" onClick={() => setStep(1)} data-testid="button-back-step1">
-                Back to device types
-              </Button>
-              {brandsLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : brands.length === 0 ? (
-                <div className="text-center py-8 space-y-4">
-                  <p className="text-muted-foreground">No specific brands configured. Proceed to select your device.</p>
-                  <Button onClick={handleSkipBrand} data-testid="button-skip-brand">
-                    Continue to Devices
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {brands.map((brand) => (
-                    <Button
-                      key={brand.id}
-                      variant="outline"
-                      className="h-16 hover-elevate"
-                      onClick={() => handleBrandSelect(brand.id)}
-                      data-testid={`button-brand-${brand.id}`}
-                    >
-                      {brand.name}
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {step === 3 && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Select Your Device</CardTitle>
-              <CardDescription>Choose your specific model</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button variant="secondary" className="mb-4" onClick={() => setStep(skippedBrandStep ? 1 : 2)} data-testid="button-back-step2">
-                {skippedBrandStep ? "Back to device types" : "Back to brands"}
-              </Button>
-              {devicesLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : devices.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No devices available for this selection.</p>
-              ) : (
-                <div className="space-y-2">
-                  {devices.map((device) => (
-                    <Button
-                      key={device.id}
-                      variant="outline"
-                      className="w-full justify-between hover-elevate"
-                      onClick={() => handleDeviceSelect(device.id)}
-                      data-testid={`button-device-${device.id}`}
-                    >
-                      <span>{device.name}</span>
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
-
-        {step === 4 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-start gap-4">
-                {/* Device Info Display */}
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
                 {selectedDevice && (
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="shrink-0">
                     {selectedDevice.imageUrl ? (
                       <img 
                         src={selectedDevice.imageUrl} 
                         alt={selectedDevice.name}
-                        className="w-14 h-14 object-contain rounded-lg bg-muted p-1"
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
                       />
                     ) : (
-                      <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
-                        <Wrench className="h-6 w-6 text-muted-foreground" />
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
                       </div>
                     )}
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
                   {selectedDevice && (
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {selectedDevice.brand?.name && <span>{selectedDevice.brand.name} </span>}
                       <span className="font-medium text-foreground">{selectedDevice.name}</span>
                     </p>
                   )}
-                  <CardTitle>{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
-                  <CardDescription>{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {servicesLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : deviceServices.length === 0 ? (
-                <>
-                  <Button variant="secondary" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
-                    {usedSearch ? "Start Over" : "Back to devices"}
-                  </Button>
-                  <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
-                </>
-              ) : (() => {
-                const allCategories = Array.from(
-                  new Map(
-                    deviceServices
-                      .filter(ds => ds.service.category)
-                      .map(ds => [ds.service.category!.id, ds.service.category!])
-                  ).values()
-                );
-                
-                const categories = allCategories.filter(cat => {
-                  const linksForCategory = brandCategoryLinks.filter(l => l.categoryId === cat.id);
-                  if (linksForCategory.length === 0) return true;
-                  if (!selectedBrandId) return false;
-                  return linksForCategory.some(l => l.brandId === selectedBrandId);
-                });
-                
-                const uncategorized = deviceServices.filter(ds => !ds.service.category);
-                const hasMultipleCategories = categories.length > 1 || (categories.length > 0 && uncategorized.length > 0);
-
-                // Show category selection if multiple categories exist and none selected
-                if (hasMultipleCategories && !selectedCategoryId) {
-                  return (
-                    <>
-                      <Button variant="secondary" className="mb-4" onClick={() => { if (usedSearch) { resetForm(); } else { setStep(3); } }} data-testid="button-back-step3">
-                        {usedSearch ? "Start Over" : "Back to devices"}
-                      </Button>
-                      <div className="space-y-2">
-                        {categories.map((cat) => (
-                          <Button
-                            key={cat.id}
-                            variant="outline"
-                            className="w-full justify-between hover-elevate"
-                            onClick={() => handleCategorySelect(cat.id, deviceServices)}
-                            data-testid={`button-category-${cat.id}`}
-                          >
-                            <div className="text-left">
-                              <div className="font-medium">{cat.name}</div>
-                              {cat.description && (
-                                <div className="text-xs text-muted-foreground">{cat.description}</div>
-                              )}
-                            </div>
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        ))}
-                        {uncategorized.length > 0 && (
-                          <Button
-                            variant="outline"
-                            className="w-full justify-between hover-elevate"
-                            onClick={() => handleCategorySelect("other", deviceServices)}
-                            data-testid="button-category-other"
-                          >
-                            <div className="text-left">
-                              <div className="font-medium">Other Services</div>
-                            </div>
-                            <ChevronRight className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </>
-                  );
-                }
-
-                // Show comparison view with all quotes
-                return (
-                  <>
-                    <Button 
-                      variant="secondary" 
-                      className="mb-4" 
-                      onClick={() => {
-                        if (hasMultipleCategories && selectedCategoryId) {
-                          setSelectedCategoryId(null);
-                          // Don't clear allQuotes - preserve them for multi-category selections
-                          setSendingQuoteFor(null);
-                        } else if (usedSearch) {
-                          resetForm();
-                        } else {
-                          setStep(3);
-                        }
-                      }} 
-                      data-testid="button-back-step3"
-                    >
-                      {hasMultipleCategories && selectedCategoryId 
-                        ? "Add another service" 
-                        : usedSearch 
-                          ? "Start Over" 
-                          : "Back to devices"}
-                    </Button>
-
-                    {quotesLoading ? (
-                      <div className="flex justify-center py-8">
-                        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                      </div>
-                    ) : allQuotes.length > 0 ? (() => {
-                      // Filter to only show quotes from the current category
-                      const currentCategoryQuotes = selectedCategoryId 
-                        ? allQuotes.filter(q => q.categoryId === selectedCategoryId || q.categoryId === "uncategorized" && selectedCategoryId === "other")
-                        : allQuotes;
-                      
-                      // Get selected quotes from OTHER categories (not the current one)
-                      const otherCategorySelectedQuotes = selectedCategoryId
-                        ? getSelectedQuotes().filter(q => q.categoryId !== selectedCategoryId && !(q.categoryId === "uncategorized" && selectedCategoryId === "other"))
-                        : [];
-                      
-                      return (
-                      <div className="space-y-4">
-                        {[...currentCategoryQuotes].sort((a, b) => {
-                          // Sort unavailable quotes to the end
-                          if (a.isAvailable !== b.isAvailable) {
-                            return a.isAvailable ? -1 : 1;
-                          }
-                          // Then sort by price (lowest first)
-                          return parseFloat(a.price) - parseFloat(b.price);
-                        }).map((quote) => (
-                          <div 
-                            key={quote.serviceId} 
-                            className={`border rounded-lg p-4 bg-card ${!quote.isAvailable ? 'opacity-60' : ''} ${selectedServices.has(quote.serviceId) ? 'ring-2 ring-primary border-primary' : ''}`}
-                            data-testid={`quote-card-${quote.serviceId}`}
-                          >
-                            <div className="flex flex-col sm:flex-row sm:items-start gap-4">
-                              {quote.isAvailable && (
-                                <div className="flex items-start pt-1">
-                                  <Checkbox
-                                    id={`select-${quote.serviceId}`}
-                                    checked={selectedServices.has(quote.serviceId)}
-                                    onCheckedChange={() => toggleServiceSelection(quote.serviceId)}
-                                    data-testid={`checkbox-select-${quote.serviceId}`}
-                                  />
-                                </div>
-                              )}
-                              <div className="flex-1">
-                                <label 
-                                  htmlFor={`select-${quote.serviceId}`}
-                                  className={`font-semibold text-lg ${quote.isAvailable ? 'cursor-pointer' : ''}`}
-                                >
-                                  {quote.serviceName}
-                                </label>
-                                {quote.serviceDescription && (
-                                  <p className="text-sm text-muted-foreground mt-1">{quote.serviceDescription}</p>
-                                )}
-                                {quote.isAvailable && (
-                                  <div className="flex flex-wrap gap-3 mt-3">
-                                    {quote.repairTime && (
-                                      <span className="text-xs bg-muted px-2 py-1 rounded">
-                                        {quote.repairTime}
-                                      </span>
-                                    )}
-                                    {quote.warranty && (
-                                      <span className="text-xs bg-muted px-2 py-1 rounded">
-                                        {quote.warranty} warranty
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="flex flex-col items-end gap-2 min-w-[100px]">
-                                {quote.isAvailable ? (
-                                  <>
-                                    <p className="text-2xl font-bold text-primary">${quote.price}</p>
-                                    <p className="text-xs text-muted-foreground">plus taxes</p>
-                                  </>
-                                ) : (
-                                  <p className="text-lg font-semibold text-muted-foreground">Not Available</p>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-
-                        {/* Selected Services Summary */}
-                        {selectedServices.size > 0 && (
-                          <div className="sticky bottom-4 mt-6">
-                            <Card className="shadow-lg border-primary/20">
-                              <CardContent className="p-4">
-                                {/* Show previously selected services from other categories */}
-                                {otherCategorySelectedQuotes.length > 0 && (
-                                  <div className="mb-4 pb-4 border-b">
-                                    <p className="text-xs text-muted-foreground mb-2">Previously selected:</p>
-                                    {otherCategorySelectedQuotes.map(q => (
-                                      <div key={q.serviceId} className="flex items-center justify-between text-sm py-1 gap-2">
-                                        <span className="text-muted-foreground flex-1">{q.serviceName}</span>
-                                        <span className="font-medium">${q.price}</span>
-                                        <Button 
-                                          variant="ghost" 
-                                          size="icon" 
-                                          className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                                          onClick={() => toggleServiceSelection(q.serviceId)}
-                                          data-testid={`button-remove-${q.serviceId}`}
-                                        >
-                                          <X className="h-4 w-4" />
-                                        </Button>
-                                      </div>
-                                    ))}
-                                  </div>
-                                )}
-                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                  <div>
-                                    <p className="text-sm text-muted-foreground">
-                                      {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
-                                    </p>
-                                    <p className="text-2xl font-bold text-primary">
-                                      Total: ${getGrandTotal().toFixed(2)}
-                                    </p>
-                                    <p className="text-xs text-muted-foreground">plus taxes</p>
-                                  </div>
-                                  <Button onClick={() => setStep(5)} data-testid="button-continue-to-quote">
-                                    <ChevronRight className="h-4 w-4 mr-2" />
-                                    Continue to Quote
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          </div>
-                        )}
-                        
-                        <div className="pt-4 border-t">
-                          <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote">
-                            Get Another Quote
-                          </Button>
-                        </div>
-                      </div>
-                      )
-                    })() : (
-                      // Auto-fetch quotes if none loaded yet (for single category case)
-                      (() => {
-                        const servicesToFetch = selectedCategoryId
-                          ? selectedCategoryId === "other"
-                            ? uncategorized
-                            : deviceServices.filter(ds => ds.service.category?.id === selectedCategoryId)
-                          : deviceServices;
-                        
-                        if (servicesToFetch.length > 0 && !quotesLoading) {
-                          handleDirectServicesView(servicesToFetch);
-                        }
-                        return (
-                          <div className="flex justify-center py-8">
-                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                          </div>
-                        );
-                      })()
-                    )}
-                  </>
-                );
-              })()}
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Step 5: Quote Summary & Contact Form */}
-        {step === 5 && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-start gap-4">
-                {/* Device Info Display */}
-                {selectedDevice && (
-                  <div className="flex items-center gap-3 shrink-0">
-                    {selectedDevice.imageUrl ? (
-                      <img 
-                        src={selectedDevice.imageUrl} 
-                        alt={selectedDevice.name}
-                        className="w-14 h-14 object-contain rounded-lg bg-muted p-1"
-                      />
-                    ) : (
-                      <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
-                        <Wrench className="h-6 w-6 text-muted-foreground" />
-                      </div>
-                    )}
-                  </div>
-                )}
-                <div className="flex-1 min-w-0">
-                  {selectedDevice && (
-                    <p className="text-sm text-muted-foreground mb-1">
-                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
-                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
-                    </p>
-                  )}
-                  <CardTitle>Your Repair Quote</CardTitle>
-                  <CardDescription>Review your selected services and provide contact details</CardDescription>
+                  <CardTitle className="text-base">
+                    {selectedCategoryId ? "Compare Options" : "Select Repair Category"}
+                  </CardTitle>
+                  <CardDescription className="text-xs">
+                    {selectedCategoryId ? "Choose your preferred service" : "What needs to be fixed?"}
+                  </CardDescription>
                 </div>
               </div>
             </CardHeader>
             <CardContent>
               <Button 
                 variant="secondary" 
-                className="mb-6" 
-                onClick={() => setStep(4)}
-                data-testid="button-back-step4"
+                size="sm"
+                className="mb-4" 
+                onClick={() => {
+                  if (selectedCategoryId) {
+                    setSelectedCategoryId(null);
+                  } else {
+                    resetForm();
+                  }
+                }}
+                data-testid="button-back-services"
               >
-                Back to services
+                {selectedCategoryId ? "Add another service" : "Search again"}
               </Button>
 
-              {combinedQuoteSent ? (
-                <div className="space-y-6">
-                  <div className="p-6 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg text-center">
-                    <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-400 mb-2">
-                      <Check className="h-6 w-6" />
-                      <span className="text-xl font-semibold">Quote Sent Successfully!</span>
-                    </div>
-                    <p className="text-muted-foreground">
-                      Check your email{contactInfo.phone ? " and phone" : ""} for your repair quote details.
-                    </p>
-                  </div>
-                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote-success">
-                    Get Another Quote
-                  </Button>
+              {servicesLoading || quotesLoading ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : allQuotes.length === 0 ? (
+                <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
+              ) : !selectedCategoryId && categories.length > 0 ? (
+                // Category selection
+                <div className="space-y-2">
+                  {categories.map(catId => {
+                    const catQuotes = allQuotes.filter(q => q.categoryId === catId);
+                    const catName = deviceServices.find(ds => ds.service.category?.id === catId)?.service.category?.name || "Other";
+                    return (
+                      <Button
+                        key={catId}
+                        variant="outline"
+                        className="w-full justify-between"
+                        onClick={() => setSelectedCategoryId(catId!)}
+                        data-testid={`category-${catId}`}
+                      >
+                        <span>{catName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {catQuotes.length} option{catQuotes.length > 1 ? 's' : ''}
+                        </span>
+                      </Button>
+                    );
+                  })}
+                  {allQuotes.filter(q => !q.categoryId).length > 0 && (
+                    <Button
+                      variant="outline"
+                      className="w-full justify-between"
+                      onClick={() => setSelectedCategoryId("other")}
+                      data-testid="category-other"
+                    >
+                      <span>Other Services</span>
+                      <span className="text-xs text-muted-foreground">
+                        {allQuotes.filter(q => !q.categoryId).length} option{allQuotes.filter(q => !q.categoryId).length > 1 ? 's' : ''}
+                      </span>
+                    </Button>
+                  )}
                 </div>
               ) : (
-                <div className="space-y-6">
-                  {/* Quote Summary */}
-                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                    <h3 className="font-semibold text-lg">Selected Services</h3>
-                    <div className="space-y-2">
-                      {getSelectedQuotes().map(q => (
-                        <div key={q.serviceId} className="flex items-center justify-between py-2 border-b last:border-b-0 gap-2">
-                          <div className="flex-1">
-                            <p className="font-medium">{q.serviceName}</p>
-                            <p className="text-xs text-muted-foreground">{q.deviceName}</p>
-                            {q.repairTime && (
-                              <span className="text-xs text-muted-foreground">{q.repairTime}</span>
-                            )}
-                            {q.warranty && (
-                              <span className="text-xs text-muted-foreground ml-2">{q.warranty} warranty</span>
+                // Service selection
+                <div className="space-y-3">
+                  {(selectedCategoryId === "other" 
+                    ? allQuotes.filter(q => !q.categoryId) 
+                    : sortedQuotes
+                  ).map(quote => (
+                    <div
+                      key={quote.serviceId}
+                      onClick={() => toggleServiceSelection(quote.serviceId)}
+                      className={`p-3 rounded-lg border transition-all cursor-pointer ${
+                        !quote.isAvailable 
+                          ? 'opacity-50 cursor-not-allowed' 
+                          : selectedServices.has(quote.serviceId)
+                            ? 'border-primary bg-primary/5'
+                            : 'hover:border-primary/50'
+                      }`}
+                      data-testid={`service-${quote.serviceId}`}
+                    >
+                      <div className="flex items-start gap-3">
+                        <Checkbox
+                          checked={selectedServices.has(quote.serviceId)}
+                          disabled={!quote.isAvailable}
+                          className="mt-1"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-2">
+                            <p className="font-medium text-sm">{quote.serviceName}</p>
+                            {quote.isAvailable ? (
+                              <span className="font-bold text-primary shrink-0">${quote.price}</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-lg">${q.price}</span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                              onClick={() => {
-                                toggleServiceSelection(q.serviceId);
-                                if (selectedServices.size <= 1) {
-                                  setStep(4);
-                                }
-                              }}
-                              data-testid={`button-remove-summary-${q.serviceId}`}
-                            >
-                              <X className="h-4 w-4" />
+                          {quote.isAvailable && (
+                            <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                              {quote.repairTime && <span>{quote.repairTime}</span>}
+                              {quote.warranty && <span>· {quote.warranty} warranty</span>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Selected Services Summary */}
+                  {selectedServices.size > 0 && (
+                    <div className="sticky bottom-2 mt-4">
+                      <Card className="shadow-lg border-primary/20">
+                        <CardContent className="p-4">
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <p className="text-sm text-muted-foreground">
+                                {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
+                              </p>
+                              <p className="text-xl font-bold text-primary">
+                                Total: ${getGrandTotal().toFixed(2)}
+                              </p>
+                              <p className="text-xs text-muted-foreground">plus taxes</p>
+                            </div>
+                            <Button size="sm" onClick={() => setView('quote')} data-testid="button-continue-quote">
+                              <ChevronRight className="h-4 w-4 mr-1" />
+                              Continue
                             </Button>
                           </div>
-                        </div>
-                      ))}
+                        </CardContent>
+                      </Card>
                     </div>
-                    <div className="flex justify-between items-center pt-3 border-t">
-                      <span className="text-lg font-semibold">Grand Total</span>
-                      <div className="text-right">
-                        <span className="text-2xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
-                        <p className="text-xs text-muted-foreground">plus taxes</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Contact Form */}
-                  <form onSubmit={handleSendCombinedQuote} className="space-y-4">
-                    <h3 className="font-semibold text-lg">Send Quote To</h3>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="quote-name">Name *</Label>
-                        <Input
-                          id="quote-name"
-                          value={contactInfo.name}
-                          onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                          placeholder="Your name"
-                          required
-                          data-testid="input-quote-name"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="quote-email">Email *</Label>
-                        <Input
-                          id="quote-email"
-                          type="email"
-                          value={contactInfo.email}
-                          onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                          placeholder="your@email.com"
-                          required
-                          data-testid="input-quote-email"
-                        />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="quote-phone">Phone (optional - for SMS quote)</Label>
-                        <Input
-                          id="quote-phone"
-                          type="tel"
-                          value={contactInfo.phone}
-                          onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                          placeholder="Your phone number"
-                          data-testid="input-quote-phone"
-                        />
-                      </div>
-                      <div className="space-y-2 sm:col-span-2">
-                        <Label htmlFor="quote-notes">Notes (optional)</Label>
-                        <Textarea
-                          id="quote-notes"
-                          value={notes}
-                          onChange={(e) => setNotes(e.target.value)}
-                          placeholder="Any additional information about your repair..."
-                          className="resize-none"
-                          rows={3}
-                          data-testid="input-quote-notes"
-                        />
-                      </div>
-                    </div>
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={submitCombinedQuoteMutation.isPending}
-                      data-testid="button-send-quote"
-                    >
-                      {submitCombinedQuoteMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <Check className="h-4 w-4 mr-2" />
-                      )}
-                      Send My Quote
-                    </Button>
-                  </form>
+                  )}
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Footer with disclaimer */}
-        <div className="mt-8 pt-4 border-t text-xs text-muted-foreground text-center space-y-1 max-w-md mx-auto">
-          <p>All prices are estimates only and subject to change. In-store verification of issues required.</p>
+        {/* Quote Summary View */}
+        {view === 'quote' && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
+                {selectedDevice && (
+                  <div className="shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {selectedDevice && (
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {selectedDevice.brand?.name && <span>{selectedDevice.brand.name} </span>}
+                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
+                    </p>
+                  )}
+                  <CardTitle className="text-lg">Your Repair Quote</CardTitle>
+                  <CardDescription className="text-xs">Review and provide contact details</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="mb-4" 
+                onClick={() => setView('services')}
+                data-testid="button-back-services-quote"
+              >
+                Back to services
+              </Button>
+
+              <div className="space-y-4">
+                {/* Quote Summary */}
+                <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                  <h3 className="font-semibold text-sm">Selected Services</h3>
+                  <div className="space-y-1">
+                    {getSelectedQuotes().map(q => (
+                      <div key={q.serviceId} className="flex items-center justify-between py-1 border-b last:border-b-0 gap-2">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{q.serviceName}</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">${q.price}</span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                            onClick={() => {
+                              toggleServiceSelection(q.serviceId);
+                              if (selectedServices.size <= 1) {
+                                setView('services');
+                              }
+                            }}
+                            data-testid={`button-remove-${q.serviceId}`}
+                          >
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t">
+                    <span className="font-semibold">Grand Total</span>
+                    <div className="text-right">
+                      <span className="text-xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
+                      <p className="text-xs text-muted-foreground">plus taxes</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Contact Form */}
+                <form onSubmit={handleSendCombinedQuote} className="space-y-3">
+                  <h3 className="font-semibold text-sm">Send Quote To</h3>
+                  <div className="space-y-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="quote-name" className="text-xs">Name *</Label>
+                      <Input
+                        id="quote-name"
+                        value={contactInfo.name}
+                        onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                        placeholder="Your name"
+                        required
+                        className="h-9"
+                        data-testid="input-quote-name"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="quote-email" className="text-xs">Email *</Label>
+                      <Input
+                        id="quote-email"
+                        type="email"
+                        value={contactInfo.email}
+                        onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                        placeholder="your@email.com"
+                        required
+                        className="h-9"
+                        data-testid="input-quote-email"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="quote-phone" className="text-xs">Phone (optional)</Label>
+                      <Input
+                        id="quote-phone"
+                        type="tel"
+                        value={contactInfo.phone}
+                        onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                        placeholder="For SMS quote"
+                        className="h-9"
+                        data-testid="input-quote-phone"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="quote-notes" className="text-xs">Notes (optional)</Label>
+                      <Textarea
+                        id="quote-notes"
+                        value={notes}
+                        onChange={(e) => setNotes(e.target.value)}
+                        placeholder="Any additional information..."
+                        className="resize-none"
+                        rows={2}
+                        data-testid="input-quote-notes"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    className="w-full"
+                    disabled={submitCombinedQuoteMutation.isPending}
+                    data-testid="button-send-quote"
+                  >
+                    {submitCombinedQuoteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Check className="h-4 w-4 mr-2" />
+                    )}
+                    Send My Quote
+                  </Button>
+                </form>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Unknown Device View */}
+        {view === 'unknown' && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Request a Quote</CardTitle>
+              <CardDescription className="text-xs">
+                Tell us about your device and we'll get back to you with a quote
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="mb-4" 
+                onClick={() => setView('search')}
+                data-testid="button-back-search"
+              >
+                Back to search
+              </Button>
+
+              <form onSubmit={handleSubmitUnknownDevice} className="space-y-4">
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="unknown-device" className="text-xs">What device do you have? *</Label>
+                    <Input
+                      id="unknown-device"
+                      value={unknownDeviceInfo.deviceDescription}
+                      onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, deviceDescription: e.target.value })}
+                      placeholder="e.g., Samsung phone, black, about 2 years old"
+                      required
+                      className="h-9"
+                      data-testid="input-unknown-device"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="unknown-issue" className="text-xs">What's the issue? *</Label>
+                    <Textarea
+                      id="unknown-issue"
+                      value={unknownDeviceInfo.issueDescription}
+                      onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, issueDescription: e.target.value })}
+                      placeholder="Describe what's wrong with your device..."
+                      required
+                      className="resize-none"
+                      rows={3}
+                      data-testid="input-unknown-issue"
+                    />
+                  </div>
+                </div>
+
+                <div className="border-t pt-4 space-y-3">
+                  <h3 className="font-semibold text-sm">Your Contact Info</h3>
+                  <div className="space-y-1">
+                    <Label htmlFor="unknown-name" className="text-xs">Name *</Label>
+                    <Input
+                      id="unknown-name"
+                      value={unknownDeviceInfo.name}
+                      onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, name: e.target.value })}
+                      placeholder="Your name"
+                      required
+                      className="h-9"
+                      data-testid="input-unknown-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="unknown-email" className="text-xs">Email *</Label>
+                    <Input
+                      id="unknown-email"
+                      type="email"
+                      value={unknownDeviceInfo.email}
+                      onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, email: e.target.value })}
+                      placeholder="your@email.com"
+                      required
+                      className="h-9"
+                      data-testid="input-unknown-email"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="unknown-phone" className="text-xs">Phone (optional)</Label>
+                    <Input
+                      id="unknown-phone"
+                      type="tel"
+                      value={unknownDeviceInfo.phone}
+                      onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, phone: e.target.value })}
+                      placeholder="For faster response"
+                      className="h-9"
+                      data-testid="input-unknown-phone"
+                    />
+                  </div>
+                </div>
+
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="w-full"
+                  disabled={submitUnknownDeviceMutation.isPending}
+                  data-testid="button-submit-unknown"
+                >
+                  {submitUnknownDeviceMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-2" />
+                  )}
+                  Request Quote
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Success View */}
+        {view === 'success' && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center space-y-4">
+                <div className="w-16 h-16 mx-auto rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
+                  <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">
+                    {unknownQuoteSent ? "Request Received!" : "Quote Sent!"}
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {unknownQuoteSent 
+                      ? "We'll review your request and get back to you soon."
+                      : "Check your email for your repair quote details."
+                    }
+                  </p>
+                </div>
+                <Button variant="outline" onClick={resetForm} data-testid="button-new-quote">
+                  Get Another Quote
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Footer */}
+        <div className="pt-4 text-xs text-muted-foreground text-center space-y-1">
+          <p>All prices are estimates only and subject to change. In-store verification required.</p>
           {partsLastUpdated?.content && (
             <p>Prices last updated: {formatLastUpdated(partsLastUpdated.content)}</p>
           )}
         </div>
-      </main>
+      </div>
     </div>
   );
 }

@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Main page unified with embed page
+  - Removed step-by-step device picker (Type → Brand → Device → Service)
+  - Now uses search-first approach identical to embed page
+  - Search for device → Select category → Select services → Enter contact info
+  - "I don't know my device" option for customers unsure of their device model
+  - Only difference: Main page shows Admin button for authenticated users
 - **Jan 2026**: Custom Parts feature
   - Parts Tab now split into "Supplier Parts" and "Custom Parts" sections
   - Custom parts have isCustom=true flag and are preserved when bulk uploading Excel files
