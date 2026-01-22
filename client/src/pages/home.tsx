@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
 import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, Wrench, Search, X } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +40,7 @@ export default function Home() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
+  const [notes, setNotes] = useState("");
   const [optInQuote, setOptInQuote] = useState(false);
   const [quoteResult, setQuoteResult] = useState<{ price: string; serviceName: string; deviceName: string; serviceDescription?: string; repairTime?: string; warranty?: string } | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
@@ -129,6 +131,7 @@ export default function Home() {
       deviceId: string;
       deviceServiceId: string;
       optIn?: boolean;
+      notes?: string;
     }) => {
       const res = await apiRequest("POST", "/api/quote-requests", data);
       return res.json();
@@ -342,6 +345,7 @@ export default function Home() {
       deviceId: selectedDeviceId,
       deviceServiceId: sendingQuoteFor,
       optIn: true,
+      notes: notes || undefined,
     });
     setQuoteSentFor(prev => new Set(prev).add(sendingQuoteFor));
     setSendingQuoteFor(null);
@@ -418,6 +422,7 @@ export default function Home() {
       customerPhone: contactInfo.phone || undefined,
       deviceId: selectedDeviceId,
       deviceServiceIds: Array.from(selectedServices),
+      notes: notes || undefined,
     });
   };
 
@@ -429,6 +434,7 @@ export default function Home() {
     setSelectedCategoryId(null);
     setSelectedServiceId(null);
     setContactInfo({ name: "", email: "", phone: "" });
+    setNotes("");
     setOptInQuote(false);
     setQuoteResult(null);
     setSkippedBrandStep(false);
@@ -1090,6 +1096,18 @@ export default function Home() {
                           onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
                           placeholder="Your phone number"
                           data-testid="input-quote-phone"
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="quote-notes">Notes (optional)</Label>
+                        <Textarea
+                          id="quote-notes"
+                          value={notes}
+                          onChange={(e) => setNotes(e.target.value)}
+                          placeholder="Any additional information about your repair..."
+                          className="resize-none"
+                          rows={3}
+                          data-testid="input-quote-notes"
                         />
                       </div>
                     </div>

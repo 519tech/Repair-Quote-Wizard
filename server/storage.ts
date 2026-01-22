@@ -6,6 +6,7 @@ import {
   serviceCategories,
   deviceServices,
   quoteRequests,
+  unknownDeviceQuotes,
   brands,
   brandDeviceTypes,
   brandServiceCategories,
@@ -24,6 +25,8 @@ import {
   type InsertDeviceService,
   type QuoteRequest,
   type InsertQuoteRequest,
+  type UnknownDeviceQuote,
+  type InsertUnknownDeviceQuote,
   type DeviceServiceWithRelations,
   type Brand,
   type InsertBrand,
@@ -112,6 +115,10 @@ export interface IStorage {
   // Quote Requests
   getQuoteRequests(): Promise<QuoteRequest[]>;
   createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest>;
+
+  // Unknown Device Quotes
+  getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]>;
+  createUnknownDeviceQuote(data: InsertUnknownDeviceQuote): Promise<UnknownDeviceQuote>;
 
   // Message Templates
   getMessageTemplates(): Promise<MessageTemplate[]>;
@@ -472,6 +479,16 @@ export class DatabaseStorage implements IStorage {
 
   async createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest> {
     const [quote] = await db.insert(quoteRequests).values(data).returning();
+    return quote;
+  }
+
+  // Unknown Device Quotes
+  async getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]> {
+    return db.select().from(unknownDeviceQuotes);
+  }
+
+  async createUnknownDeviceQuote(data: InsertUnknownDeviceQuote): Promise<UnknownDeviceQuote> {
+    const [quote] = await db.insert(unknownDeviceQuotes).values(data).returning();
     return quote;
   }
 

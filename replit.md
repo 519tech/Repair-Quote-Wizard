@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Notes field and Admin notifications
+  - Added optional "Notes" textarea to quote contact forms (main site and widget)
+  - Customers can add additional information about their repair needs
+  - Notes are included in admin notification emails
+  - Admin notification email address configurable in Settings tab (type: admin_notification_email)
+  - All quote submissions (known and unknown device) trigger admin notifications when email is configured
 - **Jan 2026**: Multi-service quote selection
   - Customers can select multiple services to get a combined quote
   - Checkboxes next to each available service for selection

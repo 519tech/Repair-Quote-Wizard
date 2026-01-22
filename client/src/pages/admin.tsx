@@ -3648,6 +3648,7 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
   const [smsTemplate, setSmsTemplate] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
@@ -3680,10 +3681,12 @@ The RepairQuote Team`,
     const emailSubjectTemplate = templates.find(t => t.type === "email_subject");
     const emailBodyTemplate = templates.find(t => t.type === "email_body");
     const smsTemplateData = templates.find(t => t.type === "sms");
+    const adminEmailData = templates.find(t => t.type === "admin_notification_email");
     
     setEmailSubject(emailSubjectTemplate?.content || defaults.email_subject);
     setEmailBody(emailBodyTemplate?.content || defaults.email_body);
     setSmsTemplate(smsTemplateData?.content || defaults.sms);
+    setAdminEmail(adminEmailData?.content || "");
   }, [templates]);
 
   const saveMutation = useMutation({
@@ -3703,6 +3706,7 @@ The RepairQuote Team`,
   const handleSaveEmailSubject = () => saveMutation.mutate({ type: "email_subject", content: emailSubject });
   const handleSaveEmailBody = () => saveMutation.mutate({ type: "email_body", content: emailBody });
   const handleSaveSms = () => saveMutation.mutate({ type: "sms", content: smsTemplate });
+  const handleSaveAdminEmail = () => saveMutation.mutate({ type: "admin_notification_email", content: adminEmail });
 
   const macros = [
     { name: "{customerName}", description: "Customer's name" },
@@ -3794,6 +3798,33 @@ The RepairQuote Team`,
               Save SMS
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Admin Notifications</CardTitle>
+          <CardDescription>Email address to receive quote submission notifications</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="admin-email">Admin Email Address</Label>
+            <Input 
+              id="admin-email"
+              type="email"
+              value={adminEmail} 
+              onChange={(e) => setAdminEmail(e.target.value)} 
+              placeholder="admin@example.com"
+              data-testid="input-admin-email"
+            />
+            <p className="text-sm text-muted-foreground">
+              When set, all quote submissions (both known and unknown device quotes) will send a notification to this email.
+            </p>
+          </div>
+          <Button onClick={handleSaveAdminEmail} disabled={saveMutation.isPending} data-testid="button-save-admin-email">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Admin Email
+          </Button>
         </CardContent>
       </Card>
     </div>

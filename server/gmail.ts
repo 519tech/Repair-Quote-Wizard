@@ -197,3 +197,208 @@ The RepairQuote Team`;
     return false;
   }
 }
+
+// Admin notification email for quote submissions
+interface AdminNotificationData {
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string;
+  deviceName: string;
+  services: Array<{
+    serviceName: string;
+    price: string;
+    repairTime?: string;
+    warranty?: string;
+  }>;
+  grandTotal: string;
+  notes?: string;
+}
+
+export async function sendAdminNotificationEmail(data: AdminNotificationData): Promise<boolean> {
+  try {
+    // Get admin email from settings
+    const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
+    if (!adminEmailSetting?.content) {
+      console.log('Admin notification email not configured');
+      return false;
+    }
+    
+    const gmail = await getGmailClient();
+    
+    const servicesList = data.services.map(s => 
+      `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
+    ).join('\n');
+
+    const subject = `New Quote Request - ${data.customerName} - $${data.grandTotal}`;
+    const emailBody = `New Quote Request Received
+
+Customer Information:
+- Name: ${data.customerName}
+- Email: ${data.customerEmail}
+- Phone: ${data.customerPhone || 'Not provided'}
+
+Device: ${data.deviceName}
+
+Selected Services:
+${servicesList}
+
+Grand Total: $${data.grandTotal} plus taxes
+
+${data.notes ? `Customer Notes:\n${data.notes}` : ''}
+-------------------
+This is an automated notification from RepairQuote.`;
+
+    const message = [
+      `To: ${adminEmailSetting.content}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`Admin notification email sent to ${adminEmailSetting.content}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send admin notification email:', error);
+    return false;
+  }
+}
+
+// Unknown device quote email
+interface UnknownDeviceQuoteEmailData {
+  customerName: string;
+  customerEmail: string;
+  deviceDescription: string;
+  issueDescription: string;
+}
+
+export async function sendUnknownDeviceQuoteEmail(data: UnknownDeviceQuoteEmailData): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+    
+    // Fetch custom template from database
+    const bodyTemplate = await storage.getMessageTemplate('unknown_device_email');
+    
+    const defaultBody = `Dear ${data.customerName},
+
+Thank you for contacting RepairQuote!
+
+We have received your repair inquiry. Our team will review your device details and get back to you with a quote as soon as possible.
+
+Your submitted information:
+- Device Description: ${data.deviceDescription}
+- Issue: ${data.issueDescription}
+
+We will contact you shortly at this email address with a personalized quote.
+
+Thank you for choosing RepairQuote!
+
+Best regards,
+The RepairQuote Team`;
+
+    const emailBody = bodyTemplate?.content
+      ?.replace(/\{customerName\}/g, data.customerName)
+      ?.replace(/\{deviceDescription\}/g, data.deviceDescription)
+      ?.replace(/\{issueDescription\}/g, data.issueDescription)
+      || defaultBody;
+
+    const subject = `Your Repair Inquiry - We'll Get Back to You Soon`;
+
+    const message = [
+      `To: ${data.customerEmail}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody.trim()
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`Unknown device quote email sent to ${data.customerEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send unknown device quote email:', error);
+    return false;
+  }
+}
+
+// Admin notification for unknown device quotes
+export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuoteEmailData & { customerPhone?: string }): Promise<boolean> {
+  try {
+    const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
+    if (!adminEmailSetting?.content) {
+      console.log('Admin notification email not configured');
+      return false;
+    }
+    
+    const gmail = await getGmailClient();
+
+    const subject = `New Unknown Device Quote Request - ${data.customerName}`;
+    const emailBody = `New Unknown Device Quote Request Received
+
+Customer Information:
+- Name: ${data.customerName}
+- Email: ${data.customerEmail}
+- Phone: ${data.customerPhone || 'Not provided'}
+
+Device Description: ${data.deviceDescription}
+
+Issue Description: ${data.issueDescription}
+
+-------------------
+ACTION REQUIRED: Please contact this customer to provide a personalized quote.
+
+This is an automated notification from RepairQuote.`;
+
+    const message = [
+      `To: ${adminEmailSetting.content}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`Unknown device admin notification sent to ${adminEmailSetting.content}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send unknown device admin notification:', error);
+    return false;
+  }
+}

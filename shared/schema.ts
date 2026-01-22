@@ -200,8 +200,24 @@ export const quoteRequests = pgTable("quote_requests", {
   deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
   deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
   quotedPrice: decimal("quoted_price", { precision: 10, scale: 2 }).notNull(),
+  notes: text("notes"),
   createdAt: text("created_at").notNull().default(sql`now()`),
 });
+
+// Unknown device quote requests (when customer doesn't know their device)
+export const unknownDeviceQuotes = pgTable("unknown_device_quotes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  customerName: text("customer_name").notNull(),
+  customerEmail: text("customer_email").notNull(),
+  customerPhone: text("customer_phone"),
+  deviceDescription: text("device_description").notNull(),
+  issueDescription: text("issue_description").notNull(),
+  createdAt: text("created_at").notNull().default(sql`now()`),
+});
+
+export const insertUnknownDeviceQuoteSchema = createInsertSchema(unknownDeviceQuotes).omit({ id: true, createdAt: true });
+export type InsertUnknownDeviceQuote = z.infer<typeof insertUnknownDeviceQuoteSchema>;
+export type UnknownDeviceQuote = typeof unknownDeviceQuotes.$inferSelect;
 
 export const quoteRequestsRelations = relations(quoteRequests, ({ one }) => ({
   device: one(devices, {

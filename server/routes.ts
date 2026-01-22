@@ -17,8 +17,8 @@ import {
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
-import { sendQuoteEmail, sendCombinedQuoteEmail } from "./gmail";
-import { sendQuoteSms, sendCombinedQuoteSms } from "./sms";
+import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "./gmail";
+import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 // Admin authentication middleware
@@ -1020,6 +1020,7 @@ export async function registerRoutes(
     deviceId: z.string(),
     deviceServiceId: z.string(),
     optIn: z.boolean().optional(),
+    notes: z.string().optional(),
   });
 
   app.post("/api/quote-requests", async (req, res) => {
@@ -1046,6 +1047,7 @@ export async function registerRoutes(
         deviceId: input.deviceId,
         deviceServiceId: input.deviceServiceId,
         quotedPrice,
+        notes: input.notes,
       });
 
       // Send quote via email and SMS if user opted in
@@ -1083,6 +1085,7 @@ export async function registerRoutes(
     customerPhone: z.string().optional(),
     deviceId: z.string(),
     deviceServiceIds: z.array(z.string()).min(1),
+    notes: z.string().optional(),
   });
 
   app.post("/api/quote-requests/combined", async (req, res) => {
@@ -1131,6 +1134,7 @@ export async function registerRoutes(
           deviceId: input.deviceId,
           deviceServiceId: deviceServiceId,
           quotedPrice: quotedPrice.toFixed(2),
+          notes: input.notes,
         });
       }
 
@@ -1154,6 +1158,17 @@ export async function registerRoutes(
         }).catch(err => console.error('Combined SMS send error:', err));
       }
 
+      // Send admin notification email
+      sendAdminNotificationEmail({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        deviceName,
+        services: servicesData,
+        grandTotal: grandTotal.toFixed(2),
+        notes: input.notes,
+      }).catch(err => console.error('Admin notification error:', err));
+
       res.status(201).json({ 
         success: true, 
         servicesCount: servicesData.length,
@@ -1161,6 +1176,61 @@ export async function registerRoutes(
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create combined quote request" });
+    }
+  });
+
+  // Unknown Device Quote Request
+  const unknownDeviceQuoteSchema = z.object({
+    customerName: z.string().min(1),
+    customerEmail: z.string().email(),
+    customerPhone: z.string().optional(),
+    deviceDescription: z.string().min(1),
+    issueDescription: z.string().min(1),
+  });
+
+  app.post("/api/unknown-device-quotes", async (req, res) => {
+    try {
+      const input = unknownDeviceQuoteSchema.parse(req.body);
+      
+      // Create the unknown device quote record
+      await storage.createUnknownDeviceQuote({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        deviceDescription: input.deviceDescription,
+        issueDescription: input.issueDescription,
+      });
+
+      // Send confirmation email to customer
+      sendUnknownDeviceQuoteEmail({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        deviceDescription: input.deviceDescription,
+        issueDescription: input.issueDescription,
+      }).catch(err => console.error('Unknown device email error:', err));
+
+      // Send SMS confirmation if phone provided
+      if (input.customerPhone) {
+        sendUnknownDeviceQuoteSms({
+          customerName: input.customerName,
+          customerPhone: input.customerPhone,
+          deviceDescription: input.deviceDescription,
+          issueDescription: input.issueDescription,
+        }).catch(err => console.error('Unknown device SMS error:', err));
+      }
+
+      // Send admin notification
+      sendUnknownDeviceAdminNotification({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        deviceDescription: input.deviceDescription,
+        issueDescription: input.issueDescription,
+      }).catch(err => console.error('Unknown device admin notification error:', err));
+
+      res.status(201).json({ success: true });
+    } catch (error: any) {
+      res.status(400).json({ error: error.message || "Failed to submit quote request" });
     }
   });
 
