@@ -338,7 +338,12 @@ export default function Embed() {
         {/* Search View */}
         {view === 'search' && (
           <Card>
-            <CardHeader>
+            <CardHeader className="text-center">
+              <img 
+                src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
+                alt="519 Tech Services" 
+                className="h-16 mx-auto mb-2"
+              />
               <CardTitle className="text-lg">Get a Repair Quote</CardTitle>
               <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
             </CardHeader>
@@ -404,7 +409,7 @@ export default function Embed() {
               {/* I don't know my device button */}
               <div className="pt-4 border-t">
                 <Button 
-                  variant="secondary" 
+                  variant="default" 
                   className="w-full" 
                   onClick={() => setView('unknown')}
                   data-testid="button-unknown-device"
