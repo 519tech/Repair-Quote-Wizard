@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -161,8 +161,7 @@ export default function Admin() {
           <TabsList className="flex flex-wrap gap-1 h-auto">
             <TabsTrigger value="device-types" data-testid="tab-device-types">Types</TabsTrigger>
             <TabsTrigger value="brands" data-testid="tab-brands">Brands</TabsTrigger>
-            <TabsTrigger value="brand-links" data-testid="tab-brand-links">Brand Links</TabsTrigger>
-            <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
+                        <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
             <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
@@ -178,10 +177,7 @@ export default function Admin() {
             <BrandsTab toast={toast} />
           </TabsContent>
 
-          <TabsContent value="brand-links">
-            <BrandDeviceTypeLinksTab toast={toast} />
-          </TabsContent>
-
+          
           <TabsContent value="devices">
             <DevicesTab toast={toast} />
           </TabsContent>
@@ -414,8 +410,15 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [editItem, setEditItem] = useState<Brand | null>(null);
   const [name, setName] = useState("");
   const [logo, setLogo] = useState("");
+  
+  // Device type links management
+  const [typesOpen, setTypesOpen] = useState(false);
+  const [selectedBrandForTypes, setSelectedBrandForTypes] = useState<Brand | null>(null);
+  const [selectedTypeId, setSelectedTypeId] = useState("");
 
   const { data: brands = [], isLoading } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
+  const { data: brandDeviceTypeLinks = [] } = useQuery<BrandDeviceType[]>({ queryKey: ["/api/brand-device-types"] });
 
   const createMutation = useMutation({
     mutationFn: async (data: { name: string; logo?: string }) => {
@@ -460,6 +463,42 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Device type link mutations
+  const addTypeLinkMutation = useMutation({
+    mutationFn: async (data: { brandId: string; deviceTypeId: string }) => {
+      const res = await apiRequest("POST", "/api/brand-device-types", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-device-types"] });
+      setSelectedTypeId("");
+      toast({ title: "Device type linked" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeTypeLinkMutation = useMutation({
+    mutationFn: async (id: string) => { await apiRequest("DELETE", `/api/brand-device-types/${id}`); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brand-device-types"] });
+      toast({ title: "Device type unlinked" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const getLinkedTypes = (brandId: string) => {
+    return brandDeviceTypeLinks.filter(link => link.brandId === brandId);
+  };
+
+  const getUnlinkedTypes = (brandId: string) => {
+    const linkedTypeIds = getLinkedTypes(brandId).map(link => link.deviceTypeId);
+    return deviceTypes.filter(type => !linkedTypeIds.includes(type.id));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -553,35 +592,132 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
         ) : brands.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No brands yet. Add your first one!</p>
         ) : (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[60px]">Logo</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Device Types</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {brands.map((brand) => (
-                <TableRow key={brand.id}>
-                  <TableCell>
-                    {brand.logo ? (
-                      <img src={brand.logo} alt={brand.name} className="h-8 w-8 object-contain rounded" />
-                    ) : (
-                      <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">-</div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">{brand.name}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(brand)} data-testid={`button-edit-brand-${brand.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(brand.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-${brand.id}`}><Trash2 className="h-4 w-4" /></Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {brands.map((brand) => {
+                const linkedTypes = getLinkedTypes(brand.id);
+                return (
+                  <TableRow key={brand.id}>
+                    <TableCell>
+                      {brand.logo ? (
+                        <img src={brand.logo} alt={brand.name} className="h-8 w-8 object-contain rounded" />
+                      ) : (
+                        <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">-</div>
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">{brand.name}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {linkedTypes.length === 0 ? (
+                          <span className="text-sm text-muted-foreground">No types linked</span>
+                        ) : (
+                          linkedTypes.map(link => {
+                            const type = deviceTypes.find(t => t.id === link.deviceTypeId);
+                            return type ? (
+                              <Badge key={link.id} variant="secondary">{type.name}</Badge>
+                            ) : null;
+                          })
+                        )}
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          onClick={() => { setSelectedBrandForTypes(brand); setTypesOpen(true); }}
+                          data-testid={`button-manage-types-${brand.id}`}
+                        >
+                          <Settings className="h-3 w-3 mr-1" />
+                          Manage
+                        </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(brand)} data-testid={`button-edit-brand-${brand.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(brand.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-${brand.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
+
+          {/* Manage Device Types Dialog */}
+          <Dialog open={typesOpen} onOpenChange={(open) => { setTypesOpen(open); if (!open) setSelectedBrandForTypes(null); }}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Manage Device Types for {selectedBrandForTypes?.name}</DialogTitle>
+                <DialogDescription>Select which device types this brand makes</DialogDescription>
+              </DialogHeader>
+              {selectedBrandForTypes && (
+                <div className="space-y-4">
+                  {/* Currently linked types */}
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">Linked Device Types</Label>
+                    {getLinkedTypes(selectedBrandForTypes.id).length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No device types linked yet</p>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {getLinkedTypes(selectedBrandForTypes.id).map(link => {
+                          const type = deviceTypes.find(t => t.id === link.deviceTypeId);
+                          return type ? (
+                            <Badge key={link.id} variant="secondary" className="flex items-center gap-1">
+                              {type.name}
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-4 w-4 ml-1" 
+                                onClick={() => removeTypeLinkMutation.mutate(link.id)}
+                                disabled={removeTypeLinkMutation.isPending}
+                                data-testid={`button-remove-type-${link.id}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </Badge>
+                          ) : null;
+                        })}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Add new type */}
+                  {getUnlinkedTypes(selectedBrandForTypes.id).length > 0 && (
+                    <div className="space-y-2 border-t pt-4">
+                      <Label className="text-sm font-medium">Add Device Type</Label>
+                      <div className="flex gap-2">
+                        <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
+                          <SelectTrigger className="flex-1" data-testid="select-add-device-type">
+                            <SelectValue placeholder="Select type to add..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {getUnlinkedTypes(selectedBrandForTypes.id).map(type => (
+                              <SelectItem key={type.id} value={type.id}>{type.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button 
+                          onClick={() => addTypeLinkMutation.mutate({ brandId: selectedBrandForTypes.id, deviceTypeId: selectedTypeId })}
+                          disabled={!selectedTypeId || addTypeLinkMutation.isPending}
+                          data-testid="button-add-type-link"
+                        >
+                          {addTypeLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+          </>
         )}
       </CardContent>
     </Card>
