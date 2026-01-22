@@ -841,7 +841,7 @@ export default function Home() {
                         ))}
 
                         {/* Selected Services Summary */}
-                        {selectedServices.size > 0 && !combinedQuoteSent && (
+                        {selectedServices.size > 0 && (
                           <div className="sticky bottom-4 mt-6">
                             <Card className="shadow-lg border-primary/20">
                               <CardContent className="p-4">
@@ -876,95 +876,13 @@ export default function Home() {
                                     </p>
                                     <p className="text-xs text-muted-foreground">plus taxes</p>
                                   </div>
-                                  {showCombinedQuoteForm ? (
-                                    <Button variant="outline" onClick={() => setShowCombinedQuoteForm(false)} data-testid="button-cancel-combined">
-                                      Cancel
-                                    </Button>
-                                  ) : (
-                                    <Button onClick={() => setShowCombinedQuoteForm(true)} data-testid="button-send-combined-quote">
-                                      Send Me Quote
-                                    </Button>
-                                  )}
+                                  <Button onClick={() => setStep(5)} data-testid="button-continue-to-quote">
+                                    <ChevronRight className="h-4 w-4 mr-2" />
+                                    Continue to Quote
+                                  </Button>
                                 </div>
-
-                                {showCombinedQuoteForm && (
-                                  <form onSubmit={handleSendCombinedQuote} className="mt-4 pt-4 border-t space-y-3">
-                                    <div className="space-y-2 mb-4">
-                                      <p className="text-sm font-medium">Selected Services:</p>
-                                      {getSelectedQuotes().map(q => (
-                                        <div key={q.serviceId} className="flex justify-between text-sm">
-                                          <span>{q.serviceName}</span>
-                                          <span className="font-medium">${q.price}</span>
-                                        </div>
-                                      ))}
-                                      <div className="flex justify-between text-sm font-bold border-t pt-2">
-                                        <span>Grand Total <span className="text-muted-foreground font-normal">+ taxes</span></span>
-                                        <span>${getGrandTotal().toFixed(2)}</span>
-                                      </div>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                      <div className="space-y-1">
-                                        <Label htmlFor="combined-name" className="text-xs">Name *</Label>
-                                        <Input
-                                          id="combined-name"
-                                          value={contactInfo.name}
-                                          onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                                          required
-                                          className="h-9"
-                                          data-testid="input-combined-name"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label htmlFor="combined-email" className="text-xs">Email *</Label>
-                                        <Input
-                                          id="combined-email"
-                                          type="email"
-                                          value={contactInfo.email}
-                                          onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                                          required
-                                          className="h-9"
-                                          data-testid="input-combined-email"
-                                        />
-                                      </div>
-                                      <div className="space-y-1">
-                                        <Label htmlFor="combined-phone" className="text-xs">Phone</Label>
-                                        <Input
-                                          id="combined-phone"
-                                          type="tel"
-                                          value={contactInfo.phone}
-                                          onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                                          className="h-9"
-                                          data-testid="input-combined-phone"
-                                        />
-                                      </div>
-                                    </div>
-                                    <Button
-                                      type="submit"
-                                      disabled={submitCombinedQuoteMutation.isPending}
-                                      data-testid="button-submit-combined"
-                                    >
-                                      {submitCombinedQuoteMutation.isPending ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                      ) : (
-                                        "Send My Combined Quote"
-                                      )}
-                                    </Button>
-                                  </form>
-                                )}
                               </CardContent>
                             </Card>
-                          </div>
-                        )}
-
-                        {combinedQuoteSent && (
-                          <div className="mt-6 p-4 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg">
-                            <div className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                              <Check className="h-5 w-5" />
-                              <span className="font-medium">Quote sent successfully!</span>
-                            </div>
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Check your email/phone for your combined repair quote.
-                            </p>
                           </div>
                         )}
                         
@@ -997,6 +915,144 @@ export default function Home() {
                   </>
                 );
               })()}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Step 5: Quote Summary & Contact Form */}
+        {step === 5 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Your Repair Quote</CardTitle>
+              <CardDescription>Review your selected services and provide contact details</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="secondary" 
+                className="mb-6" 
+                onClick={() => setStep(4)}
+                data-testid="button-back-step4"
+              >
+                Back to services
+              </Button>
+
+              {combinedQuoteSent ? (
+                <div className="space-y-6">
+                  <div className="p-6 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg text-center">
+                    <div className="flex items-center justify-center gap-2 text-green-700 dark:text-green-400 mb-2">
+                      <Check className="h-6 w-6" />
+                      <span className="text-xl font-semibold">Quote Sent Successfully!</span>
+                    </div>
+                    <p className="text-muted-foreground">
+                      Check your email{contactInfo.phone ? " and phone" : ""} for your repair quote details.
+                    </p>
+                  </div>
+                  <Button variant="outline" className="w-full" onClick={resetForm} data-testid="button-new-quote-success">
+                    Get Another Quote
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Quote Summary */}
+                  <div className="bg-muted/50 rounded-lg p-4 space-y-3">
+                    <h3 className="font-semibold text-lg">Selected Services</h3>
+                    <div className="space-y-2">
+                      {getSelectedQuotes().map(q => (
+                        <div key={q.serviceId} className="flex items-center justify-between py-2 border-b last:border-b-0 gap-2">
+                          <div className="flex-1">
+                            <p className="font-medium">{q.serviceName}</p>
+                            <p className="text-xs text-muted-foreground">{q.deviceName}</p>
+                            {q.repairTime && (
+                              <span className="text-xs text-muted-foreground">{q.repairTime}</span>
+                            )}
+                            {q.warranty && (
+                              <span className="text-xs text-muted-foreground ml-2">{q.warranty} warranty</span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-lg">${q.price}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                toggleServiceSelection(q.serviceId);
+                                if (selectedServices.size <= 1) {
+                                  setStep(4);
+                                }
+                              }}
+                              data-testid={`button-remove-summary-${q.serviceId}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex justify-between items-center pt-3 border-t">
+                      <span className="text-lg font-semibold">Grand Total</span>
+                      <div className="text-right">
+                        <span className="text-2xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
+                        <p className="text-xs text-muted-foreground">plus taxes</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Form */}
+                  <form onSubmit={handleSendCombinedQuote} className="space-y-4">
+                    <h3 className="font-semibold text-lg">Send Quote To</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="quote-name">Name *</Label>
+                        <Input
+                          id="quote-name"
+                          value={contactInfo.name}
+                          onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                          placeholder="Your name"
+                          required
+                          data-testid="input-quote-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="quote-email">Email *</Label>
+                        <Input
+                          id="quote-email"
+                          type="email"
+                          value={contactInfo.email}
+                          onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                          placeholder="your@email.com"
+                          required
+                          data-testid="input-quote-email"
+                        />
+                      </div>
+                      <div className="space-y-2 sm:col-span-2">
+                        <Label htmlFor="quote-phone">Phone (optional - for SMS quote)</Label>
+                        <Input
+                          id="quote-phone"
+                          type="tel"
+                          value={contactInfo.phone}
+                          onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                          placeholder="Your phone number"
+                          data-testid="input-quote-phone"
+                        />
+                      </div>
+                    </div>
+                    <Button
+                      type="submit"
+                      className="w-full"
+                      disabled={submitCombinedQuoteMutation.isPending}
+                      data-testid="button-send-quote"
+                    >
+                      {submitCombinedQuoteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-2" />
+                      )}
+                      Send My Quote
+                    </Button>
+                  </form>
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
