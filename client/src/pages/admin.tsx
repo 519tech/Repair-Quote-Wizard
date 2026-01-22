@@ -2528,6 +2528,12 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [uploading, setUploading] = useState(false);
   const PARTS_PER_PAGE = 100;
 
+  // Custom parts state
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customSku, setCustomSku] = useState("");
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState("");
+
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchQuery);
@@ -2537,7 +2543,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   }, [searchQuery]);
 
   const partsQueryUrl = useMemo(() => {
-    const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString() });
+    const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString(), isCustom: 'false' });
     if (debouncedSearch) params.append('search', debouncedSearch);
     return `/api/parts?${params}`;
   }, [page, debouncedSearch]);
@@ -2546,9 +2552,15 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     queryKey: [partsQueryUrl]
   });
 
+  // Query for custom parts (not synced with Excel upload)
+  const { data: customPartsData, isLoading: customPartsLoading } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: ['/api/parts?isCustom=true&limit=1000']
+  });
+
   const parts = partsData?.parts || [];
   const totalParts = partsData?.total || 0;
   const totalPages = Math.ceil(totalParts / PARTS_PER_PAGE);
+  const customParts = customPartsData?.parts || [];
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -2632,9 +2644,33 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     },
   });
 
+  // Create custom part mutation (isCustom = true)
+  const createCustomMutation = useMutation({
+    mutationFn: async (data: { sku: string; name: string; price: string; isCustom: boolean }) => {
+      const res = await apiRequest("POST", "/api/parts", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
+      setCustomOpen(false);
+      setCustomSku("");
+      setCustomName("");
+      setCustomPrice("");
+      toast({ title: "Custom part created" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({ sku, name, price });
+  };
+
+  const handleCustomSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    createCustomMutation.mutate({ sku: customSku, name: customName, price: customPrice, isCustom: true });
   };
 
   const handleEdit = (part: Part) => {
@@ -2649,11 +2685,12 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   };
 
   return (
+    <div className="space-y-4">
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
         <div>
-          <CardTitle>Parts</CardTitle>
-          <CardDescription>Manage parts inventory with SKU and pricing</CardDescription>
+          <CardTitle>Supplier Parts</CardTitle>
+          <CardDescription>Manage parts inventory with SKU and pricing. Replaced when uploading new Excel file.</CardDescription>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="relative">
@@ -2812,6 +2849,80 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
         )}
       </CardContent>
     </Card>
+
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
+          <div>
+            <CardTitle>Custom Parts</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Parts you add here are preserved when bulk uploading from Excel
+            </p>
+          </div>
+          <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+            <DialogTrigger asChild>
+              <Button data-testid="button-add-custom-part"><Plus className="h-4 w-4 mr-2" />Add Custom Part</Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader><DialogTitle>Add Custom Part</DialogTitle></DialogHeader>
+              <form onSubmit={handleCustomSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="customSku">SKU *</Label>
+                  <Input id="customSku" value={customSku} onChange={(e) => setCustomSku(e.target.value)} required data-testid="input-custom-part-sku" />
+                </div>
+                <div>
+                  <Label htmlFor="customName">Name *</Label>
+                  <Input id="customName" value={customName} onChange={(e) => setCustomName(e.target.value)} required data-testid="input-custom-part-name" />
+                </div>
+                <div>
+                  <Label htmlFor="customPrice">Price *</Label>
+                  <Input id="customPrice" type="number" step="0.01" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} required data-testid="input-custom-part-price" />
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>Cancel</Button>
+                  <Button type="submit" disabled={createCustomMutation.isPending} data-testid="button-create-custom-part">
+                    {createCustomMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </CardHeader>
+        <CardContent>
+          {customPartsLoading ? (
+            <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+          ) : customParts.length === 0 ? (
+            <p className="text-center py-8 text-muted-foreground">No custom parts yet. Custom parts are not overwritten during Excel imports.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>SKU</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Price</TableHead>
+                  <TableHead className="w-[120px]">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {customParts.map((part) => (
+                  <TableRow key={part.id}>
+                    <TableCell><Badge variant="secondary">{part.sku}</Badge></TableCell>
+                    <TableCell className="font-medium">{part.name}</TableCell>
+                    <TableCell>${part.price}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-custom-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-custom-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+    </div>
   );
 }
 

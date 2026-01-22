@@ -442,10 +442,11 @@ export async function registerRoutes(
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 100;
       const search = req.query.search as string | undefined;
+      const isCustom = req.query.isCustom === 'true' ? true : req.query.isCustom === 'false' ? false : undefined;
       
       // If pagination params provided, use paginated query
-      if (req.query.page || req.query.limit || req.query.search) {
-        const result = await storage.getPartsPaginated({ page, limit, search });
+      if (req.query.page || req.query.limit || req.query.search || req.query.isCustom !== undefined) {
+        const result = await storage.getPartsPaginated({ page, limit, search, isCustom });
         res.json(result);
       } else {
         // Legacy: return all parts (for backwards compatibility with other parts of the app)

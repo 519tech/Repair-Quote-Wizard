@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Custom Parts feature
+  - Parts Tab now split into "Supplier Parts" and "Custom Parts" sections
+  - Custom parts have isCustom=true flag and are preserved when bulk uploading Excel files
+  - Supplier parts (isCustom=false) are replaced during bulk upload
+  - Add Custom Part dialog with SKU, Name, and Price fields
+  - Custom parts can be used in service links just like supplier parts
 - **Jan 2026**: Image support for Service Categories and Services
   - Added imageUrl field to service_categories table
   - Added imageUrl field to services table

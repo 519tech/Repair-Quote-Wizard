@@ -91,6 +91,7 @@ export const parts = pgTable("parts", {
   sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  isCustom: boolean("is_custom").notNull().default(false),
 });
 
 export const insertPartSchema = createInsertSchema(parts).omit({ id: true });

@@ -80,7 +80,7 @@ export interface IStorage {
 
   // Parts
   getParts(): Promise<Part[]>;
-  getPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: Part[]; total: number }>;
+  getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }>;
   getPart(id: string): Promise<Part | undefined>;
   getPartBySku(sku: string): Promise<Part | undefined>;
   deleteAllParts(): Promise<void>;
@@ -274,23 +274,33 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(parts);
   }
 
-  async getPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: Part[]; total: number }> {
-    const { page, limit, search } = options;
+  async getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }> {
+    const { page, limit, search, isCustom } = options;
     const offset = (page - 1) * limit;
+    
+    const conditions: any[] = [];
+    
+    // Filter by isCustom if specified
+    if (isCustom !== undefined) {
+      conditions.push(eq(parts.isCustom, isCustom));
+    }
+    
+    // Filter by search if specified
+    if (search) {
+      const searchPattern = `%${search}%`;
+      conditions.push(or(
+        ilike(parts.sku, searchPattern),
+        ilike(parts.name, searchPattern)
+      ));
+    }
     
     let query = db.select().from(parts);
     let countQuery = db.select({ count: sql<number>`count(*)` }).from(parts);
     
-    if (search) {
-      const searchPattern = `%${search}%`;
-      query = query.where(or(
-        ilike(parts.sku, searchPattern),
-        ilike(parts.name, searchPattern)
-      )) as typeof query;
-      countQuery = countQuery.where(or(
-        ilike(parts.sku, searchPattern),
-        ilike(parts.name, searchPattern)
-      )) as typeof countQuery;
+    if (conditions.length > 0) {
+      const whereClause = conditions.length === 1 ? conditions[0] : and(...conditions);
+      query = query.where(whereClause) as typeof query;
+      countQuery = countQuery.where(whereClause) as typeof countQuery;
     }
     
     const [countResult] = await countQuery;
@@ -302,7 +312,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteAllParts(): Promise<void> {
-    await db.delete(parts);
+    // Only delete non-custom parts (preserve custom parts during bulk upload)
+    await db.delete(parts).where(eq(parts.isCustom, false));
   }
 
   async getPart(id: string): Promise<Part | undefined> {
