@@ -341,21 +341,34 @@ export class DatabaseStorage implements IStorage {
   }
 
   async bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }> {
-    let inserted = 0;
-    let updated = 0;
-    
-    for (const partData of partsData) {
-      const existing = await this.getPartBySku(partData.sku);
-      if (existing) {
-        await db.update(parts).set({ name: partData.name, price: partData.price }).where(eq(parts.sku, partData.sku));
-        updated++;
-      } else {
-        await db.insert(parts).values(partData);
-        inserted++;
-      }
+    if (partsData.length === 0) {
+      return { inserted: 0, updated: 0 };
+    }
+
+    const BATCH_SIZE = 500;
+    let totalInserted = 0;
+
+    // Process in batches for better performance
+    for (let i = 0; i < partsData.length; i += BATCH_SIZE) {
+      const batch = partsData.slice(i, i + BATCH_SIZE);
+      
+      // Use raw SQL for efficient batch insert with ON CONFLICT
+      const values = batch.map(p => 
+        `('${p.sku.replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}', false)`
+      ).join(',');
+      
+      await db.execute(sql`
+        INSERT INTO parts (sku, name, price, is_custom)
+        VALUES ${sql.raw(values)}
+        ON CONFLICT (sku) DO UPDATE SET
+          name = EXCLUDED.name,
+          price = EXCLUDED.price
+      `);
+      
+      totalInserted += batch.length;
     }
     
-    return { inserted, updated };
+    return { inserted: totalInserted, updated: 0 };
   }
 
   // Service Categories
