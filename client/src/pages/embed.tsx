@@ -44,6 +44,7 @@ export default function Embed() {
     repairTime?: string;
     warranty?: string;
     isAvailable: boolean;
+    hasPart: boolean;
     categoryId?: string;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
@@ -205,6 +206,7 @@ export default function Embed() {
               repairTime: ds.service.repairTime || undefined,
               warranty: ds.service.warranty || undefined,
               isAvailable: quote.isAvailable,
+              hasPart: quote.hasPart,
               categoryId: ds.service.category?.id,
             };
           } catch {
@@ -217,11 +219,29 @@ export default function Embed() {
               repairTime: ds.service.repairTime || undefined,
               warranty: ds.service.warranty || undefined,
               isAvailable: false,
+              hasPart: false,
               categoryId: ds.service.category?.id,
             };
           }
         })
       );
+      
+      // Check if NO services have parts linked - redirect to manual quote form
+      const anyServiceHasPart = quotes.some(q => q.hasPart);
+      if (!anyServiceHasPart && quotes.length > 0) {
+        // No priced services available - pre-fill device info and go to manual quote form
+        const deviceName = selectedDevice?.name || quotes[0]?.deviceName || "";
+        const brandName = selectedDevice?.brand?.name || "";
+        const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+        setUnknownDeviceInfo(prev => ({
+          ...prev,
+          deviceDescription: fullDeviceName
+        }));
+        setView('unknown');
+        setAllQuotes(quotes);
+        return;
+      }
+      
       setAllQuotes(quotes);
     } finally {
       setQuotesLoading(false);
@@ -330,6 +350,31 @@ export default function Embed() {
     if (!a.isAvailable && b.isAvailable) return 1;
     return parseFloat(a.price) - parseFloat(b.price);
   });
+
+  // Handler for category selection - checks if category has any priced services
+  const handleCategorySelect = (catId: string) => {
+    const catQuotes = catId === "other" 
+      ? allQuotes.filter(q => !q.categoryId)
+      : allQuotes.filter(q => q.categoryId === catId);
+    
+    // Check if any service in this category has parts linked
+    const anyHasPart = catQuotes.some(q => q.hasPart);
+    
+    if (!anyHasPart && catQuotes.length > 0) {
+      // No priced services in this category - pre-fill device info and go to manual quote form
+      const deviceName = selectedDevice?.name || catQuotes[0]?.deviceName || "";
+      const brandName = selectedDevice?.brand?.name || "";
+      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+      setUnknownDeviceInfo(prev => ({
+        ...prev,
+        deviceDescription: fullDeviceName
+      }));
+      setView('unknown');
+      return;
+    }
+    
+    setSelectedCategoryId(catId);
+  };
 
   return (
     <div className="min-h-screen bg-background p-4">
@@ -492,7 +537,7 @@ export default function Embed() {
                         key={catId}
                         variant="outline"
                         className="w-full justify-between"
-                        onClick={() => setSelectedCategoryId(catId!)}
+                        onClick={() => handleCategorySelect(catId!)}
                         data-testid={`category-${catId}`}
                       >
                         <span>{catName}</span>
@@ -506,7 +551,7 @@ export default function Embed() {
                     <Button
                       variant="outline"
                       className="w-full justify-between"
-                      onClick={() => setSelectedCategoryId("other")}
+                      onClick={() => handleCategorySelect("other")}
                       data-testid="category-other"
                     >
                       <span>Other Services</span>
