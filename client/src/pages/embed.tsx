@@ -333,7 +333,7 @@ export default function Embed() {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-md mx-auto space-y-4">
+      <div className="max-w-lg mx-auto space-y-4">
         
         {/* Search View */}
         {view === 'search' && (
@@ -347,24 +347,25 @@ export default function Embed() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
+                  placeholder="Search your device model..."
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
                   onFocus={() => setShowSearch(true)}
-                  className="pl-9 pr-9 h-12 text-base"
+                  className="pl-9 pr-10 h-12 text-base"
                   data-testid="input-device-search"
                 />
                 {searchQuery && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
-                    onClick={clearSearch}
-                    data-testid="button-clear-search"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
+                  <div className="absolute right-0 top-0 h-full flex items-center pr-1">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      onClick={clearSearch}
+                      data-testid="button-clear-search"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </div>
 
@@ -403,7 +404,7 @@ export default function Embed() {
               {/* I don't know my device button */}
               <div className="pt-4 border-t">
                 <Button 
-                  variant="outline" 
+                  variant="secondary" 
                   className="w-full" 
                   onClick={() => setView('unknown')}
                   data-testid="button-unknown-device"
