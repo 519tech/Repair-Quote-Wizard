@@ -506,6 +506,16 @@ export async function registerRoutes(
     }
   });
 
+  // Delete all supplier parts (preserves custom parts)
+  app.delete("/api/parts/supplier/all", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteAllParts();
+      res.json({ success: true, message: "All supplier parts deleted" });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete supplier parts" });
+    }
+  });
+
   app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {

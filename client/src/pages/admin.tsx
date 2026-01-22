@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -2780,6 +2781,17 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     },
   });
 
+  const clearSupplierPartsMutation = useMutation({
+    mutationFn: async () => { await apiRequest("DELETE", "/api/parts/supplier/all"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
+      toast({ title: "All supplier parts cleared" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Create custom part mutation (isCustom = true)
   const createCustomMutation = useMutation({
     mutationFn: async (data: { sku: string; name: string; price: string; isCustom: boolean }) => {
@@ -2855,6 +2867,28 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
             className="hidden"
             data-testid="input-upload-parts"
           />
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="destructive" data-testid="button-clear-supplier-parts">
+                <Trash2 className="h-4 w-4 mr-2" />
+                Clear All
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Clear All Supplier Parts?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  This will permanently delete all supplier parts from the inventory. Custom parts will be preserved. This action cannot be undone.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction onClick={() => clearSupplierPartsMutation.mutate()} data-testid="button-confirm-clear-parts">
+                  Delete All Supplier Parts
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
               <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
