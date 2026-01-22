@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, RotateCcw, Search, X } from "lucide-react";
+import { Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, ChevronRight, Check, Loader2, RotateCcw, Search, X, Wrench } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceType, Device, DeviceServiceWithRelations, Brand, ServiceCategory, MessageTemplate } from "@shared/schema";
@@ -112,6 +112,10 @@ export default function Embed() {
       return null;
     }
   };
+
+  // Computed selected device and brand for display
+  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+  const selectedBrand = brands.find(b => b.id === selectedBrandId);
 
   const submitQuoteMutation = useMutation({
     mutationFn: async (data: {
@@ -617,9 +621,35 @@ export default function Embed() {
 
         {step === 4 && (
           <Card>
-            <CardHeader>
-              <CardTitle>{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
-              <CardDescription>{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
+                {/* Device Info Display */}
+                {selectedDevice && (
+                  <div className="shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {selectedDevice && (
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
+                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
+                    </p>
+                  )}
+                  <CardTitle className="text-base">{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
+                  <CardDescription className="text-xs">{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {servicesLoading ? (
@@ -880,8 +910,34 @@ export default function Embed() {
         {step === 5 && (
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-lg">Your Repair Quote</CardTitle>
-              <CardDescription className="text-xs">Review and provide contact details</CardDescription>
+              <div className="flex items-start gap-3">
+                {/* Device Info Display */}
+                {selectedDevice && (
+                  <div className="shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {selectedDevice && (
+                    <p className="text-xs text-muted-foreground mb-1">
+                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
+                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
+                    </p>
+                  )}
+                  <CardTitle className="text-lg">Your Repair Quote</CardTitle>
+                  <CardDescription className="text-xs">Review and provide contact details</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <Button 

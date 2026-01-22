@@ -117,6 +117,10 @@ export default function Home() {
     }
   };
 
+  // Computed selected device and brand for display
+  const selectedDevice = devices.find(d => d.id === selectedDeviceId);
+  const selectedBrand = brands.find(b => b.id === selectedBrandId);
+
   const submitQuoteMutation = useMutation({
     mutationFn: async (data: {
       customerName: string;
@@ -657,8 +661,34 @@ export default function Home() {
         {step === 4 && (
           <Card>
             <CardHeader>
-              <CardTitle>{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
-              <CardDescription>{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
+              <div className="flex items-start gap-4">
+                {/* Device Info Display */}
+                {selectedDevice && (
+                  <div className="flex items-center gap-3 shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-14 h-14 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {selectedDevice && (
+                    <p className="text-sm text-muted-foreground mb-1">
+                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
+                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
+                    </p>
+                  )}
+                  <CardTitle>{selectedCategoryId ? "Compare Service Options" : "Select Repair Category"}</CardTitle>
+                  <CardDescription>{selectedCategoryId ? "All available options for your repair" : "What needs to be fixed?"}</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               {servicesLoading ? (
@@ -923,8 +953,34 @@ export default function Home() {
         {step === 5 && (
           <Card>
             <CardHeader>
-              <CardTitle>Your Repair Quote</CardTitle>
-              <CardDescription>Review your selected services and provide contact details</CardDescription>
+              <div className="flex items-start gap-4">
+                {/* Device Info Display */}
+                {selectedDevice && (
+                  <div className="flex items-center gap-3 shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-14 h-14 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-14 h-14 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-6 w-6 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  {selectedDevice && (
+                    <p className="text-sm text-muted-foreground mb-1">
+                      {selectedBrand?.name && <span>{selectedBrand.name} </span>}
+                      <span className="font-medium text-foreground">{selectedDevice.name}</span>
+                    </p>
+                  )}
+                  <CardTitle>Your Repair Quote</CardTitle>
+                  <CardDescription>Review your selected services and provide contact details</CardDescription>
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
               <Button 
