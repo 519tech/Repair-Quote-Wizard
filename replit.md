@@ -6,6 +6,11 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: "I Don't Know My Device" templates
+  - Added unknown device email template to Settings tab (type: unknown_device_email)
+  - Added unknown device SMS template to Settings tab (type: unknown_device_sms)
+  - Templates support macros: {customerName}, {deviceDescription}, {issueDescription}
+  - Customizable confirmation messages for customers who use the "I don't know my device" flow
 - **Jan 2026**: Notes field and Admin notifications
   - Added optional "Notes" textarea to quote contact forms (main site and widget)
   - Customers can add additional information about their repair needs

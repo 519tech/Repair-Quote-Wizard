@@ -3649,6 +3649,8 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [emailBody, setEmailBody] = useState("");
   const [smsTemplate, setSmsTemplate] = useState("");
   const [adminEmail, setAdminEmail] = useState("");
+  const [unknownDeviceEmail, setUnknownDeviceEmail] = useState("");
+  const [unknownDeviceSms, setUnknownDeviceSms] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
@@ -3674,7 +3676,24 @@ Thank you for choosing RepairQuote!
 
 Best regards,
 The RepairQuote Team`,
-    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!"
+    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!",
+    unknown_device_email: `Dear {customerName},
+
+Thank you for contacting RepairQuote!
+
+We have received your repair inquiry. Our team will review your device details and get back to you with a quote as soon as possible.
+
+Your submitted information:
+- Device Description: {deviceDescription}
+- Issue: {issueDescription}
+
+We will contact you shortly at this email address with a personalized quote.
+
+Thank you for choosing RepairQuote!
+
+Best regards,
+The RepairQuote Team`,
+    unknown_device_sms: "Hi {customerName}! We received your repair inquiry for: {deviceDescription}. We'll review and get back to you with a quote soon!"
   };
 
   useEffect(() => {
@@ -3682,11 +3701,15 @@ The RepairQuote Team`,
     const emailBodyTemplate = templates.find(t => t.type === "email_body");
     const smsTemplateData = templates.find(t => t.type === "sms");
     const adminEmailData = templates.find(t => t.type === "admin_notification_email");
+    const unknownDeviceEmailData = templates.find(t => t.type === "unknown_device_email");
+    const unknownDeviceSmsData = templates.find(t => t.type === "unknown_device_sms");
     
     setEmailSubject(emailSubjectTemplate?.content || defaults.email_subject);
     setEmailBody(emailBodyTemplate?.content || defaults.email_body);
     setSmsTemplate(smsTemplateData?.content || defaults.sms);
     setAdminEmail(adminEmailData?.content || "");
+    setUnknownDeviceEmail(unknownDeviceEmailData?.content || defaults.unknown_device_email);
+    setUnknownDeviceSms(unknownDeviceSmsData?.content || defaults.unknown_device_sms);
   }, [templates]);
 
   const saveMutation = useMutation({
@@ -3707,6 +3730,8 @@ The RepairQuote Team`,
   const handleSaveEmailBody = () => saveMutation.mutate({ type: "email_body", content: emailBody });
   const handleSaveSms = () => saveMutation.mutate({ type: "sms", content: smsTemplate });
   const handleSaveAdminEmail = () => saveMutation.mutate({ type: "admin_notification_email", content: adminEmail });
+  const handleSaveUnknownDeviceEmail = () => saveMutation.mutate({ type: "unknown_device_email", content: unknownDeviceEmail });
+  const handleSaveUnknownDeviceSms = () => saveMutation.mutate({ type: "unknown_device_sms", content: unknownDeviceSms });
 
   const macros = [
     { name: "{customerName}", description: "Customer's name" },
@@ -3715,6 +3740,12 @@ The RepairQuote Team`,
     { name: "{price}", description: "Quoted price (number only, add $ manually)" },
     { name: "{repairTime}", description: "Estimated repair time" },
     { name: "{warranty}", description: "Warranty information" },
+  ];
+
+  const unknownDeviceMacros = [
+    { name: "{customerName}", description: "Customer's name" },
+    { name: "{deviceDescription}", description: "Customer's device description" },
+    { name: "{issueDescription}", description: "Customer's issue description" },
   ];
 
   if (isLoading) {
@@ -3796,6 +3827,63 @@ The RepairQuote Team`,
             <Button onClick={handleSaveSms} disabled={saveMutation.isPending} data-testid="button-save-sms">
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Save SMS
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>"I Don't Know My Device" Email Template</CardTitle>
+          <CardDescription>Email sent to customers who submit unknown device quote requests</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {unknownDeviceMacros.map((macro) => (
+              <Badge key={macro.name} variant="secondary" className="text-xs">
+                {macro.name} - {macro.description}
+              </Badge>
+            ))}
+          </div>
+          <Textarea 
+            value={unknownDeviceEmail} 
+            onChange={(e) => setUnknownDeviceEmail(e.target.value)} 
+            placeholder="Enter email template..."
+            className="min-h-[200px] font-mono text-sm"
+            data-testid="textarea-unknown-device-email"
+          />
+          <Button onClick={handleSaveUnknownDeviceEmail} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-email">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Unknown Device Email
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>"I Don't Know My Device" SMS Template</CardTitle>
+          <CardDescription>SMS sent to customers who submit unknown device quote requests</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {unknownDeviceMacros.map((macro) => (
+              <Badge key={macro.name} variant="secondary" className="text-xs">
+                {macro.name} - {macro.description}
+              </Badge>
+            ))}
+          </div>
+          <Textarea 
+            value={unknownDeviceSms} 
+            onChange={(e) => setUnknownDeviceSms(e.target.value)} 
+            placeholder="Enter SMS template..."
+            className="min-h-[80px]"
+            data-testid="textarea-unknown-device-sms"
+          />
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <p className="text-sm text-muted-foreground">{unknownDeviceSms.length} characters (160 recommended max)</p>
+            <Button onClick={handleSaveUnknownDeviceSms} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-sms">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Unknown Device SMS
             </Button>
           </div>
         </CardContent>

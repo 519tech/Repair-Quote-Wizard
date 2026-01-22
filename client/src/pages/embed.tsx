@@ -195,7 +195,7 @@ export default function Embed() {
               serviceName: ds.service.name,
               serviceDescription: ds.service.description || undefined,
               deviceName: ds.device.name,
-              price: quote.quotedPrice,
+              price: quote.totalPrice,
               repairTime: ds.service.repairTime || undefined,
               warranty: ds.service.warranty || undefined,
               isAvailable: quote.isAvailable,
