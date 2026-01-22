@@ -32,6 +32,7 @@ export default function Embed() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceSearchResult | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [showSearch, setShowSearch] = useState(false);
   
   // Quote data
   const [allQuotes, setAllQuotes] = useState<Array<{
@@ -173,11 +174,16 @@ export default function Embed() {
     },
   });
 
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchResults([]);
+    setShowSearch(false);
+  };
+
   const handleSelectDevice = async (device: DeviceSearchResult) => {
     setSelectedDevice(device);
     setSelectedDeviceId(device.id);
-    setSearchQuery("");
-    setSearchResults([]);
+    clearSearch();
     setView('services');
   };
 
@@ -341,41 +347,57 @@ export default function Embed() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Search for your device..."
+                  placeholder="Type your device model (e.g. iPhone 15, Galaxy S24)..."
                   value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
+                  onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
+                  onFocus={() => setShowSearch(true)}
+                  className="pl-9 pr-9 h-12 text-base"
                   data-testid="input-device-search"
                 />
-                {searchLoading && (
-                  <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                {searchQuery && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
+                    onClick={clearSearch}
+                    data-testid="button-clear-search"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 )}
               </div>
 
               {/* Search Results */}
-              {searchResults.length > 0 && (
-                <div className="border rounded-lg max-h-60 overflow-y-auto">
-                  {searchResults.map(device => (
-                    <button
-                      key={device.id}
-                      onClick={() => handleSelectDevice(device)}
-                      className="w-full text-left p-3 hover:bg-muted/50 border-b last:border-b-0 transition-colors"
-                      data-testid={`device-result-${device.id}`}
-                    >
-                      <p className="font-medium text-sm">{device.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {device.brand?.name && `${device.brand.name} · `}
-                        {device.deviceType?.name}
-                      </p>
-                    </button>
-                  ))}
+              {showSearch && searchQuery.length >= 2 && (
+                <div className="border rounded-md max-h-64 overflow-y-auto">
+                  {searchLoading ? (
+                    <div className="flex justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : searchResults.length === 0 ? (
+                    <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
+                  ) : (
+                    <div className="p-1 space-y-1">
+                      {searchResults.map(device => (
+                        <Button
+                          key={device.id}
+                          variant="ghost"
+                          className="w-full justify-start text-left h-auto py-3 hover-elevate"
+                          onClick={() => handleSelectDevice(device)}
+                          data-testid={`device-result-${device.id}`}
+                        >
+                          <div>
+                            <div className="font-medium">{device.name}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
+                            </div>
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-
-              {searchQuery.length >= 2 && !searchLoading && searchResults.length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-4">
-                  No devices found matching "{searchQuery}"
-                </p>
               )}
 
               {/* I don't know my device button */}

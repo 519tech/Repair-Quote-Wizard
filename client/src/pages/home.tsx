@@ -504,14 +504,16 @@ export default function Home() {
                   data-testid="input-device-search"
                 />
                 {searchQuery && (
-                  <button
+                  <Button
                     type="button"
-                    className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8"
                     onClick={clearSearch}
                     data-testid="button-clear-search"
                   >
                     <X className="h-4 w-4" />
-                  </button>
+                  </Button>
                 )}
               </div>
               {showSearch && searchQuery.length >= 2 && (
