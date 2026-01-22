@@ -1696,6 +1696,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
   const [editItem, setEditItem] = useState<ServiceCategory | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkCategory, setLinkCategory] = useState<ServiceCategory | null>(null);
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
@@ -1761,7 +1762,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; description?: string }) => {
+    mutationFn: async (data: { name: string; description?: string; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/service-categories", data);
       if (!res.ok) {
         const errorData = await res.json();
@@ -1774,6 +1775,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
       setOpen(false);
       setName("");
       setDescription("");
+      setImageUrl("");
       toast({ title: "Service category created" });
     },
     onError: (error: Error) => {
@@ -1814,7 +1816,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name, description: description || undefined });
+    createMutation.mutate({ name, description: description || undefined, imageUrl: imageUrl || undefined });
   };
 
   const handleEdit = (category: ServiceCategory) => {
@@ -1825,7 +1827,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, description: editItem.description || undefined } });
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, description: editItem.description || undefined, imageUrl: editItem.imageUrl || undefined } });
   };
 
   return (
@@ -1854,6 +1856,13 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                   <Label>Description (optional)</Label>
                   <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of this category" data-testid="input-category-description" />
                 </div>
+                <ImageInput
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  label="Image (optional)"
+                  placeholder="Enter image URL"
+                  testIdPrefix="category-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-submit-category">
@@ -1873,6 +1882,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
                 <TableHead>Brands</TableHead>
@@ -1884,6 +1894,13 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                 const linkedBrands = getLinkedBrands(category.id);
                 return (
                   <TableRow key={category.id}>
+                    <TableCell>
+                      {category.imageUrl ? (
+                        <img src={category.imageUrl} alt={category.name} className="h-10 w-10 object-contain rounded" />
+                      ) : (
+                        <div className="h-10 w-10 bg-muted rounded flex items-center justify-center text-muted-foreground text-xs">-</div>
+                      )}
+                    </TableCell>
                     <TableCell className="font-medium">{category.name}</TableCell>
                     <TableCell className="text-muted-foreground">{category.description || "-"}</TableCell>
                     <TableCell>
@@ -1926,6 +1943,13 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                   <Label>Description</Label>
                   <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(editItem ? { ...editItem, description: e.target.value } : null)} data-testid="input-edit-category-description" />
                 </div>
+                <ImageInput
+                  value={editItem?.imageUrl || ""}
+                  onChange={(url) => setEditItem(editItem ? { ...editItem, imageUrl: url } : null)}
+                  label="Image (optional)"
+                  placeholder="Enter image URL"
+                  testIdPrefix="edit-category-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-category">
@@ -2012,6 +2036,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [partsMarkup, setPartsMarkup] = useState("1.0");
   const [notes, setNotes] = useState("");
   const [labourOnly, setLabourOnly] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
 
   // Inline editing state
@@ -2035,7 +2060,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string; labourOnly?: boolean }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string; labourOnly?: boolean; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -2051,6 +2076,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setPartsMarkup("1.0");
       setNotes("");
       setLabourOnly(false);
+      setImageUrl("");
       toast({ title: "Service created" });
     },
     onError: (error: Error) => {
@@ -2096,7 +2122,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       laborPrice, 
       partsMarkup,
       notes: notes || undefined,
-      labourOnly
+      labourOnly,
+      imageUrl: imageUrl || undefined
     });
   };
 
@@ -2155,7 +2182,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         laborPrice: editItem.laborPrice,
         partsMarkup: editItem.partsMarkup,
         notes: editItem.notes || undefined,
-        labourOnly: editItem.labourOnly
+        labourOnly: editItem.labourOnly,
+        imageUrl: editItem.imageUrl || undefined
       } 
     });
   };
@@ -2227,6 +2255,13 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Checkbox id="labour-only" checked={labourOnly} onCheckedChange={(checked) => setLabourOnly(checked === true)} data-testid="checkbox-labour-only" />
                   <Label htmlFor="labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
                 </div>
+                <ImageInput
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  label="Image (optional)"
+                  placeholder="Enter image URL"
+                  testIdPrefix="service-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-service">
@@ -2294,6 +2329,13 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Checkbox id="edit-labour-only" checked={editItem?.labourOnly || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, labourOnly: checked === true} : null)} data-testid="checkbox-edit-labour-only" />
                   <Label htmlFor="edit-labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
                 </div>
+                <ImageInput
+                  value={editItem?.imageUrl || ""}
+                  onChange={(url) => setEditItem(prev => prev ? {...prev, imageUrl: url} : null)}
+                  label="Image (optional)"
+                  placeholder="Enter image URL"
+                  testIdPrefix="edit-service-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-service">
@@ -2325,6 +2367,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-16">Image</TableHead>
                 <TableHead>Category</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Labor</TableHead>
@@ -2338,6 +2381,13 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
             <TableBody>
               {filteredServices.map((service) => (
                 <TableRow key={service.id}>
+                  <TableCell>
+                    {service.imageUrl ? (
+                      <img src={service.imageUrl} alt={service.name} className="h-10 w-10 object-contain rounded" />
+                    ) : (
+                      <div className="h-10 w-10 bg-muted rounded flex items-center justify-center text-muted-foreground text-xs">-</div>
+                    )}
+                  </TableCell>
                   <TableCell><Badge variant="secondary">{getCategoryName(service.categoryId)}</Badge></TableCell>
                   <TableCell className="font-medium">{service.name}</TableCell>
                   <TableCell>

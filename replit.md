@@ -6,6 +6,12 @@ RepairQuote is a full-stack web application that provides instant repair quotes 
 
 ## Recent Changes
 
+- **Jan 2026**: Image support for Service Categories and Services
+  - Added imageUrl field to service_categories table
+  - Added imageUrl field to services table
+  - Service Categories tab in admin now shows Image column with upload/URL support
+  - Services tab in admin now shows Image column with upload/URL support
+  - Both create and edit dialogs include ImageInput component for image management
 - **Jan 2026**: "I Don't Know My Device" templates
   - Added unknown device email template to Settings tab (type: unknown_device_email)
   - Added unknown device SMS template to Settings tab (type: unknown_device_sms)

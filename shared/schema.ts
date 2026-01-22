@@ -102,6 +102,7 @@ export const serviceCategories = pgTable("service_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   description: text("description"),
+  imageUrl: text("image_url"),
 });
 
 export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
@@ -148,6 +149,7 @@ export const services = pgTable("services", {
   partsMarkup: decimal("parts_markup", { precision: 5, scale: 2 }).notNull().default("1.0"),
   notes: text("notes"),
   labourOnly: boolean("labour_only").notNull().default(false),
+  imageUrl: text("image_url"),
 });
 
 export const servicesRelations = relations(services, ({ one }) => ({
