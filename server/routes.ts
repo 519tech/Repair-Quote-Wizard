@@ -516,6 +516,73 @@ export async function registerRoutes(
     }
   });
 
+  // Supplier callback endpoint for real-time parts pricing updates
+  app.post("/api/supplier/parts-callback", async (req, res) => {
+    try {
+      const apiKey = req.headers["x-api-key"] || req.query.api_key;
+      const expectedKey = process.env.SUPPLIER_API_KEY;
+      
+      if (!expectedKey || apiKey !== expectedKey) {
+        return res.status(401).json({ error: "Invalid API key" });
+      }
+
+      const schema = z.object({
+        sku: z.string(),
+        name: z.string().optional(),
+        price: z.union([z.string(), z.number()]),
+      });
+
+      const data = schema.parse(req.body);
+      const priceStr = typeof data.price === 'number' ? data.price.toFixed(2) : data.price;
+      
+      // Try to find existing part by SKU
+      const existingPart = await storage.getPartBySku(data.sku);
+      
+      if (existingPart) {
+        // Update existing part price
+        await storage.updatePart(existingPart.id, { price: priceStr });
+        res.json({ success: true, action: "updated", sku: data.sku, price: priceStr });
+      } else if (data.name) {
+        // Create new part if name is provided
+        await storage.createPart({ sku: data.sku, name: data.name, price: priceStr, isCustom: false });
+        res.json({ success: true, action: "created", sku: data.sku, price: priceStr });
+      } else {
+        res.status(404).json({ error: "Part not found and no name provided to create" });
+      }
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid data format", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to process supplier callback" });
+    }
+  });
+
+  // Endpoint to query supplier for part pricing (for admin use)
+  app.get("/api/supplier/query/:sku", requireAdmin, async (req, res) => {
+    try {
+      const supplierUrl = process.env.SUPPLIER_API_URL;
+      const supplierKey = process.env.SUPPLIER_API_KEY;
+      
+      if (!supplierUrl) {
+        return res.status(400).json({ error: "Supplier API URL not configured" });
+      }
+
+      const sku = req.params.sku;
+      const response = await fetch(`${supplierUrl}?sku=${encodeURIComponent(sku)}`, {
+        headers: supplierKey ? { "Authorization": `Bearer ${supplierKey}` } : {},
+      });
+
+      if (!response.ok) {
+        return res.status(response.status).json({ error: "Failed to query supplier" });
+      }
+
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to query supplier API" });
+    }
+  });
+
   app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
