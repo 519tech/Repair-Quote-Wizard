@@ -79,6 +79,10 @@ export default function Home() {
     queryKey: ["/api/device-types"],
   });
 
+  const { data: adminAuth } = useQuery<{ isAdmin: boolean }>({
+    queryKey: ["/api/admin/auth"],
+  });
+
   const { data: brands = [], isLoading: brandsLoading, isFetched: brandsFetched } = useQuery<Brand[]>({
     queryKey: [`/api/brands/by-type/${selectedTypeId}`],
     enabled: !!selectedTypeId,
@@ -460,9 +464,16 @@ export default function Home() {
             <Wrench className="h-6 w-6 text-primary" />
             <span className="text-xl font-semibold">RepairQuote</span>
           </div>
-          <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-admin">
-            Admin
-          </a>
+          <div className="flex items-center gap-4">
+            {adminAuth?.isAdmin && (
+              <a href="/internal" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-internal">
+                Internal
+              </a>
+            )}
+            <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground" data-testid="link-admin">
+              Admin
+            </a>
+          </div>
         </div>
       </header>
 
