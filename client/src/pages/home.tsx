@@ -231,9 +231,10 @@ export default function Home() {
         })
       );
       
-      // Check if NO services have parts linked - redirect to manual quote form
-      const anyServiceHasPart = quotes.some(q => q.hasPart);
-      if (!anyServiceHasPart && quotes.length > 0) {
+      // Check if NO services are available (priced) - redirect to manual quote form
+      // A service is available if it has parts linked OR is labour-only
+      const anyServiceAvailable = quotes.some(q => q.isAvailable);
+      if (!anyServiceAvailable && quotes.length > 0) {
         // No priced services available - pre-fill device info and go to manual quote form
         const deviceName = selectedDevice?.name || quotes[0]?.deviceName || "";
         const brandName = selectedDevice?.brand?.name || "";
@@ -362,10 +363,10 @@ export default function Home() {
       ? allQuotes.filter(q => !q.categoryId)
       : allQuotes.filter(q => q.categoryId === catId);
     
-    // Check if any service in this category has parts linked
-    const anyHasPart = catQuotes.some(q => q.hasPart);
+    // Check if any service in this category is available (has parts OR is labour-only)
+    const anyAvailable = catQuotes.some(q => q.isAvailable);
     
-    if (!anyHasPart && catQuotes.length > 0) {
+    if (!anyAvailable && catQuotes.length > 0) {
       // No priced services in this category - pre-fill device info and go to manual quote form
       const deviceName = selectedDevice?.name || catQuotes[0]?.deviceName || "";
       const brandName = selectedDevice?.brand?.name || "";
