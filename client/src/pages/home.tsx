@@ -47,6 +47,7 @@ export default function Home() {
     isAvailable: boolean;
     hasPart: boolean;
     categoryId?: string;
+    categoryName?: string;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
@@ -213,6 +214,7 @@ export default function Home() {
               isAvailable: quote.isAvailable,
               hasPart: quote.hasPart,
               categoryId: ds.service.category?.id,
+              categoryName: ds.service.category?.name,
             };
           } catch {
             return {
@@ -226,6 +228,7 @@ export default function Home() {
               isAvailable: false,
               hasPart: false,
               categoryId: ds.service.category?.id,
+              categoryName: ds.service.category?.name,
             };
           }
         })
@@ -622,6 +625,9 @@ export default function Home() {
                               <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                             )}
                           </div>
+                          {quote.serviceDescription && (
+                            <p className="text-xs text-muted-foreground mt-1">{quote.serviceDescription}</p>
+                          )}
                           {quote.isAvailable && (
                             <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
@@ -710,28 +716,36 @@ export default function Home() {
                 {/* Quote Summary */}
                 <div className="bg-muted/50 rounded-lg p-3 space-y-2">
                   <h3 className="font-semibold text-sm">Selected Services</h3>
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     {getSelectedQuotes().map(q => (
-                      <div key={q.serviceId} className="flex items-center justify-between py-1 border-b last:border-b-0 gap-2">
-                        <div className="flex-1">
-                          <p className="text-sm font-medium">{q.serviceName}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">${q.price}</span>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6 text-muted-foreground hover:text-destructive"
-                            onClick={() => {
-                              toggleServiceSelection(q.serviceId);
-                              if (selectedServices.size <= 1) {
-                                setView('services');
-                              }
-                            }}
-                            data-testid={`button-remove-${q.serviceId}`}
-                          >
-                            <X className="h-3 w-3" />
-                          </Button>
+                      <div key={q.serviceId} className="py-2 border-b last:border-b-0">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            {q.categoryName && (
+                              <p className="text-xs text-muted-foreground mb-0.5">{q.categoryName}</p>
+                            )}
+                            <p className="text-sm font-medium">{q.serviceName}</p>
+                            {q.serviceDescription && (
+                              <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-semibold">${q.price}</span>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                              onClick={() => {
+                                toggleServiceSelection(q.serviceId);
+                                if (selectedServices.size <= 1) {
+                                  setView('services');
+                                }
+                              }}
+                              data-testid={`button-remove-${q.serviceId}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
