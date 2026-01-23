@@ -1030,6 +1030,61 @@ export async function registerRoutes(
     }
   });
 
+  // Device Service Parts (additional parts for a device-service link)
+  app.get("/api/device-services/:id/parts", requireAdmin, async (req, res) => {
+    try {
+      const parts = await storage.getDeviceServiceParts(req.params.id);
+      res.json(parts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get device service parts" });
+    }
+  });
+
+  app.post("/api/device-services/:id/parts", requireAdmin, async (req, res) => {
+    try {
+      const schema = z.object({
+        partId: z.string().optional(),
+        partSku: z.string().optional(),
+        isPrimary: z.boolean().optional(),
+      }).refine(data => data.partId || data.partSku, {
+        message: "Either partId or partSku is required",
+      });
+      
+      const data = schema.parse(req.body);
+      
+      const part = await storage.addDeviceServicePart({
+        deviceServiceId: req.params.id,
+        partId: data.partId,
+        partSku: data.partSku,
+        isPrimary: data.isPrimary || false,
+      });
+      res.json(part);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Invalid request", details: error.errors });
+      }
+      res.status(500).json({ error: "Failed to add part to device service" });
+    }
+  });
+
+  app.delete("/api/device-service-parts/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.removeDeviceServicePart(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to remove part from device service" });
+    }
+  });
+
+  app.delete("/api/device-services/:id/parts", requireAdmin, async (req, res) => {
+    try {
+      await storage.clearDeviceServiceParts(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to clear device service parts" });
+    }
+  });
+
   // Round price to nearest 5 minus 1 (so prices end in 9 or 4, like $99, $84, $149)
   function roundToNearestFiveMinus1(price: number): number {
     const rounded = Math.round(price / 5) * 5;
@@ -1048,13 +1103,27 @@ export async function registerRoutes(
       const service = deviceService.service;
       const laborPrice = parseFloat(service.laborPrice || "0");
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-      const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
-      const markedUpPartCost = partCost * partsMarkup;
+      const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
+      
+      // Primary part cost (100%)
+      const primaryPartCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+      
+      // Get additional parts and calculate their cost at secondary percentage
+      const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
+      let additionalPartsCost = 0;
+      for (const ap of additionalParts) {
+        if (ap.part && !ap.isPrimary) {
+          additionalPartsCost += parseFloat(ap.part.price) * secondaryPartPercentage;
+        }
+      }
+      
+      const totalPartCost = primaryPartCost + additionalPartsCost;
+      const markedUpPartCost = totalPartCost * partsMarkup;
       const rawTotal = laborPrice + markedUpPartCost;
       const totalPrice = roundToNearestFiveMinus1(rawTotal);
       
       // Check if service has parts or is labour-only
-      const hasPart = !!deviceService.part;
+      const hasPart = !!deviceService.part || additionalParts.some(ap => !!ap.part);
       const isLabourOnly = service.labourOnly === true;
       // Service is available if it has parts OR is marked as labour-only
       const isAvailable = hasPart || isLabourOnly;
@@ -1068,9 +1137,13 @@ export async function registerRoutes(
         repairTime: service.repairTime,
         laborPrice: service.laborPrice,
         partsMarkup: service.partsMarkup,
+        secondaryPartPercentage: service.secondaryPartPercentage,
         partCost: deviceService.part?.price || "0.00",
         partSku: deviceService.part?.sku || null,
         partName: deviceService.part?.name || null,
+        additionalPartsCount: additionalParts.filter(ap => !ap.isPrimary).length,
+        additionalPartsCost: additionalPartsCost.toFixed(2),
+        totalPartCost: totalPartCost.toFixed(2),
         totalPrice: totalPrice.toFixed(2),
         hasPart,
         isLabourOnly,

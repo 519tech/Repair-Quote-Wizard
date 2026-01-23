@@ -5,6 +5,7 @@ import {
   services,
   serviceCategories,
   deviceServices,
+  deviceServiceParts,
   quoteRequests,
   unknownDeviceQuotes,
   brands,
@@ -23,11 +24,14 @@ import {
   type InsertServiceCategory,
   type DeviceService,
   type InsertDeviceService,
+  type DeviceServicePart,
+  type InsertDeviceServicePart,
   type QuoteRequest,
   type InsertQuoteRequest,
   type UnknownDeviceQuote,
   type InsertUnknownDeviceQuote,
   type DeviceServiceWithRelations,
+  type DeviceServicePartWithPart,
   type Brand,
   type InsertBrand,
   type BrandDeviceType,
@@ -111,6 +115,12 @@ export interface IStorage {
   createDeviceService(data: InsertDeviceService): Promise<DeviceService>;
   updateDeviceService(id: string, data: Partial<InsertDeviceService>): Promise<DeviceService | undefined>;
   deleteDeviceService(id: string): Promise<void>;
+
+  // Device Service Parts (additional parts for a device-service link)
+  getDeviceServiceParts(deviceServiceId: string): Promise<DeviceServicePartWithPart[]>;
+  addDeviceServicePart(data: InsertDeviceServicePart): Promise<DeviceServicePart>;
+  removeDeviceServicePart(id: string): Promise<void>;
+  clearDeviceServiceParts(deviceServiceId: string): Promise<void>;
 
   // Quote Requests
   getQuoteRequests(): Promise<QuoteRequest[]>;
@@ -494,6 +504,31 @@ export class DatabaseStorage implements IStorage {
 
   async deleteDeviceService(id: string): Promise<void> {
     await db.delete(deviceServices).where(eq(deviceServices.id, id));
+  }
+
+  // Device Service Parts (additional parts for a device-service link)
+  async getDeviceServiceParts(deviceServiceId: string): Promise<DeviceServicePartWithPart[]> {
+    const rows = await db.select().from(deviceServiceParts)
+      .leftJoin(parts, eq(deviceServiceParts.partId, parts.id))
+      .where(eq(deviceServiceParts.deviceServiceId, deviceServiceId));
+    
+    return rows.map(row => ({
+      ...row.device_service_parts,
+      part: row.parts || null,
+    }));
+  }
+
+  async addDeviceServicePart(data: InsertDeviceServicePart): Promise<DeviceServicePart> {
+    const [dsp] = await db.insert(deviceServiceParts).values(data).returning();
+    return dsp;
+  }
+
+  async removeDeviceServicePart(id: string): Promise<void> {
+    await db.delete(deviceServiceParts).where(eq(deviceServiceParts.id, id));
+  }
+
+  async clearDeviceServiceParts(deviceServiceId: string): Promise<void> {
+    await db.delete(deviceServiceParts).where(eq(deviceServiceParts.deviceServiceId, deviceServiceId));
   }
 
   // Quote Requests

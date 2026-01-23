@@ -876,6 +876,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [linkPartSearch, setLinkPartSearch] = useState("");
   const [linkPartId, setLinkPartId] = useState<string | undefined>();
   const [debouncedLinkPartSearch, setDebouncedLinkPartSearch] = useState("");
+  const [additionalPartSku, setAdditionalPartSku] = useState("");
 
   // Bulk add links state
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
@@ -918,6 +919,45 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const { data: linkSkuPart } = useQuery<Part | null>({
     queryKey: [`/api/parts/sku/${encodeURIComponent(linkPartSku)}`],
     enabled: linkPartSku.length > 0
+  });
+
+  // Additional part SKU lookup
+  const { data: additionalSkuPart } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(additionalPartSku)}`],
+    enabled: additionalPartSku.length > 0
+  });
+
+  // Query for additional parts for the current edit link
+  const { data: additionalParts = [], refetch: refetchAdditionalParts } = useQuery<{ id: string; partId: string | null; partSku: string | null; isPrimary: boolean; part: Part | null }[]>({
+    queryKey: [`/api/device-services/${editLinkItem?.id}/parts`],
+    enabled: !!editLinkItem?.id
+  });
+
+  const addAdditionalPartMutation = useMutation({
+    mutationFn: async ({ deviceServiceId, partId, partSku }: { deviceServiceId: string; partId?: string; partSku?: string }) => {
+      await apiRequest("POST", `/api/device-services/${deviceServiceId}/parts`, { partId, partSku, isPrimary: false });
+    },
+    onSuccess: () => {
+      refetchAdditionalParts();
+      setAdditionalPartSku("");
+      toast({ title: "Additional part added" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeAdditionalPartMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/device-service-parts/${id}`);
+    },
+    onSuccess: () => {
+      refetchAdditionalParts();
+      toast({ title: "Part removed" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   const filteredDevices = devices.filter((device) => {
@@ -1702,25 +1742,89 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       </Dialog>
 
       {/* Edit Service Link Dialog */}
-      <Dialog open={editLinkOpen} onOpenChange={setEditLinkOpen}>
-        <DialogContent>
+      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) setAdditionalPartSku(""); }}>
+        <DialogContent className="max-w-lg">
           <form onSubmit={handleEditLinkSubmit}>
             <DialogHeader>
               <DialogTitle>Edit Service Link</DialogTitle>
-              <DialogDescription>Update part for {editLinkItem?.service?.name}</DialogDescription>
+              <DialogDescription>Update parts for {editLinkItem?.service?.name}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
               <div className="space-y-2">
                 <Label>Service</Label>
                 <Input value={editLinkItem?.service?.name || ""} disabled />
+                {editLinkItem?.service?.secondaryPartPercentage !== undefined && editLinkItem.service.secondaryPartPercentage !== 100 && (
+                  <p className="text-xs text-muted-foreground">Secondary parts charged at {editLinkItem.service.secondaryPartPercentage}%</p>
+                )}
               </div>
               <div className="space-y-2">
-                <Label>Part SKU</Label>
+                <Label>Primary Part SKU</Label>
                 <Input value={linkPartSku} onChange={(e) => setLinkPartSku(e.target.value)} placeholder="Enter SKU" data-testid="input-edit-link-sku" />
                 {linkPartSku && linkSkuPart && (
                   <p className="text-sm text-green-600">Found: {linkSkuPart.name} (${linkSkuPart.price})</p>
                 )}
                 {linkPartSku && !linkSkuPart && linkPartSku.length > 0 && (
+                  <p className="text-sm text-destructive">SKU not found</p>
+                )}
+              </div>
+              
+              {/* Additional Parts Section */}
+              <div className="space-y-2 border-t pt-4">
+                <Label>Additional Parts (Secondary)</Label>
+                <p className="text-xs text-muted-foreground mb-2">These parts will be charged at {editLinkItem?.service?.secondaryPartPercentage || 100}% of their cost</p>
+                
+                {/* List existing additional parts */}
+                {additionalParts.filter(ap => !ap.isPrimary).length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {additionalParts.filter(ap => !ap.isPrimary).map((ap) => (
+                      <div key={ap.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                        <span>{ap.part?.name || ap.partSku || "Unknown"} {ap.part && `($${ap.part.price})`}</span>
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="icon" 
+                          className="h-6 w-6"
+                          onClick={() => removeAdditionalPartMutation.mutate(ap.id)}
+                          disabled={removeAdditionalPartMutation.isPending}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Add new additional part */}
+                <div className="flex gap-2">
+                  <Input 
+                    value={additionalPartSku} 
+                    onChange={(e) => setAdditionalPartSku(e.target.value)} 
+                    placeholder="Enter additional part SKU" 
+                    className="flex-1"
+                    data-testid="input-additional-part-sku" 
+                  />
+                  <Button 
+                    type="button"
+                    size="sm"
+                    disabled={!additionalSkuPart || addAdditionalPartMutation.isPending}
+                    onClick={() => {
+                      if (additionalSkuPart && editLinkItem) {
+                        addAdditionalPartMutation.mutate({
+                          deviceServiceId: editLinkItem.id,
+                          partId: additionalSkuPart.id,
+                          partSku: additionalSkuPart.sku,
+                        });
+                      }
+                    }}
+                    data-testid="button-add-additional-part"
+                  >
+                    {addAdditionalPartMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {additionalPartSku && additionalSkuPart && (
+                  <p className="text-sm text-green-600">Found: {additionalSkuPart.name} (${additionalSkuPart.price})</p>
+                )}
+                {additionalPartSku && !additionalSkuPart && additionalPartSku.length > 0 && (
                   <p className="text-sm text-destructive">SKU not found</p>
                 )}
               </div>
@@ -2171,6 +2275,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [repairTime, setRepairTime] = useState("");
   const [laborPrice, setLaborPrice] = useState("");
   const [partsMarkup, setPartsMarkup] = useState("1.0");
+  const [secondaryPartPercentage, setSecondaryPartPercentage] = useState("50");
   const [notes, setNotes] = useState("");
   const [labourOnly, setLabourOnly] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
@@ -2197,7 +2302,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; notes?: string; labourOnly?: boolean; imageUrl?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -2211,6 +2316,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setRepairTime("");
       setLaborPrice("");
       setPartsMarkup("1.0");
+      setSecondaryPartPercentage("50");
       setNotes("");
       setLabourOnly(false);
       setImageUrl("");
@@ -2258,6 +2364,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       repairTime: repairTime || undefined,
       laborPrice, 
       partsMarkup,
+      secondaryPartPercentage: secondaryPartPercentage === "" ? 50 : parseInt(secondaryPartPercentage),
       notes: notes || undefined,
       labourOnly,
       imageUrl: imageUrl || undefined
@@ -2374,6 +2481,11 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                     <Input type="number" step="0.01" min="1" value={partsMarkup} onChange={(e) => setPartsMarkup(e.target.value)} placeholder="1.0" required data-testid="input-service-parts-markup" />
                   </div>
                 </div>
+                <div className="space-y-2">
+                  <Label>Secondary Part % (for additional parts)</Label>
+                  <Input type="number" step="1" min="0" max="100" value={secondaryPartPercentage} onChange={(e) => setSecondaryPartPercentage(e.target.value)} placeholder="50" data-testid="input-service-secondary-part-percentage" />
+                  <p className="text-xs text-muted-foreground">When a repair needs multiple parts, secondary parts are charged at this % of their cost (e.g., 50% means a $10 secondary part adds $5)</p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Warranty (optional)</Label>
@@ -2447,6 +2559,11 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                     <Label>Parts Markup (multiplier)</Label>
                     <Input type="number" step="0.01" min="1" value={editItem?.partsMarkup || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, partsMarkup: e.target.value} : null)} required data-testid="input-edit-service-parts-markup" />
                   </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Secondary Part % (for additional parts)</Label>
+                  <Input type="number" step="1" min="0" max="100" value={editItem?.secondaryPartPercentage ?? 100} onChange={(e) => setEditItem(prev => prev ? {...prev, secondaryPartPercentage: e.target.value === "" ? 50 : parseInt(e.target.value)} : null)} data-testid="input-edit-service-secondary-part-percentage" />
+                  <p className="text-xs text-muted-foreground">When a repair needs multiple parts, secondary parts are charged at this % of their cost</p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">

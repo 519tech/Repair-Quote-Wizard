@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, unique, boolean } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -148,6 +148,7 @@ export const services = pgTable("services", {
   repairTime: text("repair_time"),
   laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull().default("0"),
   partsMarkup: decimal("parts_markup", { precision: 5, scale: 2 }).notNull().default("1.0"),
+  secondaryPartPercentage: integer("secondary_part_percentage").notNull().default(100),
   notes: text("notes"),
   labourOnly: boolean("labour_only").notNull().default(false),
   imageUrl: text("image_url"),
@@ -193,6 +194,30 @@ export const deviceServicesRelations = relations(deviceServices, ({ one }) => ({
 export const insertDeviceServiceSchema = createInsertSchema(deviceServices).omit({ id: true });
 export type InsertDeviceService = z.infer<typeof insertDeviceServiceSchema>;
 export type DeviceService = typeof deviceServices.$inferSelect;
+
+// Junction table for multiple parts per device-service link
+export const deviceServiceParts = pgTable("device_service_parts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
+  partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
+  partSku: varchar("part_sku"),
+  isPrimary: boolean("is_primary").notNull().default(false),
+});
+
+export const deviceServicePartsRelations = relations(deviceServiceParts, ({ one }) => ({
+  deviceService: one(deviceServices, {
+    fields: [deviceServiceParts.deviceServiceId],
+    references: [deviceServices.id],
+  }),
+  part: one(parts, {
+    fields: [deviceServiceParts.partId],
+    references: [parts.id],
+  }),
+}));
+
+export const insertDeviceServicePartSchema = createInsertSchema(deviceServiceParts).omit({ id: true });
+export type InsertDeviceServicePart = z.infer<typeof insertDeviceServicePartSchema>;
+export type DeviceServicePart = typeof deviceServiceParts.$inferSelect;
 
 // Quote requests from customers
 export const quoteRequests = pgTable("quote_requests", {
@@ -252,8 +277,10 @@ export type MessageTemplate = typeof messageTemplates.$inferSelect;
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
 export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };
 export type ServiceWithCategory = Service & { category: ServiceCategory | null };
+export type DeviceServicePartWithPart = DeviceServicePart & { part: Part | null };
 export type DeviceServiceWithRelations = DeviceService & { 
   device: Device & { deviceType?: DeviceType; brand?: Brand | null }; 
   service: ServiceWithCategory; 
   part: Part | null;
+  additionalParts?: DeviceServicePartWithPart[];
 };
