@@ -248,13 +248,18 @@ ${data.notes ? `Customer Notes:\n${data.notes}` : ''}
 -------------------
 This is an automated notification from RepairQuote.`;
 
-    const message = [
+    const messageHeaders = [
       `To: ${adminEmailSetting.content}`,
       `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=utf-8',
-      '',
-      emailBody
-    ].join('\n');
+    ];
+    
+    if (data.customerEmail) {
+      messageHeaders.push(`Reply-To: ${data.customerEmail}`);
+    }
+    
+    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
+    
+    const message = [...messageHeaders, '', emailBody].join('\n');
 
     const encodedMessage = Buffer.from(message)
       .toString('base64')
@@ -269,7 +274,7 @@ This is an automated notification from RepairQuote.`;
       }
     });
 
-    console.log(`Admin notification email sent to ${adminEmailSetting.content}`);
+    console.log(`Admin notification email sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
     return true;
   } catch (error) {
     console.error('Failed to send admin notification email:', error);
@@ -374,13 +379,18 @@ ACTION REQUIRED: Please contact this customer to provide a personalized quote.
 
 This is an automated notification from RepairQuote.`;
 
-    const message = [
+    const messageHeaders = [
       `To: ${adminEmailSetting.content}`,
       `Subject: ${subject}`,
-      'Content-Type: text/plain; charset=utf-8',
-      '',
-      emailBody
-    ].join('\n');
+    ];
+    
+    if (data.customerEmail) {
+      messageHeaders.push(`Reply-To: ${data.customerEmail}`);
+    }
+    
+    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
+    
+    const message = [...messageHeaders, '', emailBody].join('\n');
 
     const encodedMessage = Buffer.from(message)
       .toString('base64')
@@ -395,7 +405,7 @@ This is an automated notification from RepairQuote.`;
       }
     });
 
-    console.log(`Unknown device admin notification sent to ${adminEmailSetting.content}`);
+    console.log(`Unknown device admin notification sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
     return true;
   } catch (error) {
     console.error('Failed to send unknown device admin notification:', error);
