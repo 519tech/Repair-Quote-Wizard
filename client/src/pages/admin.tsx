@@ -2120,14 +2120,11 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                 <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
-                <TableHead>Brands</TableHead>
                 <TableHead className="w-24">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {categories.map((category) => {
-                const linkedBrands = getLinkedBrands(category.id);
-                return (
+              {categories.map((category) => (
                   <TableRow key={category.id}>
                     <TableCell>
                       {category.imageUrl ? (
@@ -2139,26 +2136,13 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                     <TableCell className="font-medium">{category.name}</TableCell>
                     <TableCell className="text-muted-foreground">{category.description || "-"}</TableCell>
                     <TableCell>
-                      {linkedBrands.length === 0 ? (
-                        <span className="text-muted-foreground text-sm">All brands</span>
-                      ) : (
-                        <div className="flex flex-wrap gap-1">
-                          {linkedBrands.map(brand => (
-                            <Badge key={brand.id} variant="secondary" className="text-xs">{brand.name}</Badge>
-                          ))}
-                        </div>
-                      )}
-                    </TableCell>
-                    <TableCell>
                       <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => openLinkDialog(category)} title="Manage brand links" data-testid={`button-link-brands-${category.id}`}><Link2 className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(category)} data-testid={`button-edit-category-${category.id}`}><Pencil className="h-4 w-4" /></Button>
                         <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(category.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </TableCell>
                   </TableRow>
-                );
-              })}
+                ))}
             </TableBody>
           </Table>
         )}
@@ -2195,65 +2179,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
           </DialogContent>
         </Dialog>
 
-        <Dialog open={linkOpen} onOpenChange={setLinkOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Manage Brand Links</DialogTitle>
-              <DialogDescription>Link "{linkCategory?.name}" to specific brands. When linked, this category will only appear for those brands in the quote widget.</DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Add Brand</Label>
-                <div className="flex gap-2">
-                  <Select value={selectedBrandId} onValueChange={setSelectedBrandId}>
-                    <SelectTrigger className="flex-1" data-testid="select-link-brand">
-                      <SelectValue placeholder="Select a brand to link" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {brands.filter(b => !getLinkedBrandIds(linkCategory?.id || "").has(b.id)).map(brand => (
-                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <Button onClick={handleAddLink} disabled={!selectedBrandId || createLinkMutation.isPending} data-testid="button-add-brand-link">
-                    {createLinkMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                  </Button>
-                </div>
-              </div>
-              
-              {linkCategory && getLinkedBrands(linkCategory.id).length > 0 && (
-                <div className="space-y-2">
-                  <Label>Linked Brands</Label>
-                  <div className="flex flex-wrap gap-2">
-                    {getLinkedBrands(linkCategory.id).map(brand => (
-                      <Badge key={brand.id} variant="secondary" className="flex items-center gap-1">
-                        {brand.name}
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-4 w-4 p-0 hover:bg-transparent"
-                          onClick={() => handleRemoveLink(linkCategory.id, brand.id)}
-                          disabled={deleteLinkMutation.isPending}
-                          data-testid={`button-remove-brand-link-${brand.id}`}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-              )}
-              
-              {linkCategory && getLinkedBrands(linkCategory.id).length === 0 && (
-                <p className="text-sm text-muted-foreground">No brands linked. This category will appear for all brands.</p>
-              )}
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setLinkOpen(false)}>Done</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
-      </CardContent>
+              </CardContent>
     </Card>
   );
 }
