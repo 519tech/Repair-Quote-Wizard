@@ -141,7 +141,7 @@ function buildSmsServicesList(services: CombinedQuoteSmsData['services'], servic
       .replace(/\{repairTime\}/g, s.repairTime || '')
       .replace(/\{warranty\}/g, s.warranty || '')
       .replace(/\{serviceDescription\}/g, s.serviceDescription || '');
-  }).join(', ');
+  }).join('\n\n');
 }
 
 async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): Promise<string> {

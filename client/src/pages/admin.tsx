@@ -4213,7 +4213,7 @@ $\{servicePrice} plus taxes
         <CardHeader>
           <CardTitle>Service Item Template (SMS)</CardTitle>
           <CardDescription>
-            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by " | ".
+            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by blank lines.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
