@@ -428,7 +428,16 @@ export default function Embed() {
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : searchResults.length === 0 ? (
-                    <p className="text-center py-4 text-sm text-muted-foreground">No devices found</p>
+                    <div className="text-center py-4">
+                      <button
+                        type="button"
+                        onClick={() => { setShowSearch(false); setView('unknown'); }}
+                        className="text-sm text-primary hover:underline"
+                        data-testid="link-device-not-listed"
+                      >
+                        Your device not listed?
+                      </button>
+                    </div>
                   ) : (
                     <div className="p-1 space-y-1">
                       {searchResults.map(device => (
