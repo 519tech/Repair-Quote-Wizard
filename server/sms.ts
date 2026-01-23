@@ -129,13 +129,30 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   }
 }
 
-const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {deviceName}: {serviceName}. Total: ${price} plus taxes. Reply for questions!";
+const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {deviceName}: {servicesList}. Total: ${price} plus taxes. Reply for questions!";
 
-function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): string {
+const defaultSmsServiceItemTemplate = "{serviceName} (${servicePrice})";
+
+function buildSmsServicesList(services: CombinedQuoteSmsData['services'], serviceItemTemplate: string): string {
+  return services.map(s => {
+    return serviceItemTemplate
+      .replace(/\{serviceName\}/g, s.serviceName)
+      .replace(/\{servicePrice\}/g, s.price)
+      .replace(/\{repairTime\}/g, s.repairTime || '')
+      .replace(/\{warranty\}/g, s.warranty || '')
+      .replace(/\{serviceDescription\}/g, s.serviceDescription || '');
+  }).join(', ');
+}
+
+async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): Promise<string> {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
   const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
   const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
+  
+  const serviceItemTemplate = await storage.getMessageTemplate('sms_service_item_template');
+  const servicesList = buildSmsServicesList(data.services, serviceItemTemplate?.content || defaultSmsServiceItemTemplate);
+  
   return template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
@@ -143,7 +160,8 @@ function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): st
     .replace(/\{serviceDescription\}/g, serviceDescriptions)
     .replace(/\{price\}/g, data.grandTotal)
     .replace(/\{repairTime\}/g, repairTimes)
-    .replace(/\{warranty\}/g, warranties);
+    .replace(/\{warranty\}/g, warranties)
+    .replace(/\{servicesList\}/g, servicesList);
 }
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
@@ -154,7 +172,7 @@ export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<
 
   try {
     const smsTemplate = await storage.getMessageTemplate('sms');
-    const message = replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data);
+    const message = await replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data);
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
     console.error('Failed to send combined quote SMS:', error);

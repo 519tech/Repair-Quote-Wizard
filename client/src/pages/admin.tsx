@@ -4038,6 +4038,8 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [adminEmail, setAdminEmail] = useState("");
   const [unknownDeviceEmail, setUnknownDeviceEmail] = useState("");
   const [unknownDeviceSms, setUnknownDeviceSms] = useState("");
+  const [serviceItemTemplate, setServiceItemTemplate] = useState("");
+  const [smsServiceItemTemplate, setSmsServiceItemTemplate] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
@@ -4052,10 +4054,10 @@ Thank you for requesting a repair quote from RepairQuote!
 Here are your quote details:
 
 Device: {deviceName}
-Service: {serviceName}
-Estimated Price: $\{price} plus taxes
-{repairTime}
-{warranty}
+
+{servicesList}
+
+Total: $\{price} plus taxes
 
 To proceed with this repair, please reply to this email or visit our store.
 
@@ -4063,7 +4065,7 @@ Thank you for choosing RepairQuote!
 
 Best regards,
 The RepairQuote Team`,
-    sms: "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!",
+    sms: "Hi {customerName}! Your RepairQuote for {deviceName}: {servicesList}. Total: ${price} plus taxes. Reply for questions!",
     unknown_device_email: `Dear {customerName},
 
 Thank you for contacting RepairQuote!
@@ -4080,7 +4082,12 @@ Thank you for choosing RepairQuote!
 
 Best regards,
 The RepairQuote Team`,
-    unknown_device_sms: "Hi {customerName}! We received your repair inquiry for: {deviceDescription}. We'll review and get back to you with a quote soon!"
+    unknown_device_sms: "Hi {customerName}! We received your repair inquiry for: {deviceDescription}. We'll review and get back to you with a quote soon!",
+    service_item_template: `{serviceName}
+$\{servicePrice} plus taxes
+{repairTime}
+{warranty}`,
+    sms_service_item_template: "{serviceName} (${servicePrice})"
   };
 
   useEffect(() => {
@@ -4090,6 +4097,8 @@ The RepairQuote Team`,
     const adminEmailData = templates.find(t => t.type === "admin_notification_email");
     const unknownDeviceEmailData = templates.find(t => t.type === "unknown_device_email");
     const unknownDeviceSmsData = templates.find(t => t.type === "unknown_device_sms");
+    const serviceItemTemplateData = templates.find(t => t.type === "service_item_template");
+    const smsServiceItemTemplateData = templates.find(t => t.type === "sms_service_item_template");
     
     setEmailSubject(emailSubjectTemplate?.content || defaults.email_subject);
     setEmailBody(emailBodyTemplate?.content || defaults.email_body);
@@ -4097,6 +4106,8 @@ The RepairQuote Team`,
     setAdminEmail(adminEmailData?.content || "");
     setUnknownDeviceEmail(unknownDeviceEmailData?.content || defaults.unknown_device_email);
     setUnknownDeviceSms(unknownDeviceSmsData?.content || defaults.unknown_device_sms);
+    setServiceItemTemplate(serviceItemTemplateData?.content || defaults.service_item_template);
+    setSmsServiceItemTemplate(smsServiceItemTemplateData?.content || defaults.sms_service_item_template);
   }, [templates]);
 
   const saveMutation = useMutation({
@@ -4119,6 +4130,8 @@ The RepairQuote Team`,
   const handleSaveAdminEmail = () => saveMutation.mutate({ type: "admin_notification_email", content: adminEmail });
   const handleSaveUnknownDeviceEmail = () => saveMutation.mutate({ type: "unknown_device_email", content: unknownDeviceEmail });
   const handleSaveUnknownDeviceSms = () => saveMutation.mutate({ type: "unknown_device_sms", content: unknownDeviceSms });
+  const handleSaveServiceItemTemplate = () => saveMutation.mutate({ type: "service_item_template", content: serviceItemTemplate });
+  const handleSaveSmsServiceItemTemplate = () => saveMutation.mutate({ type: "sms_service_item_template", content: smsServiceItemTemplate });
 
   const macros = [
     { name: "{customerName}", description: "Customer's name" },
@@ -4135,6 +4148,14 @@ The RepairQuote Team`,
     { name: "{customerName}", description: "Customer's name" },
     { name: "{deviceDescription}", description: "Customer's device description" },
     { name: "{issueDescription}", description: "Customer's issue description" },
+  ];
+
+  const serviceItemMacros = [
+    { name: "{serviceName}", description: "Name of the service" },
+    { name: "{servicePrice}", description: "Price for this individual service" },
+    { name: "{repairTime}", description: "Repair time for this service" },
+    { name: "{warranty}", description: "Warranty for this service" },
+    { name: "{serviceDescription}", description: "Description of the service" },
   ];
 
   if (isLoading) {
@@ -4156,6 +4177,63 @@ The RepairQuote Team`,
               </Badge>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Service Item Template (Email)</CardTitle>
+          <CardDescription>
+            Format for each service in the {"{servicesList}"} placeholder for emails. Each service will be formatted using this template and separated by blank lines.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {serviceItemMacros.map((macro) => (
+              <Badge key={macro.name} variant="outline" className="text-sm">
+                {macro.name} - {macro.description}
+              </Badge>
+            ))}
+          </div>
+          <Textarea 
+            value={serviceItemTemplate} 
+            onChange={(e) => setServiceItemTemplate(e.target.value)} 
+            placeholder="Enter service item template..."
+            className="min-h-[120px] font-mono text-sm"
+            data-testid="textarea-service-item-template"
+          />
+          <Button onClick={handleSaveServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-service-item-template">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save Service Item Template
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Service Item Template (SMS)</CardTitle>
+          <CardDescription>
+            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by commas.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex flex-wrap gap-2 mb-4">
+            {serviceItemMacros.map((macro) => (
+              <Badge key={macro.name} variant="outline" className="text-sm">
+                {macro.name} - {macro.description}
+              </Badge>
+            ))}
+          </div>
+          <Input 
+            value={smsServiceItemTemplate} 
+            onChange={(e) => setSmsServiceItemTemplate(e.target.value)} 
+            placeholder="Enter SMS service item template..."
+            data-testid="input-sms-service-item-template"
+          />
+          <Button onClick={handleSaveSmsServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-sms-service-item-template">
+            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+            Save SMS Service Item Template
+          </Button>
         </CardContent>
       </Card>
 

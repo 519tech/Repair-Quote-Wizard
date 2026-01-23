@@ -142,14 +142,30 @@ interface CombinedQuoteEmailData {
   grandTotal: string;
 }
 
-function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): string {
+const defaultServiceItemTemplate = `{serviceName}
+$\{servicePrice} plus taxes
+{repairTime}
+{warranty}`;
+
+function buildServicesList(services: CombinedQuoteEmailData['services'], serviceItemTemplate: string): string {
+  return services.map(s => {
+    return serviceItemTemplate
+      .replace(/\{serviceName\}/g, s.serviceName)
+      .replace(/\{servicePrice\}/g, s.price)
+      .replace(/\{repairTime\}/g, s.repairTime || '')
+      .replace(/\{warranty\}/g, s.warranty || '')
+      .replace(/\{serviceDescription\}/g, s.serviceDescription || '');
+  }).join('\n\n');
+}
+
+async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): Promise<string> {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
   const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
   const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
-  const servicesList = data.services.map(s => 
-    `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
-  ).join('\n');
+  
+  const serviceItemTemplate = await storage.getMessageTemplate('service_item_template');
+  const servicesList = buildServicesList(data.services, serviceItemTemplate?.content || defaultServiceItemTemplate);
   
   return template
     .replace(/\{customerName\}/g, data.customerName)
@@ -177,10 +193,10 @@ Thank you for requesting a repair quote from RepairQuote!
 Here are your quote details:
 
 Device: {deviceName}
-Service: {serviceName}
-Estimated Price: $\{price} plus taxes
-{repairTime}
-{warranty}
+
+{servicesList}
+
+Total: $\{price} plus taxes
 
 To proceed with this repair, please reply to this email or visit our store.
 
@@ -189,8 +205,8 @@ Thank you for choosing RepairQuote!
 Best regards,
 The RepairQuote Team`;
 
-    const subject = replaceCombinedEmailMacros(subjectTemplate?.content || defaultSubject, data);
-    const emailBody = replaceCombinedEmailMacros(bodyTemplate?.content || defaultBody, data);
+    const subject = await replaceCombinedEmailMacros(subjectTemplate?.content || defaultSubject, data);
+    const emailBody = await replaceCombinedEmailMacros(bodyTemplate?.content || defaultBody, data);
 
     const message = [
       `To: ${data.customerEmail}`,
