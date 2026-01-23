@@ -9,6 +9,7 @@ interface QuoteSmsData {
   customerPhone: string;
   deviceName: string;
   serviceName: string;
+  serviceDescription?: string;
   price: string;
   repairTime?: string;
   warranty?: string;
@@ -20,6 +21,7 @@ interface CombinedQuoteSmsData {
   deviceName: string;
   services: Array<{
     serviceName: string;
+    serviceDescription?: string;
     price: string;
   }>;
   grandTotal: string;
@@ -44,6 +46,7 @@ function replaceMacros(template: string, data: QuoteSmsData): string {
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, data.serviceName)
+    .replace(/\{serviceDescription\}/g, data.serviceDescription || '')
     .replace(/\{price\}/g, data.price)
     .replace(/\{repairTime\}/g, data.repairTime || '')
     .replace(/\{warranty\}/g, data.warranty || '');
@@ -128,10 +131,12 @@ const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {dev
 
 function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): string {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
+  const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
   return template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, serviceNames)
+    .replace(/\{serviceDescription\}/g, serviceDescriptions)
     .replace(/\{price\}/g, data.grandTotal)
     .replace(/\{repairTime\}/g, '')
     .replace(/\{warranty\}/g, '');

@@ -50,6 +50,7 @@ interface QuoteEmailData {
   customerEmail: string;
   deviceName: string;
   serviceName: string;
+  serviceDescription?: string;
   price: string;
   repairTime?: string;
   warranty?: string;
@@ -60,6 +61,7 @@ function replaceMacros(template: string, data: QuoteEmailData): string {
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, data.serviceName)
+    .replace(/\{serviceDescription\}/g, data.serviceDescription || '')
     .replace(/\{price\}/g, data.price)
     .replace(/\{repairTime\}/g, data.repairTime ? `Repair Time: ${data.repairTime}` : '')
     .replace(/\{warranty\}/g, data.warranty ? `Warranty: ${data.warranty}` : '');
@@ -132,6 +134,7 @@ interface CombinedQuoteEmailData {
   deviceName: string;
   services: Array<{
     serviceName: string;
+    serviceDescription?: string;
     price: string;
     repairTime?: string;
     warranty?: string;
@@ -141,6 +144,7 @@ interface CombinedQuoteEmailData {
 
 function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): string {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
+  const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
   const servicesList = data.services.map(s => 
     `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
   ).join('\n');
@@ -149,6 +153,7 @@ function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailDa
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, serviceNames)
+    .replace(/\{serviceDescription\}/g, serviceDescriptions)
     .replace(/\{price\}/g, data.grandTotal)
     .replace(/\{repairTime\}/g, '')
     .replace(/\{warranty\}/g, '')
