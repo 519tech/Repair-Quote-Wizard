@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -4040,6 +4040,8 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [unknownDeviceSms, setUnknownDeviceSms] = useState("");
   const [serviceItemTemplate, setServiceItemTemplate] = useState("");
   const [smsServiceItemTemplate, setSmsServiceItemTemplate] = useState("");
+  const [testEmail, setTestEmail] = useState("");
+  const [testPhone, setTestPhone] = useState("");
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
@@ -4132,6 +4134,48 @@ $\{servicePrice} plus taxes
   const handleSaveUnknownDeviceSms = () => saveMutation.mutate({ type: "unknown_device_sms", content: unknownDeviceSms });
   const handleSaveServiceItemTemplate = () => saveMutation.mutate({ type: "service_item_template", content: serviceItemTemplate });
   const handleSaveSmsServiceItemTemplate = () => saveMutation.mutate({ type: "sms_service_item_template", content: smsServiceItemTemplate });
+
+  const testEmailMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const res = await apiRequest("POST", "/api/admin/test-email", { email });
+      return res.json();
+    },
+    onSuccess: (data: { message: string }) => {
+      toast({ title: "Success", description: data.message });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const testSmsMutation = useMutation({
+    mutationFn: async (phone: string) => {
+      const res = await apiRequest("POST", "/api/admin/test-sms", { phone });
+      return res.json();
+    },
+    onSuccess: (data: { message: string }) => {
+      toast({ title: "Success", description: data.message });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSendTestEmail = () => {
+    if (!testEmail) {
+      toast({ title: "Error", description: "Please enter a test email address", variant: "destructive" });
+      return;
+    }
+    testEmailMutation.mutate(testEmail);
+  };
+
+  const handleSendTestSms = () => {
+    if (!testPhone) {
+      toast({ title: "Error", description: "Please enter a test phone number", variant: "destructive" });
+      return;
+    }
+    testSmsMutation.mutate(testPhone);
+  };
 
   const macros = [
     { name: "{customerName}", description: "Customer's name" },
@@ -4381,6 +4425,67 @@ $\{servicePrice} plus taxes
             {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
             Save Admin Email
           </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Test Message Recipients</CardTitle>
+          <CardDescription>Configure where test emails and SMS messages should be sent</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="test-email">Test Email Address</Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="test-email"
+                  type="email"
+                  value={testEmail} 
+                  onChange={(e) => setTestEmail(e.target.value)} 
+                  placeholder="test@example.com"
+                  data-testid="input-test-email"
+                />
+                <Button 
+                  onClick={handleSendTestEmail} 
+                  disabled={testEmailMutation.isPending}
+                  variant="outline"
+                  data-testid="button-send-test-email"
+                >
+                  {testEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                  Send Test
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Send a test email with sample quote data to verify your email templates.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="test-phone">Test Phone Number</Label>
+              <div className="flex gap-2">
+                <Input 
+                  id="test-phone"
+                  type="tel"
+                  value={testPhone} 
+                  onChange={(e) => setTestPhone(e.target.value)} 
+                  placeholder="+1 (555) 123-4567"
+                  data-testid="input-test-phone"
+                />
+                <Button 
+                  onClick={handleSendTestSms} 
+                  disabled={testSmsMutation.isPending}
+                  variant="outline"
+                  data-testid="button-send-test-sms"
+                >
+                  {testSmsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                  Send Test
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Send a test SMS with sample quote data to verify your SMS templates.
+              </p>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>
