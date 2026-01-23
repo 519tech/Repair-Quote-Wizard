@@ -4213,7 +4213,7 @@ $\{servicePrice} plus taxes
         <CardHeader>
           <CardTitle>Service Item Template (SMS)</CardTitle>
           <CardDescription>
-            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by commas.
+            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by " | ".
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -4224,10 +4224,11 @@ $\{servicePrice} plus taxes
               </Badge>
             ))}
           </div>
-          <Input 
+          <Textarea 
             value={smsServiceItemTemplate} 
             onChange={(e) => setSmsServiceItemTemplate(e.target.value)} 
             placeholder="Enter SMS service item template..."
+            className="min-h-[120px] font-mono text-sm"
             data-testid="input-sms-service-item-template"
           />
           <Button onClick={handleSaveSmsServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-sms-service-item-template">
