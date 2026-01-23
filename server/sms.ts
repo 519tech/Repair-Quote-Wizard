@@ -124,6 +124,19 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   }
 }
 
+const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {deviceName}: {serviceName}. Total: ${price} plus taxes. Reply for questions!";
+
+function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): string {
+  const serviceNames = data.services.map(s => s.serviceName).join(', ');
+  return template
+    .replace(/\{customerName\}/g, data.customerName)
+    .replace(/\{deviceName\}/g, data.deviceName)
+    .replace(/\{serviceName\}/g, serviceNames)
+    .replace(/\{price\}/g, data.grandTotal)
+    .replace(/\{repairTime\}/g, '')
+    .replace(/\{warranty\}/g, '');
+}
+
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
@@ -131,8 +144,8 @@ export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<
   }
 
   try {
-    const serviceNames = data.services.map(s => s.serviceName).join(', ');
-    const message = `Hi ${data.customerName}! Your RepairQuote for ${data.deviceName}: ${serviceNames}. Total: $${data.grandTotal} plus taxes. Reply for questions!`;
+    const smsTemplate = await storage.getMessageTemplate('sms');
+    const message = replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data);
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
     console.error('Failed to send combined quote SMS:', error);
