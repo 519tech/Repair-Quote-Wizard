@@ -20,8 +20,8 @@ import * as XLSX from "xlsx";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "./gmail";
-import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "./sms";
+import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, sendTestEmail } from "./gmail";
+import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 
 // Extend express-session types
@@ -130,6 +130,54 @@ export async function registerRoutes(
       isAdmin: req.session?.isAdmin === true,
       username: req.session?.username || null,
     });
+  });
+
+  // Test Email Endpoint
+  app.post("/api/admin/test-email", async (req, res) => {
+    if (!req.session?.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { email } = req.body;
+    if (!email || typeof email !== 'string') {
+      return res.status(400).json({ error: "Email is required" });
+    }
+    
+    try {
+      const success = await sendTestEmail(email);
+      if (success) {
+        res.json({ success: true, message: `Test email sent to ${email}` });
+      } else {
+        res.status(500).json({ error: "Failed to send test email" });
+      }
+    } catch (error: any) {
+      console.error('Test email error:', error);
+      res.status(500).json({ error: error.message || "Failed to send test email" });
+    }
+  });
+
+  // Test SMS Endpoint
+  app.post("/api/admin/test-sms", async (req, res) => {
+    if (!req.session?.isAdmin) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+    
+    const { phone } = req.body;
+    if (!phone || typeof phone !== 'string') {
+      return res.status(400).json({ error: "Phone number is required" });
+    }
+    
+    try {
+      const success = await sendTestSms(phone);
+      if (success) {
+        res.json({ success: true, message: `Test SMS sent to ${phone}` });
+      } else {
+        res.status(500).json({ error: "Failed to send test SMS" });
+      }
+    } catch (error: any) {
+      console.error('Test SMS error:', error);
+      res.status(500).json({ error: error.message || "Failed to send test SMS" });
+    }
   });
 
   // Device Types

@@ -451,3 +451,32 @@ This is an automated notification from RepairQuote.`;
     return false;
   }
 }
+
+// Test email function - sends a test email with sample data
+export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
+  const testData = {
+    customerName: 'Test Customer',
+    customerEmail: recipientEmail,
+    deviceName: 'iPhone 15 Pro Max',
+    services: [
+      {
+        serviceName: 'Screen Replacement',
+        serviceDescription: 'Replace cracked or damaged screen',
+        price: '$299.99',
+        repairTime: '1-2 hours',
+        warranty: '90 days'
+      },
+      {
+        serviceName: 'Battery Replacement',
+        serviceDescription: 'Replace worn battery',
+        price: '$89.99',
+        repairTime: '30 minutes',
+        warranty: '60 days'
+      }
+    ],
+    grandTotal: '$389.98'
+  };
+
+  console.log(`Sending test email to ${recipientEmail}...`);
+  return await sendCombinedQuoteEmail(testData);
+}

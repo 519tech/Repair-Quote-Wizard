@@ -202,3 +202,32 @@ export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Pro
     return false;
   }
 }
+
+// Test SMS function - sends a test SMS with sample data
+export async function sendTestSms(recipientPhone: string): Promise<boolean> {
+  const testData = {
+    customerName: 'Test Customer',
+    customerPhone: recipientPhone,
+    deviceName: 'iPhone 15 Pro Max',
+    services: [
+      {
+        serviceName: 'Screen Replacement',
+        serviceDescription: 'Replace cracked or damaged screen',
+        price: '$299.99',
+        repairTime: '1-2 hours',
+        warranty: '90 days'
+      },
+      {
+        serviceName: 'Battery Replacement',
+        serviceDescription: 'Replace worn battery',
+        price: '$89.99',
+        repairTime: '30 minutes',
+        warranty: '60 days'
+      }
+    ],
+    grandTotal: '$389.98'
+  };
+
+  console.log(`Sending test SMS to ${recipientPhone}...`);
+  return await sendCombinedQuoteSms(testData);
+}
