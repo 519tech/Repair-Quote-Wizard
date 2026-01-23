@@ -1,6 +1,8 @@
-// SMS integration via Zapier webhook for OpenPhone
-// Configure ZAPIER_WEBHOOK_URL environment variable
+// SMS integration via OpenPhone/Quo API
+// Configure OPENPHONE_API_KEY environment variable
 import { storage } from './storage';
+
+const OPENPHONE_API_BASE = 'https://api.openphone.com/v1';
 
 interface QuoteSmsData {
   customerName: string;
@@ -10,6 +12,31 @@ interface QuoteSmsData {
   price: string;
   repairTime?: string;
   warranty?: string;
+}
+
+interface CombinedQuoteSmsData {
+  customerName: string;
+  customerPhone: string;
+  deviceName: string;
+  services: Array<{
+    serviceName: string;
+    price: string;
+  }>;
+  grandTotal: string;
+}
+
+interface UnknownDeviceSmsData {
+  customerName: string;
+  customerPhone: string;
+  deviceDescription: string;
+  issueDescription: string;
+}
+
+interface OpenPhoneNumber {
+  id: string;
+  phoneNumber: string;
+  name?: string;
+  userId?: string;
 }
 
 function replaceMacros(template: string, data: QuoteSmsData): string {
@@ -22,76 +49,113 @@ function replaceMacros(template: string, data: QuoteSmsData): string {
     .replace(/\{warranty\}/g, data.warranty || '');
 }
 
+function formatPhoneE164(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.startsWith('1') && digits.length === 11) {
+    return `+${digits}`;
+  }
+  if (digits.length === 10) {
+    return `+1${digits}`;
+  }
+  return `+${digits}`;
+}
+
+let cachedFromNumber: string | null = null;
+
+async function getFromPhoneNumber(): Promise<string | null> {
+  if (cachedFromNumber) return cachedFromNumber;
+  
+  const apiKey = process.env.OPENPHONE_API_KEY;
+  if (!apiKey) return null;
+  
+  try {
+    const response = await fetch(`${OPENPHONE_API_BASE}/phone-numbers`, {
+      method: 'GET',
+      headers: {
+        'Authorization': apiKey,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (data.data && data.data.length > 0) {
+        cachedFromNumber = data.data[0].phoneNumber;
+        console.log(`OpenPhone from number: ${cachedFromNumber}`);
+        return cachedFromNumber;
+      }
+    } else {
+      console.error('Failed to get OpenPhone numbers:', response.status, await response.text());
+    }
+  } catch (error) {
+    console.error('Error fetching OpenPhone numbers:', error);
+  }
+  return null;
+}
+
+async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean> {
+  const apiKey = process.env.OPENPHONE_API_KEY;
+  
+  if (!apiKey) {
+    console.log('OPENPHONE_API_KEY not configured - SMS not sent');
+    return false;
+  }
+  
+  const fromNumber = await getFromPhoneNumber();
+  if (!fromNumber) {
+    console.error('No OpenPhone number available - SMS not sent');
+    return false;
+  }
+  
+  const formattedTo = formatPhoneE164(to);
+  
+  try {
+    const response = await fetch(`${OPENPHONE_API_BASE}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        content: message,
+        from: fromNumber,
+        to: [formattedTo]
+      })
+    });
+    
+    if (response.ok || response.status === 202) {
+      console.log(`SMS sent via OpenPhone to ${formattedTo}`);
+      return true;
+    } else {
+      const errorText = await response.text();
+      console.error('OpenPhone API error:', response.status, errorText);
+      return false;
+    }
+  } catch (error) {
+    console.error('Failed to send SMS via OpenPhone:', error);
+    return false;
+  }
+}
+
 const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!";
 
 export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
-  const webhookUrl = process.env.ZAPIER_WEBHOOK_URL;
-  
-  if (!webhookUrl) {
-    console.log('ZAPIER_WEBHOOK_URL not configured - SMS not sent');
-    return false;
-  }
-
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
   }
 
   try {
-    // Fetch custom template from database
     const smsTemplate = await storage.getMessageTemplate('sms');
     const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data);
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phone: data.customerPhone,
-        message: message,
-        customerName: data.customerName,
-        deviceName: data.deviceName,
-        serviceName: data.serviceName,
-        price: data.price,
-        repairTime: data.repairTime || '',
-        warranty: data.warranty || ''
-      })
-    });
-
-    if (response.ok) {
-      console.log(`Quote SMS webhook triggered for ${data.customerPhone}`);
-      return true;
-    } else {
-      console.error('Zapier webhook failed:', response.status);
-      return false;
-    }
+    return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to trigger SMS webhook:', error);
+    console.error('Failed to send quote SMS:', error);
     return false;
   }
-}
-
-// Combined multi-service quote SMS
-interface CombinedQuoteSmsData {
-  customerName: string;
-  customerPhone: string;
-  deviceName: string;
-  services: Array<{
-    serviceName: string;
-    price: string;
-  }>;
-  grandTotal: string;
 }
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
-  const webhookUrl = process.env.ZAPIER_WEBHOOK_URL;
-  
-  if (!webhookUrl) {
-    console.log('ZAPIER_WEBHOOK_URL not configured - SMS not sent');
-    return false;
-  }
-
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
@@ -100,60 +164,20 @@ export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<
   try {
     const serviceNames = data.services.map(s => s.serviceName).join(', ');
     const message = `Hi ${data.customerName}! Your RepairQuote for ${data.deviceName}: ${serviceNames}. Total: $${data.grandTotal} plus taxes. Reply for questions!`;
-
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phone: data.customerPhone,
-        message: message,
-        customerName: data.customerName,
-        deviceName: data.deviceName,
-        serviceName: serviceNames,
-        price: data.grandTotal,
-        repairTime: '',
-        warranty: ''
-      })
-    });
-
-    if (response.ok) {
-      console.log(`Combined quote SMS webhook triggered for ${data.customerPhone}`);
-      return true;
-    } else {
-      console.error('Zapier webhook failed:', response.status);
-      return false;
-    }
+    return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to trigger combined SMS webhook:', error);
+    console.error('Failed to send combined quote SMS:', error);
     return false;
   }
-}
-
-// Unknown device quote SMS
-interface UnknownDeviceSmsData {
-  customerName: string;
-  customerPhone: string;
-  deviceDescription: string;
-  issueDescription: string;
 }
 
 export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Promise<boolean> {
-  const webhookUrl = process.env.ZAPIER_WEBHOOK_URL;
-  
-  if (!webhookUrl) {
-    console.log('ZAPIER_WEBHOOK_URL not configured - SMS not sent');
-    return false;
-  }
-
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
   }
 
   try {
-    // Fetch custom template from database
     const smsTemplate = await storage.getMessageTemplate('unknown_device_sms');
     const defaultMessage = `Hi ${data.customerName}! Thanks for contacting RepairQuote. We received your inquiry about "${data.deviceDescription}". Our team will review and contact you with a personalized quote soon!`;
     
@@ -163,29 +187,9 @@ export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Pro
       ?.replace(/\{issueDescription\}/g, data.issueDescription)
       || defaultMessage;
 
-    const response = await fetch(webhookUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        phone: data.customerPhone,
-        message: message,
-        customerName: data.customerName,
-        deviceDescription: data.deviceDescription,
-        issueDescription: data.issueDescription
-      })
-    });
-
-    if (response.ok) {
-      console.log(`Unknown device SMS webhook triggered for ${data.customerPhone}`);
-      return true;
-    } else {
-      console.error('Zapier webhook failed:', response.status);
-      return false;
-    }
+    return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to trigger unknown device SMS webhook:', error);
+    console.error('Failed to send unknown device SMS:', error);
     return false;
   }
 }

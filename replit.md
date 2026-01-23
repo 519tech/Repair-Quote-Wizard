@@ -57,4 +57,4 @@ The application's data model includes:
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
-- **OpenPhone/Zapier SMS**: Integrates with Zapier to send SMS notifications, configured via a `ZAPIER_WEBHOOK_URL` environment variable.
+- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.
