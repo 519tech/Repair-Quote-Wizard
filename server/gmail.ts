@@ -145,6 +145,8 @@ interface CombinedQuoteEmailData {
 function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): string {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
+  const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
+  const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
   const servicesList = data.services.map(s => 
     `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
   ).join('\n');
@@ -155,8 +157,8 @@ function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailDa
     .replace(/\{serviceName\}/g, serviceNames)
     .replace(/\{serviceDescription\}/g, serviceDescriptions)
     .replace(/\{price\}/g, data.grandTotal)
-    .replace(/\{repairTime\}/g, '')
-    .replace(/\{warranty\}/g, '')
+    .replace(/\{repairTime\}/g, repairTimes)
+    .replace(/\{warranty\}/g, warranties)
     .replace(/\{servicesList\}/g, servicesList);
 }
 

@@ -1231,6 +1231,7 @@ export async function registerRoutes(
       // Fetch all device services and calculate prices
       const servicesData: Array<{
         serviceName: string;
+        serviceDescription?: string;
         price: string;
         repairTime?: string;
         warranty?: string;
@@ -1255,6 +1256,7 @@ export async function registerRoutes(
         
         servicesData.push({
           serviceName: service.name,
+          serviceDescription: service.description || undefined,
           price: quotedPrice.toFixed(2),
           repairTime: service.repairTime || undefined,
           warranty: service.warranty || undefined,

@@ -23,6 +23,8 @@ interface CombinedQuoteSmsData {
     serviceName: string;
     serviceDescription?: string;
     price: string;
+    repairTime?: string;
+    warranty?: string;
   }>;
   grandTotal: string;
 }
@@ -132,14 +134,16 @@ const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {dev
 function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): string {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
+  const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
+  const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
   return template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, serviceNames)
     .replace(/\{serviceDescription\}/g, serviceDescriptions)
     .replace(/\{price\}/g, data.grandTotal)
-    .replace(/\{repairTime\}/g, '')
-    .replace(/\{warranty\}/g, '');
+    .replace(/\{repairTime\}/g, repairTimes)
+    .replace(/\{warranty\}/g, warranties);
 }
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
