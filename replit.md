@@ -56,7 +56,7 @@ The application's data model includes:
 - `@replit/vite-plugin-dev-banner`: Displays development environment information.
 
 ### Authentication
-- **Replit Auth**: The admin panel uses Replit's OpenID Connect authentication, supporting Google, GitHub, Apple, X, and email/password login. Users authenticate via `/api/login` and session is managed via PostgreSQL-backed sessions.
+- **Username/Password Auth**: The admin panel uses simple username/password authentication. Sessions are stored in PostgreSQL and persist for 1 week. Login endpoint: `/api/admin/login`, logout: `/api/admin/logout`.
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.

@@ -12,6 +12,7 @@ import {
   brandDeviceTypes,
   brandServiceCategories,
   messageTemplates,
+  users,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -134,6 +135,10 @@ export interface IStorage {
   getMessageTemplates(): Promise<MessageTemplate[]>;
   getMessageTemplate(type: string): Promise<MessageTemplate | undefined>;
   upsertMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate>;
+
+  // Users
+  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined>;
+  createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -569,6 +574,21 @@ export class DatabaseStorage implements IStorage {
     }
     const [template] = await db.insert(messageTemplates).values(data).returning();
     return template;
+  }
+
+  // Users
+  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined> {
+    const [user] = await db.select({
+      id: users.id,
+      username: users.username,
+      passwordHash: users.passwordHash,
+    }).from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  async createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }> {
+    const [user] = await db.insert(users).values({ username, passwordHash }).returning({ id: users.id, username: users.username });
+    return user;
   }
 }
 

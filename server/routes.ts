@@ -17,15 +17,25 @@ import {
 import { z } from "zod";
 import multer from "multer";
 import * as XLSX from "xlsx";
+import bcrypt from "bcrypt";
+import session from "express-session";
+import connectPg from "connect-pg-simple";
 import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "./gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
-import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 
-// Admin authentication middleware - now uses proper auth
+// Extend express-session types
+declare module "express-session" {
+  interface SessionData {
+    userId?: string;
+    username?: string;
+    isAdmin?: boolean;
+  }
+}
+
+// Admin authentication middleware
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  // Check if user is authenticated via Replit Auth
-  if (!req.isAuthenticated || !req.isAuthenticated()) {
+  if (!req.session?.isAdmin) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
@@ -51,12 +61,59 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  // Setup Replit Auth before other routes
-  await setupAuth(app);
-  registerAuthRoutes(app);
+  // Setup session middleware
+  const pgStore = connectPg(session);
+  const sessionStore = new pgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false,
+    tableName: "sessions",
+  });
+  
+  app.set("trust proxy", 1);
+  app.use(session({
+    store: sessionStore,
+    secret: process.env.SESSION_SECRET!,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+    },
+  }));
 
   // Register Object Storage routes for file uploads
   registerObjectStorageRoutes(app);
+
+  // Admin login with username/password
+  app.post("/api/admin/login", async (req, res) => {
+    try {
+      const { username, password } = req.body;
+      
+      if (!username || !password) {
+        return res.status(400).json({ error: "Username and password required" });
+      }
+      
+      const user = await storage.getUserByUsername(username);
+      if (!user) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      
+      const validPassword = await bcrypt.compare(password, user.passwordHash);
+      if (!validPassword) {
+        return res.status(401).json({ error: "Invalid username or password" });
+      }
+      
+      req.session.userId = user.id;
+      req.session.username = user.username;
+      req.session.isAdmin = true;
+      
+      res.json({ success: true, username: user.username });
+    } catch (error) {
+      console.error('Login error:', error);
+      res.status(500).json({ error: "Login failed" });
+    }
+  });
 
   app.post("/api/admin/logout", (req, res) => {
     req.session.destroy((err) => {
@@ -69,7 +126,10 @@ export async function registerRoutes(
   });
 
   app.get("/api/admin/me", (req, res) => {
-    res.json({ isAdmin: req.session?.isAdmin === true });
+    res.json({ 
+      isAdmin: req.session?.isAdmin === true,
+      username: req.session?.username || null,
+    });
   });
 
   // Device Types
