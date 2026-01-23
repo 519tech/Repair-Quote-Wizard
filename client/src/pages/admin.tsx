@@ -4123,10 +4123,12 @@ The RepairQuote Team`,
   const macros = [
     { name: "{customerName}", description: "Customer's name" },
     { name: "{deviceName}", description: "Device name (e.g., iPhone 15 Pro)" },
-    { name: "{serviceName}", description: "Service name (e.g., Screen Replacement)" },
-    { name: "{price}", description: "Quoted price (number only, add $ manually)" },
-    { name: "{repairTime}", description: "Estimated repair time" },
-    { name: "{warranty}", description: "Warranty information" },
+    { name: "{serviceName}", description: "Service name(s) - comma-separated for multiple" },
+    { name: "{serviceDescription}", description: "Service description(s) - semicolon-separated for multiple" },
+    { name: "{price}", description: "Total quoted price (number only, add $ manually)" },
+    { name: "{repairTime}", description: "Repair time(s) - comma-separated for multiple" },
+    { name: "{warranty}", description: "Warranty info - comma-separated for multiple" },
+    { name: "{servicesList}", description: "Formatted list of all selected services with details" },
   ];
 
   const unknownDeviceMacros = [
