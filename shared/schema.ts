@@ -284,3 +284,6 @@ export type DeviceServiceWithRelations = DeviceService & {
   part: Part | null;
   additionalParts?: DeviceServicePartWithPart[];
 };
+
+// Auth models
+export * from "./models/auth";

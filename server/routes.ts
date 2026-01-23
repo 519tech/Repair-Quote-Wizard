@@ -20,10 +20,12 @@ import * as XLSX from "xlsx";
 import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "./gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 
-// Admin authentication middleware
+// Admin authentication middleware - now uses proper auth
 function requireAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.session?.isAdmin) {
+  // Check if user is authenticated via Replit Auth
+  if (!req.isAuthenticated || !req.isAuthenticated()) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
@@ -49,29 +51,12 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  // Setup Replit Auth before other routes
+  await setupAuth(app);
+  registerAuthRoutes(app);
+
   // Register Object Storage routes for file uploads
   registerObjectStorageRoutes(app);
-
-  // Admin authentication endpoints
-  app.post("/api/admin/login", async (req, res) => {
-    try {
-      const { password } = req.body;
-      const adminPassword = process.env.ADMIN_PASSWORD;
-      
-      if (!adminPassword) {
-        return res.status(500).json({ error: "Admin password not configured" });
-      }
-      
-      if (password === adminPassword) {
-        req.session.isAdmin = true;
-        res.json({ success: true });
-      } else {
-        res.status(401).json({ error: "Invalid password" });
-      }
-    } catch (error) {
-      res.status(500).json({ error: "Login failed" });
-    }
-  });
 
   app.post("/api/admin/logout", (req, res) => {
     req.session.destroy((err) => {

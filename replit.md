@@ -55,6 +55,9 @@ The application's data model includes:
 - `@replit/vite-plugin-cartographer`: Development tooling.
 - `@replit/vite-plugin-dev-banner`: Displays development environment information.
 
+### Authentication
+- **Replit Auth**: The admin panel uses Replit's OpenID Connect authentication, supporting Google, GitHub, Apple, X, and email/password login. Users authenticate via `/api/login` and session is managed via PostgreSQL-backed sessions.
+
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
 - **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.

@@ -12,55 +12,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, User } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { ImageInput } from "@/components/ImageInput";
+import { useAuth } from "@/hooks/use-auth";
 import type { DeviceType, Device, Part, Service, ServiceCategory, DeviceServiceWithRelations, Brand, BrandDeviceType, MessageTemplate } from "@shared/schema";
 
 export default function Admin() {
   const { toast } = useToast();
-  const [password, setPassword] = useState("");
-
-  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean }>({
-    queryKey: ["/api/admin/me"],
-  });
-
-  const loginMutation = useMutation({
-    mutationFn: async (password: string) => {
-      const res = await apiRequest("POST", "/api/admin/login", { password });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Login failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
-      setPassword("");
-      toast({ title: "Logged in successfully" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const logoutMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/admin/logout", {});
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
-      toast({ title: "Logged out" });
-    },
-  });
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    loginMutation.mutate(password);
-  };
+  const { user, isLoading: authLoading, isAuthenticated, logout, isLoggingOut } = useAuth();
 
   if (authLoading) {
     return (
@@ -70,7 +32,7 @@ export default function Admin() {
     );
   }
 
-  if (!authStatus?.isAdmin) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background">
         <header className="border-b bg-card">
@@ -96,30 +58,18 @@ export default function Admin() {
                 <Lock className="h-6 w-6 text-primary" />
               </div>
               <CardTitle>Admin Login</CardTitle>
-              <CardDescription>Enter your admin password to continue</CardDescription>
+              <CardDescription>Sign in with your account to access the admin panel</CardDescription>
             </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Enter admin password"
-                    required
-                    data-testid="input-admin-password"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-admin-login">
-                  {loginMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Login"
-                  )}
-                </Button>
-              </form>
+            <CardContent className="space-y-4">
+              <Button asChild className="w-full" data-testid="button-admin-login">
+                <a href="/api/login">
+                  <User className="h-4 w-4 mr-2" />
+                  Sign In
+                </a>
+              </Button>
+              <p className="text-sm text-muted-foreground text-center">
+                Sign in with Google, email, or other providers
+              </p>
             </CardContent>
           </Card>
         </main>
@@ -142,15 +92,21 @@ export default function Admin() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {user && (
+              <span className="text-sm text-muted-foreground hidden sm:inline">
+                {user.firstName || user.email || 'Admin'}
+              </span>
+            )}
             <Button 
               variant="ghost" 
-              size="icon" 
-              onClick={() => logoutMutation.mutate()}
-              disabled={logoutMutation.isPending}
+              size="icon"
+              asChild
               title="Logout"
               data-testid="button-admin-logout"
             >
-              <LogOut className="h-4 w-4" />
+              <a href="/api/logout">
+                <LogOut className="h-4 w-4" />
+              </a>
             </Button>
             <ThemeToggle />
           </div>
