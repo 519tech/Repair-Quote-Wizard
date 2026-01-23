@@ -741,6 +741,7 @@ export default function Home() {
                     <div className="text-right">
                       <span className="text-xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
                       <p className="text-xs text-muted-foreground">plus taxes</p>
+                      <p className="text-xs text-muted-foreground">prices include labour</p>
                     </div>
                   </div>
                 </div>
