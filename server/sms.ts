@@ -60,37 +60,10 @@ function formatPhoneE164(phone: string): string {
   return `+${digits}`;
 }
 
-let cachedFromNumber: string | null = null;
+const OPENPHONE_FROM_NUMBER = '+12264449927';
 
-async function getFromPhoneNumber(): Promise<string | null> {
-  if (cachedFromNumber) return cachedFromNumber;
-  
-  const apiKey = process.env.OPENPHONE_API_KEY;
-  if (!apiKey) return null;
-  
-  try {
-    const response = await fetch(`${OPENPHONE_API_BASE}/phone-numbers`, {
-      method: 'GET',
-      headers: {
-        'Authorization': apiKey,
-        'Content-Type': 'application/json'
-      }
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      if (data.data && data.data.length > 0) {
-        cachedFromNumber = data.data[0].phoneNumber;
-        console.log(`OpenPhone from number: ${cachedFromNumber}`);
-        return cachedFromNumber;
-      }
-    } else {
-      console.error('Failed to get OpenPhone numbers:', response.status, await response.text());
-    }
-  } catch (error) {
-    console.error('Error fetching OpenPhone numbers:', error);
-  }
-  return null;
+function getFromPhoneNumber(): string {
+  return OPENPHONE_FROM_NUMBER;
 }
 
 async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean> {
@@ -101,11 +74,7 @@ async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean
     return false;
   }
   
-  const fromNumber = await getFromPhoneNumber();
-  if (!fromNumber) {
-    console.error('No OpenPhone number available - SMS not sent');
-    return false;
-  }
+  const fromNumber = getFromPhoneNumber();
   
   const formattedTo = formatPhoneE164(to);
   
