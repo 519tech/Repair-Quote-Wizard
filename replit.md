@@ -34,6 +34,7 @@ The application's data model includes:
 - **Internal Counter Lookup**: A streamlined interface at `/internal` for staff to quickly look up service options and prices for devices.
 - **Multi-Service Selection**: Customers can select multiple services within a repair category or across categories, with a running total displayed.
 - **Pricing Logic**: Server-side quote calculation ensures accurate pricing. Services without parts can be marked as "Labour only" to display prices.
+- **Multi-Part Pricing**: Services can require multiple parts. Primary parts are charged at 100%, while additional parts are charged at the service's "Secondary Part %" (configurable, default 50%). Quote calculation sums: labor + (primary part cost × markup) + (sum of additional parts × secondary% × markup).
 - **Unique Constraints**: Database-level constraints prevent duplicate entries for devices, services, and device-service links.
 
 ## External Dependencies
