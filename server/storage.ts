@@ -12,7 +12,6 @@ import {
   brandDeviceTypes,
   brandServiceCategories,
   messageTemplates,
-  users,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -46,6 +45,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, ilike, sql } from "drizzle-orm";
+import { users } from "@shared/models/auth";
 
 export interface IStorage {
   // Device Types
