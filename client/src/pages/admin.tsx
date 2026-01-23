@@ -161,8 +161,7 @@ export default function Admin() {
         <Tabs defaultValue="device-types" className="space-y-6">
           <TabsList className="flex flex-wrap gap-1 h-auto">
             <TabsTrigger value="device-types" data-testid="tab-device-types">Types</TabsTrigger>
-            <TabsTrigger value="brands" data-testid="tab-brands">Brands</TabsTrigger>
-                        <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
+            <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
             <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
             <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
@@ -173,11 +172,6 @@ export default function Admin() {
           <TabsContent value="device-types">
             <DeviceTypesTab toast={toast} />
           </TabsContent>
-
-          <TabsContent value="brands">
-            <BrandsTab toast={toast} />
-          </TabsContent>
-
           
           <TabsContent value="devices">
             <DevicesTab toast={toast} />
