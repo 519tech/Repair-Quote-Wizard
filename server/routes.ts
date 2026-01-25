@@ -1630,6 +1630,31 @@ export async function registerRoutes(
     }
   });
 
+  // Hide prices until contact setting
+  app.get("/api/settings/hide-prices-until-contact", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'hide_prices_until_contact');
+      res.json({ enabled: setting ? setting.content === 'true' : false });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get setting" });
+    }
+  });
+
+  app.post("/api/settings/hide-prices-until-contact", requireAdmin, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      await storage.upsertMessageTemplate({
+        type: 'hide_prices_until_contact',
+        content: enabled ? 'true' : 'false'
+      });
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error('Hide prices setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
   app.post("/api/repairdesk/check-stock", async (req, res) => {
     try {
       // Check if stock checking is enabled
