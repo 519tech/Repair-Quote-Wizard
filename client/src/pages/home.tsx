@@ -785,14 +785,13 @@ export default function Home() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
-                              {(quote.allPartSkus?.length || quote.partSku) && (
+                              {quote.partSku && (
                                 stockLoading ? (
                                   <span className="flex items-center gap-1 text-muted-foreground">
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                     <span>Checking stock...</span>
                                   </span>
-                                ) : ((quote.allPartSkus && quote.allPartSkus.length > 0 && quote.allPartSkus.every(sku => stockData[sku] && stockData[sku] > 0)) ||
-                                     (quote.partSku && !quote.allPartSkus?.length && stockData[quote.partSku] && stockData[quote.partSku] > 0)) ? (
+                                ) : stockData[quote.partSku] && stockData[quote.partSku] > 0 ? (
                                   <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
                                     In Stock
                                   </Badge>
@@ -901,8 +900,7 @@ export default function Home() {
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
-                            {((q.allPartSkus && q.allPartSkus.length > 0 && q.allPartSkus.every(sku => stockData[sku] && stockData[sku] > 0)) ||
-                              (q.partSku && !q.allPartSkus?.length && stockData[q.partSku] && stockData[q.partSku] > 0)) && (
+                            {q.partSku && stockData[q.partSku] && stockData[q.partSku] > 0 && (
                               <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                 <Package className="h-3 w-3 mr-1" />
                                 In Stock
