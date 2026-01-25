@@ -1525,8 +1525,11 @@ export async function registerRoutes(
 
   app.get("/api/repairdesk/authorize", requireAdmin, (req, res) => {
     try {
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers['x-forwarded-host'] || req.get('host');
+      // Handle headers that may be arrays or strings
+      const protoHeader = req.headers['x-forwarded-proto'];
+      const hostHeader = req.headers['x-forwarded-host'];
+      const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+      const host = (Array.isArray(hostHeader) ? hostHeader[0] : hostHeader) || req.get('host');
       const redirectUri = `${protocol}://${host}/api/repairdesk/callback`;
       
       // Generate and store state in session for CSRF protection
@@ -1568,8 +1571,11 @@ export async function registerRoutes(
       // Clear the used state to prevent replay
       delete (req.session as any).repairDeskOAuthState;
 
-      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
-      const host = req.headers['x-forwarded-host'] || req.get('host');
+      // Handle headers that may be arrays or strings
+      const protoHeader = req.headers['x-forwarded-proto'];
+      const hostHeader = req.headers['x-forwarded-host'];
+      const protocol = (Array.isArray(protoHeader) ? protoHeader[0] : protoHeader) || req.protocol;
+      const host = (Array.isArray(hostHeader) ? hostHeader[0] : hostHeader) || req.get('host');
       const redirectUri = `${protocol}://${host}/api/repairdesk/callback`;
       
       await exchangeCodeForToken(code as string, redirectUri);
