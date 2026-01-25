@@ -911,7 +911,12 @@ export default function Home() {
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
                             {q.partSku && (
-                              stockData[q.partSku] && stockData[q.partSku] > 0 ? (
+                              stockLoading ? (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <span>Checking stock...</span>
+                                </span>
+                              ) : stockData[q.partSku] && stockData[q.partSku] > 0 ? (
                                 <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                   <Package className="h-3 w-3 mr-1" />
                                   In Stock
