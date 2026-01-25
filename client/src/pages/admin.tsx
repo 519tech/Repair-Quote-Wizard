@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -4044,8 +4045,18 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [testPhone, setTestPhone] = useState("");
 
   // RepairDesk Integration (API Key based)
-  const { data: repairDeskStatus, refetch: refetchRepairDeskStatus } = useQuery<{ connected: boolean }>({
+  const { data: repairDeskStatus, refetch: refetchRepairDeskStatus } = useQuery<{ connected: boolean; stockCheckEnabled: boolean }>({
     queryKey: ["/api/repairdesk/status"],
+  });
+
+  const toggleStockCheck = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("POST", "/api/repairdesk/stock-enabled", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/repairdesk/status"] });
+      toast({ title: "Setting updated" });
+    },
   });
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
@@ -4222,7 +4233,7 @@ $\{servicePrice} plus taxes
           </CardTitle>
           <CardDescription>API key connection for real-time parts inventory status</CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
           <div className="flex items-center gap-3">
             {repairDeskStatus?.connected ? (
               <>
@@ -4231,7 +4242,7 @@ $\{servicePrice} plus taxes
                   Connected
                 </Badge>
                 <span className="text-sm text-muted-foreground">
-                  Parts inventory status will display on quotes
+                  API key configured
                 </span>
               </>
             ) : (
@@ -4245,6 +4256,21 @@ $\{servicePrice} plus taxes
               </>
             )}
           </div>
+          
+          {repairDeskStatus?.connected && (
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <p className="font-medium text-sm">Show Stock Status</p>
+                <p className="text-xs text-muted-foreground">Display "In Stock" / "Parts order may be required" on quotes</p>
+              </div>
+              <Switch
+                checked={repairDeskStatus?.stockCheckEnabled ?? true}
+                onCheckedChange={(checked) => toggleStockCheck.mutate(checked)}
+                disabled={toggleStockCheck.isPending}
+                data-testid="switch-stock-check"
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

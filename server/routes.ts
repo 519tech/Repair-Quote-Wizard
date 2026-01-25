@@ -1523,14 +1523,64 @@ export async function registerRoutes(
   app.get("/api/repairdesk/status", requireAdmin, async (req, res) => {
     try {
       const connected = await isRepairDeskConnected();
-      res.json({ connected });
+      // Get stock check enabled setting
+      const templates = await storage.getMessageTemplates();
+      const stockSetting = templates.find(t => t.type === 'stock_check_enabled');
+      const stockCheckEnabled = stockSetting ? stockSetting.content === 'true' : true; // Default enabled
+      res.json({ connected, stockCheckEnabled });
     } catch (error) {
       res.status(500).json({ error: "Failed to check RepairDesk status" });
     }
   });
 
+  // Public endpoint to check if stock checking is enabled
+  app.get("/api/repairdesk/stock-enabled", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const stockSetting = templates.find(t => t.type === 'stock_check_enabled');
+      const enabled = stockSetting ? stockSetting.content === 'true' : true; // Default enabled
+      const connected = await isRepairDeskConnected();
+      res.json({ enabled: enabled && connected });
+    } catch (error) {
+      res.json({ enabled: false });
+    }
+  });
+
+  // Toggle stock check enabled setting
+  app.post("/api/repairdesk/stock-enabled", requireAdmin, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      const templates = await storage.getMessageTemplates();
+      const existing = templates.find(t => t.type === 'stock_check_enabled');
+      
+      if (existing) {
+        await storage.updateMessageTemplate(existing.id, {
+          content: enabled ? 'true' : 'false'
+        });
+      } else {
+        await storage.createMessageTemplate({
+          type: 'stock_check_enabled',
+          subject: 'Stock Check Setting',
+          content: enabled ? 'true' : 'false'
+        });
+      }
+      res.json({ success: true, enabled });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
   app.post("/api/repairdesk/check-stock", async (req, res) => {
     try {
+      // Check if stock checking is enabled
+      const templates = await storage.getMessageTemplates();
+      const stockSetting = templates.find(t => t.type === 'stock_check_enabled');
+      const stockCheckEnabled = stockSetting ? stockSetting.content === 'true' : true;
+      
+      if (!stockCheckEnabled) {
+        return res.json({}); // Return empty if disabled
+      }
+
       const { skus } = req.body;
       if (!Array.isArray(skus)) {
         return res.status(400).json({ error: "skus must be an array" });

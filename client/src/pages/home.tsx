@@ -272,14 +272,20 @@ export default function Home() {
       // Check stock for all parts with SKUs (runs in background)
       const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
       if (skus.length > 0) {
-        setStockLoading(true);
-        fetch('/api/repairdesk/check-stock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ skus }),
-        })
-          .then(res => res.ok ? res.json() : {})
-          .then(stockInfo => setStockData(stockInfo))
+        // First check if stock checking is enabled
+        fetch('/api/repairdesk/stock-enabled')
+          .then(res => res.json())
+          .then(({ enabled }) => {
+            if (!enabled) return;
+            setStockLoading(true);
+            return fetch('/api/repairdesk/check-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ skus }),
+            });
+          })
+          .then(res => res?.ok ? res.json() : {})
+          .then(stockInfo => stockInfo && setStockData(stockInfo))
           .catch(() => console.log('Stock check not available'))
           .finally(() => setStockLoading(false));
       }
