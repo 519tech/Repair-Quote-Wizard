@@ -152,6 +152,7 @@ export const services = pgTable("services", {
   notes: text("notes"),
   labourOnly: boolean("labour_only").notNull().default(false),
   imageUrl: text("image_url"),
+  bypassMultiDiscount: boolean("bypass_multi_discount").notNull().default(false),
 });
 
 export const servicesRelations = relations(services, ({ one }) => ({
