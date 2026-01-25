@@ -1228,6 +1228,17 @@ export async function registerRoutes(
       // Service is available if it has parts OR is marked as labour-only
       const isAvailable = hasPart || isLabourOnly;
       
+      // Collect all part SKUs for stock checking
+      const allPartSkus: string[] = [];
+      if (deviceService.part?.sku) {
+        allPartSkus.push(deviceService.part.sku);
+      }
+      for (const ap of additionalParts) {
+        if (ap.part?.sku) {
+          allPartSkus.push(ap.part.sku);
+        }
+      }
+      
       res.json({
         deviceServiceId: deviceService.id,
         deviceName: deviceService.device.name,
@@ -1241,6 +1252,7 @@ export async function registerRoutes(
         partCost: deviceService.part?.price || "0.00",
         partSku: deviceService.part?.sku || null,
         partName: deviceService.part?.name || null,
+        allPartSkus: allPartSkus,
         additionalPartsCount: additionalParts.filter(ap => !ap.isPrimary).length,
         additionalPartsCost: additionalPartsCost.toFixed(2),
         totalPartCost: totalPartCost.toFixed(2),

@@ -53,6 +53,7 @@ export default function Home() {
     categoryDescription?: string;
     categoryImageUrl?: string;
     partSku?: string;
+    allPartSkus?: string[];
     inStock?: boolean;
     bypassMultiDiscount?: boolean;
   }>>([]);
@@ -234,6 +235,7 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: quote.partSku || undefined,
+              allPartSkus: quote.allPartSkus || [],
               bypassMultiDiscount: quote.bypassMultiDiscount || false,
             };
           } catch {
@@ -253,6 +255,7 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: undefined,
+              allPartSkus: [],
               bypassMultiDiscount: false,
             };
           }
@@ -279,7 +282,15 @@ export default function Home() {
       setAllQuotes(quotes);
       
       // Check stock for all parts with SKUs (runs in background)
-      const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
+      const allSkus = new Set<string>();
+      quotes.forEach(q => {
+        if (q.allPartSkus && q.allPartSkus.length > 0) {
+          q.allPartSkus.forEach(sku => allSkus.add(sku));
+        } else if (q.partSku) {
+          allSkus.add(q.partSku);
+        }
+      });
+      const skus = Array.from(allSkus);
       if (skus.length > 0) {
         // First check if stock checking is enabled
         fetch('/api/repairdesk/stock-enabled')
@@ -774,13 +785,14 @@ export default function Home() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
-                              {quote.partSku && (
+                              {(quote.allPartSkus?.length || quote.partSku) && (
                                 stockLoading ? (
                                   <span className="flex items-center gap-1 text-muted-foreground">
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                     <span>Checking stock...</span>
                                   </span>
-                                ) : stockData[quote.partSku] && stockData[quote.partSku] > 0 ? (
+                                ) : ((quote.allPartSkus && quote.allPartSkus.length > 0 && quote.allPartSkus.every(sku => stockData[sku] && stockData[sku] > 0)) ||
+                                     (quote.partSku && !quote.allPartSkus?.length && stockData[quote.partSku] && stockData[quote.partSku] > 0)) ? (
                                   <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
                                     In Stock
                                   </Badge>
@@ -889,7 +901,8 @@ export default function Home() {
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
-                            {q.partSku && stockData[q.partSku] && stockData[q.partSku] > 0 && (
+                            {((q.allPartSkus && q.allPartSkus.length > 0 && q.allPartSkus.every(sku => stockData[sku] && stockData[sku] > 0)) ||
+                              (q.partSku && !q.allPartSkus?.length && stockData[q.partSku] && stockData[q.partSku] > 0)) && (
                               <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                 <Package className="h-3 w-3 mr-1" />
                                 In Stock
