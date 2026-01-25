@@ -364,6 +364,9 @@ export async function registerRoutes(
       const brandsMap = new Map(allBrands.map(b => [b.id, b]));
       const typesMap = new Map(allTypes.map(t => [t.id, t]));
       
+      // Split query into words for flexible matching
+      const queryWords = query.split(/\s+/).filter(w => w.length > 0);
+      
       const results = allDevices
         .map(device => ({
           ...device,
@@ -374,7 +377,10 @@ export async function registerRoutes(
           const deviceName = device.name.toLowerCase();
           const brandName = device.brand?.name?.toLowerCase() || "";
           const typeName = device.deviceType?.name?.toLowerCase() || "";
-          return deviceName.includes(query) || brandName.includes(query) || typeName.includes(query);
+          const fullText = `${brandName} ${deviceName} ${typeName}`;
+          
+          // All query words must be found somewhere in the full text
+          return queryWords.every(word => fullText.includes(word));
         })
         .slice(0, 20);
       
