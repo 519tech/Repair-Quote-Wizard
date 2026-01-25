@@ -23,6 +23,7 @@ import connectPg from "connect-pg-simple";
 import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, sendTestEmail } from "./gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
+import { getRepairDeskAuthUrl, exchangeCodeForToken, isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku } from "./repairdesk";
 
 // Extend express-session types
 declare module "express-session" {
@@ -1509,6 +1510,105 @@ export async function registerRoutes(
       res.json(template);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update message template" });
+    }
+  });
+
+  // RepairDesk OAuth Routes
+  app.get("/api/repairdesk/status", requireAdmin, async (req, res) => {
+    try {
+      const connected = await isRepairDeskConnected();
+      res.json({ connected });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check RepairDesk status" });
+    }
+  });
+
+  app.get("/api/repairdesk/authorize", requireAdmin, (req, res) => {
+    try {
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const redirectUri = `${protocol}://${host}/api/repairdesk/callback`;
+      
+      // Generate and store state in session for CSRF protection
+      const state = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+      (req.session as any).repairDeskOAuthState = state;
+      
+      const authUrl = getRepairDeskAuthUrl(redirectUri, state);
+      res.json({ authUrl });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to generate auth URL" });
+    }
+  });
+
+  app.get("/api/repairdesk/callback", async (req, res) => {
+    try {
+      const { code, error, state } = req.query;
+      
+      if (error) {
+        return res.redirect("/admin?repairdesk=error&message=" + encodeURIComponent(error as string));
+      }
+      
+      if (!code) {
+        return res.redirect("/admin?repairdesk=error&message=No%20authorization%20code%20received");
+      }
+
+      // Validate OAuth state from session - stored when admin initiated OAuth flow
+      // Session cookie is preserved through the redirect since it's same-site
+      const storedState = (req.session as any).repairDeskOAuthState;
+      if (!storedState || storedState !== state) {
+        // State mismatch - either session expired, different browser, or CSRF attempt
+        return res.redirect("/admin?repairdesk=error&message=Session%20expired%20or%20invalid%20state");
+      }
+      
+      // Verify admin session is still valid (user initiated this OAuth flow)
+      if (!(req.session as any).isAdmin) {
+        return res.redirect("/admin?repairdesk=error&message=Admin%20session%20expired");
+      }
+      
+      // Clear the used state to prevent replay
+      delete (req.session as any).repairDeskOAuthState;
+
+      const protocol = req.headers['x-forwarded-proto'] || req.protocol;
+      const host = req.headers['x-forwarded-host'] || req.get('host');
+      const redirectUri = `${protocol}://${host}/api/repairdesk/callback`;
+      
+      await exchangeCodeForToken(code as string, redirectUri);
+      res.redirect("/admin?repairdesk=success");
+    } catch (error: any) {
+      console.error("RepairDesk OAuth callback error:", error);
+      res.redirect("/admin?repairdesk=error&message=" + encodeURIComponent(error.message || "Connection failed"));
+    }
+  });
+
+  app.post("/api/repairdesk/disconnect", requireAdmin, async (req, res) => {
+    try {
+      await disconnectRepairDesk();
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to disconnect RepairDesk" });
+    }
+  });
+
+  app.post("/api/repairdesk/check-stock", async (req, res) => {
+    try {
+      const { skus } = req.body;
+      if (!Array.isArray(skus)) {
+        return res.status(400).json({ error: "skus must be an array" });
+      }
+      
+      // Limit the number of SKUs per request to prevent abuse
+      if (skus.length > 50) {
+        return res.status(400).json({ error: "Maximum 50 SKUs per request" });
+      }
+
+      const stockMap = await checkInventoryBySku(skus);
+      const result: Record<string, number> = {};
+      stockMap.forEach((qty, sku) => {
+        result[sku] = qty;
+      });
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to check stock" });
     }
   });
 

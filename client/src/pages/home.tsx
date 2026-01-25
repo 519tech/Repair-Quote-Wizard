@@ -6,7 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
@@ -51,7 +52,10 @@ export default function Home() {
     categoryName?: string;
     categoryDescription?: string;
     categoryImageUrl?: string;
+    partSku?: string;
+    inStock?: boolean;
   }>>([]);
+  const [stockData, setStockData] = useState<Record<string, number>>({});
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
@@ -221,6 +225,7 @@ export default function Home() {
               categoryName: ds.service.category?.name,
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
+              partSku: quote.partSku || undefined,
             };
           } catch {
             return {
@@ -238,6 +243,7 @@ export default function Home() {
               categoryName: ds.service.category?.name,
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
+              partSku: undefined,
             };
           }
         })
@@ -261,6 +267,24 @@ export default function Home() {
       }
       
       setAllQuotes(quotes);
+
+      // Check stock for all parts with SKUs
+      const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
+      if (skus.length > 0) {
+        try {
+          const stockRes = await fetch('/api/repairdesk/check-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skus }),
+          });
+          if (stockRes.ok) {
+            const stockInfo = await stockRes.json();
+            setStockData(stockInfo);
+          }
+        } catch (error) {
+          console.log('Stock check not available');
+        }
+      }
     } finally {
       setQuotesLoading(false);
     }
@@ -710,9 +734,15 @@ export default function Home() {
                             <p className="text-xs text-muted-foreground mt-1">{quote.serviceDescription}</p>
                           )}
                           {quote.isAvailable && (
-                            <div className="flex gap-2 mt-1 text-xs text-muted-foreground">
+                            <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
+                              {quote.partSku && stockData[quote.partSku] && stockData[quote.partSku] > 0 && (
+                                <Badge variant="secondary" className="text-xs py-0 px-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                  <Package className="h-3 w-3 mr-1" />
+                                  In Stock
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </div>

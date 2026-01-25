@@ -273,6 +273,19 @@ export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).
 export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 
+// RepairDesk OAuth tokens storage
+export const repairDeskTokens = pgTable("repairdesk_tokens", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  accessToken: text("access_token").notNull(),
+  refreshToken: text("refresh_token").notNull(),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`now()`),
+});
+
+export const insertRepairDeskTokenSchema = createInsertSchema(repairDeskTokens).omit({ id: true, createdAt: true });
+export type InsertRepairDeskToken = z.infer<typeof insertRepairDeskTokenSchema>;
+export type RepairDeskToken = typeof repairDeskTokens.$inferSelect;
+
 // Extended types for frontend with relations
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
 export type BrandDeviceTypeWithRelations = BrandDeviceType & { brand: Brand; deviceType: DeviceType };

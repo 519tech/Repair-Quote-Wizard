@@ -61,3 +61,11 @@ The application's data model includes:
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
 - **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.
+
+### RepairDesk Integration
+- **OAuth 2.0 Connection**: The application integrates with RepairDesk POS software using OAuth 2.0 authentication flow.
+- **Inventory Checking**: When connected, the application queries RepairDesk's inventory API to check parts stock levels by SKU.
+- **Stock Status Display**: Services with parts in stock (quantity > 0) display a green "In Stock" badge in the quote flow.
+- **Admin Management**: Admins can connect/disconnect RepairDesk from the Settings tab in the admin panel.
+- **Environment Variables**: `REPAIRDESK_CLIENT_ID` and `REPAIRDESK_CLIENT_SECRET` store OAuth credentials.
+- **Token Storage**: OAuth tokens are stored in the `repairdesk_tokens` database table with automatic refresh handling.
