@@ -267,24 +267,6 @@ export default function Home() {
       }
       
       setAllQuotes(quotes);
-
-      // Check stock for all parts with SKUs
-      const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
-      if (skus.length > 0) {
-        try {
-          const stockRes = await fetch('/api/repairdesk/check-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skus }),
-          });
-          if (stockRes.ok) {
-            const stockInfo = await stockRes.json();
-            setStockData(stockInfo);
-          }
-        } catch (error) {
-          console.log('Stock check not available');
-        }
-      }
     } finally {
       setQuotesLoading(false);
     }
@@ -319,6 +301,29 @@ export default function Home() {
       }
       return next;
     });
+  };
+
+  const handleContinueToQuote = async () => {
+    setView('quote');
+    
+    // Check stock for selected services with SKUs
+    const selectedQuotes = allQuotes.filter(q => selectedServices.has(q.serviceId));
+    const skus = selectedQuotes.filter(q => q.partSku).map(q => q.partSku!);
+    if (skus.length > 0) {
+      try {
+        const stockRes = await fetch('/api/repairdesk/check-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skus }),
+        });
+        if (stockRes.ok) {
+          const stockInfo = await stockRes.json();
+          setStockData(stockInfo);
+        }
+      } catch (error) {
+        console.log('Stock check not available');
+      }
+    }
   };
 
   const getSelectedQuotes = () => {
@@ -759,7 +764,7 @@ export default function Home() {
                               </p>
                               <p className="text-xs text-muted-foreground">plus taxes</p>
                             </div>
-                            <Button size="sm" onClick={() => setView('quote')} data-testid="button-continue-quote">
+                            <Button size="sm" onClick={handleContinueToQuote} data-testid="button-continue-quote">
                               <ChevronRight className="h-4 w-4 mr-1" />
                               Continue
                             </Button>
