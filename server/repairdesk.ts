@@ -15,6 +15,54 @@ function getApiKey(): string | null {
   return process.env.REPAIRDESK_API_KEY || null;
 }
 
+// Cache inventory data to avoid repeated API calls
+let inventoryCache: Map<string, number> = new Map();
+let cacheTimestamp: number = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function loadFullInventory(apiKey: string): Promise<Map<string, number>> {
+  const stockMap = new Map<string, number>();
+  let page = 1;
+  let totalPages = 1;
+  
+  try {
+    do {
+      const response = await fetch(
+        `${REPAIRDESK_API_BASE}/inventory?api_key=${encodeURIComponent(apiKey)}&page=${page}`,
+        { headers: { "Content-Type": "application/json" } }
+      );
+
+      if (!response.ok) {
+        console.error(`Failed to fetch inventory page ${page}:`, response.status);
+        break;
+      }
+
+      const data = await response.json();
+      
+      if (data?.data?.inventoryListData && Array.isArray(data.data.inventoryListData)) {
+        for (const item of data.data.inventoryListData) {
+          if (item.sku) {
+            const qty = parseInt(item.in_stock || "0", 10) || 0;
+            stockMap.set(item.sku, qty);
+          }
+        }
+      }
+      
+      if (data?.data?.pagination) {
+        totalPages = data.data.pagination.total_pages || 1;
+      }
+      
+      page++;
+    } while (page <= totalPages);
+    
+    console.log(`RepairDesk: Loaded ${stockMap.size} SKUs from ${totalPages} pages`);
+  } catch (error) {
+    console.error("Error loading RepairDesk inventory:", error);
+  }
+  
+  return stockMap;
+}
+
 export async function checkInventoryBySku(skus: string[]): Promise<Map<string, number>> {
   const stockMap = new Map<string, number>();
 
@@ -28,42 +76,21 @@ export async function checkInventoryBySku(skus: string[]): Promise<Map<string, n
     return stockMap;
   }
 
-  try {
-    // RepairDesk API uses api_key query parameter for authentication
-    const response = await fetch(`${REPAIRDESK_API_BASE}/inventory?api_key=${encodeURIComponent(apiKey)}`, {
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+  // Refresh cache if expired
+  const now = Date.now();
+  if (now - cacheTimestamp > CACHE_TTL || inventoryCache.size === 0) {
+    console.log("RepairDesk: Refreshing inventory cache...");
+    inventoryCache = await loadFullInventory(apiKey);
+    cacheTimestamp = now;
+  }
 
-    if (!response.ok) {
-      console.error("Failed to fetch inventory from RepairDesk:", response.status, await response.text());
-      return stockMap;
+  // Look up SKUs from cache
+  for (const sku of skus) {
+    const qty = inventoryCache.get(sku);
+    if (qty !== undefined) {
+      stockMap.set(sku, qty);
+      console.log(`RepairDesk: SKU ${sku} has ${qty} in stock`);
     }
-
-    const data = await response.json();
-    
-    // RepairDesk API returns { success: true, statusCode: 200, message: "...", data: { inventoryListData: [...], pagination: {...} } }
-    let items: InventoryItem[] = [];
-    if (data?.data?.inventoryListData && Array.isArray(data.data.inventoryListData)) {
-      items = data.data.inventoryListData;
-      console.log("Found", items.length, "inventory items from RepairDesk");
-    } else if (Array.isArray(data?.data)) {
-      items = data.data;
-    } else if (Array.isArray(data)) {
-      items = data;
-    }
-
-    for (const item of items) {
-      if (item.sku && skus.includes(item.sku)) {
-        const currentQty = stockMap.get(item.sku) || 0;
-        // in_stock is returned as a string
-        const qty = parseInt(item.in_stock || "0", 10) || 0;
-        stockMap.set(item.sku, currentQty + qty);
-      }
-    }
-  } catch (error) {
-    console.error("Error checking RepairDesk inventory:", error);
   }
 
   return stockMap;
