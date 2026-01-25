@@ -422,7 +422,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-lg mx-auto space-y-4">
+      <div className="max-w-2xl mx-auto space-y-4">
         
         {/* Admin Button */}
         {adminAuth?.isAdmin && (
