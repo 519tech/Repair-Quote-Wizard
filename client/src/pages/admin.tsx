@@ -4089,6 +4089,21 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // Hide prices until contact setting
+  const { data: hidePricesSettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/hide-prices-until-contact"],
+  });
+
+  const updateHidePrices = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("POST", "/api/settings/hide-prices-until-contact", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-until-contact"] });
+      toast({ title: "Setting updated" });
+    },
+  });
+
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
   });
@@ -4351,6 +4366,31 @@ $\{servicePrice} plus taxes
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Hide Prices Until Contact */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5" />
+            Quote Flow Settings
+          </CardTitle>
+          <CardDescription>Control when customers see pricing information</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div>
+              <p className="font-medium text-sm">Require Contact Info Before Showing Prices</p>
+              <p className="text-xs text-muted-foreground">When enabled, customers must enter their contact details before seeing prices</p>
+            </div>
+            <Switch
+              checked={hidePricesSettings?.enabled ?? false}
+              onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
+              disabled={updateHidePrices.isPending}
+              data-testid="switch-hide-prices"
+            />
+          </div>
         </CardContent>
       </Card>
 
