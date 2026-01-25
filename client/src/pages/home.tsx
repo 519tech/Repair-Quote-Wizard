@@ -749,6 +749,10 @@ export default function Home() {
                                   <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
                                     In Stock
                                   </Badge>
+                                ) : Object.keys(stockData).length > 0 ? (
+                                  <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs">
+                                    Parts order may be required
+                                  </Badge>
                                 ) : null
                               )}
                             </div>
