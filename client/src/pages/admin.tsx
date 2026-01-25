@@ -4043,53 +4043,10 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [testEmail, setTestEmail] = useState("");
   const [testPhone, setTestPhone] = useState("");
 
-  // RepairDesk Integration
+  // RepairDesk Integration (API Key based)
   const { data: repairDeskStatus, refetch: refetchRepairDeskStatus } = useQuery<{ connected: boolean }>({
     queryKey: ["/api/repairdesk/status"],
   });
-
-  const connectRepairDeskMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("GET", "/api/repairdesk/authorize");
-      const data = await res.json();
-      return data.authUrl;
-    },
-    onSuccess: (authUrl: string) => {
-      window.location.href = authUrl;
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const disconnectRepairDeskMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/repairdesk/disconnect");
-      return res.json();
-    },
-    onSuccess: () => {
-      refetchRepairDeskStatus();
-      toast({ title: "RepairDesk disconnected" });
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Check for RepairDesk OAuth callback result
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const repairDeskResult = params.get('repairdesk');
-    if (repairDeskResult === 'success') {
-      toast({ title: "RepairDesk connected successfully!" });
-      refetchRepairDeskStatus();
-      window.history.replaceState({}, '', '/admin');
-    } else if (repairDeskResult === 'error') {
-      const message = params.get('message') || 'Connection failed';
-      toast({ title: "RepairDesk connection failed", description: message, variant: "destructive" });
-      window.history.replaceState({}, '', '/admin');
-    }
-  }, []);
 
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
@@ -4263,58 +4220,29 @@ $\{servicePrice} plus taxes
             <Link2 className="h-5 w-5" />
             RepairDesk Integration
           </CardTitle>
-          <CardDescription>Connect to RepairDesk to show real-time parts inventory status</CardDescription>
+          <CardDescription>API key connection for real-time parts inventory status</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              {repairDeskStatus?.connected ? (
-                <>
-                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                    <Check className="h-3 w-3 mr-1" />
-                    Connected
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    Parts inventory status will display on quotes
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Badge variant="secondary" className="bg-muted">
-                    Not Connected
-                  </Badge>
-                  <span className="text-sm text-muted-foreground">
-                    Connect to show "Parts in Stock" labels
-                  </span>
-                </>
-              )}
-            </div>
+          <div className="flex items-center gap-3">
             {repairDeskStatus?.connected ? (
-              <Button 
-                variant="outline" 
-                onClick={() => disconnectRepairDeskMutation.mutate()}
-                disabled={disconnectRepairDeskMutation.isPending}
-                data-testid="button-disconnect-repairdesk"
-              >
-                {disconnectRepairDeskMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "Disconnect"
-                )}
-              </Button>
+              <>
+                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                  <Check className="h-3 w-3 mr-1" />
+                  Connected
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Parts inventory status will display on quotes
+                </span>
+              </>
             ) : (
-              <Button 
-                onClick={() => connectRepairDeskMutation.mutate()}
-                disabled={connectRepairDeskMutation.isPending}
-                data-testid="button-connect-repairdesk"
-              >
-                {connectRepairDeskMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Link2 className="h-4 w-4 mr-2" />
-                )}
-                Connect RepairDesk
-              </Button>
+              <>
+                <Badge variant="secondary" className="bg-muted">
+                  Not Connected
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  Add REPAIRDESK_API_KEY to Secrets to enable
+                </span>
+              </>
             )}
           </div>
         </CardContent>
