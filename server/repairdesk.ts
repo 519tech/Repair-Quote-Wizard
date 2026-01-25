@@ -6,7 +6,8 @@ const REPAIRDESK_API_BASE = "https://api.repairdesk.co/api/web/v1";
 interface InventoryItem {
   sku: string;
   name: string;
-  quantity: number;
+  in_stock: string;  // RepairDesk returns as string
+  quantity?: number;
   store_id?: string;
 }
 
@@ -41,12 +42,24 @@ export async function checkInventoryBySku(skus: string[]): Promise<Map<string, n
     }
 
     const data = await response.json();
-    const items: InventoryItem[] = data.data || data || [];
+    
+    // RepairDesk API returns { success: true, statusCode: 200, message: "...", data: { inventoryListData: [...], pagination: {...} } }
+    let items: InventoryItem[] = [];
+    if (data?.data?.inventoryListData && Array.isArray(data.data.inventoryListData)) {
+      items = data.data.inventoryListData;
+      console.log("Found", items.length, "inventory items from RepairDesk");
+    } else if (Array.isArray(data?.data)) {
+      items = data.data;
+    } else if (Array.isArray(data)) {
+      items = data;
+    }
 
     for (const item of items) {
       if (item.sku && skus.includes(item.sku)) {
         const currentQty = stockMap.get(item.sku) || 0;
-        stockMap.set(item.sku, currentQty + (item.quantity || 0));
+        // in_stock is returned as a string
+        const qty = parseInt(item.in_stock || "0", 10) || 0;
+        stockMap.set(item.sku, currentQty + qty);
       }
     }
   } catch (error) {
