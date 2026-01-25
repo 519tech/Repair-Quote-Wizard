@@ -47,8 +47,9 @@ interface OpenPhoneNumber {
 function cleanupSingleServicePlaceholders(text: string): string {
   return text
     .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[^\S\n]{2,}/g, ' ')
     .replace(/\.\s*\./g, '.')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
@@ -158,8 +159,9 @@ function buildSmsServicesList(services: CombinedQuoteSmsData['services'], servic
 function cleanupEmptyPlaceholders(text: string): string {
   return text
     .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/\s{2,}/g, ' ')
+    .replace(/[^\S\n]{2,}/g, ' ')
     .replace(/\.\s*\./g, '.')
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
