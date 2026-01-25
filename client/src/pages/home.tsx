@@ -900,11 +900,18 @@ export default function Home() {
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
-                            {q.partSku && stockData[q.partSku] && stockData[q.partSku] > 0 && (
-                              <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                <Package className="h-3 w-3 mr-1" />
-                                In Stock
-                              </Badge>
+                            {q.partSku && (
+                              stockData[q.partSku] && stockData[q.partSku] > 0 ? (
+                                <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                  <Package className="h-3 w-3 mr-1" />
+                                  In Stock
+                                </Badge>
+                              ) : Object.keys(stockData).length > 0 ? (
+                                <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
+                                  <Package className="h-3 w-3 mr-1" />
+                                  Parts order may be required
+                                </Badge>
+                              ) : null
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
