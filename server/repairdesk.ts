@@ -15,18 +15,16 @@ function getApiKey(): string | null {
   return process.env.REPAIRDESK_API_KEY || null;
 }
 
-// Cache inventory data to avoid repeated API calls
-let inventoryCache: Map<string, number> = new Map();
-let cacheTimestamp: number = 0;
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-async function loadFullInventory(apiKey: string): Promise<Map<string, number>> {
+// Search for specific SKUs by paginating through inventory until found
+async function searchSkuInPages(apiKey: string, targetSkus: Set<string>): Promise<Map<string, number>> {
   const stockMap = new Map<string, number>();
+  const foundSkus = new Set<string>();
   let page = 1;
   let totalPages = 1;
   
   try {
-    do {
+    // Paginate until all SKUs found or no more pages
+    while (foundSkus.size < targetSkus.size && page <= totalPages) {
       const response = await fetch(
         `${REPAIRDESK_API_BASE}/inventory?api_key=${encodeURIComponent(apiKey)}&page=${page}`,
         { headers: { "Content-Type": "application/json" } }
@@ -41,23 +39,34 @@ async function loadFullInventory(apiKey: string): Promise<Map<string, number>> {
       
       if (data?.data?.inventoryListData && Array.isArray(data.data.inventoryListData)) {
         for (const item of data.data.inventoryListData) {
-          if (item.sku) {
+          if (item.sku && targetSkus.has(item.sku) && !foundSkus.has(item.sku)) {
             const qty = parseInt(item.in_stock || "0", 10) || 0;
             stockMap.set(item.sku, qty);
+            foundSkus.add(item.sku);
+            console.log(`RepairDesk: SKU ${item.sku} found on page ${page} with ${qty} in stock`);
           }
         }
       }
       
-      if (data?.data?.pagination) {
+      if (data?.data?.pagination && page === 1) {
         totalPages = data.data.pagination.total_pages || 1;
       }
       
+      // Stop early if all SKUs found
+      if (foundSkus.size >= targetSkus.size) {
+        console.log(`RepairDesk: All ${foundSkus.size} SKUs found by page ${page}`);
+        break;
+      }
+      
       page++;
-    } while (page <= totalPages);
+    }
     
-    console.log(`RepairDesk: Loaded ${stockMap.size} SKUs from ${totalPages} pages`);
+    if (foundSkus.size < targetSkus.size) {
+      const notFound = [...targetSkus].filter(s => !foundSkus.has(s));
+      console.log(`RepairDesk: ${notFound.length} SKUs not found after ${page - 1} pages`);
+    }
   } catch (error) {
-    console.error("Error loading RepairDesk inventory:", error);
+    console.error("Error searching RepairDesk inventory:", error);
   }
   
   return stockMap;
@@ -76,24 +85,11 @@ export async function checkInventoryBySku(skus: string[]): Promise<Map<string, n
     return stockMap;
   }
 
-  // Refresh cache if expired
-  const now = Date.now();
-  if (now - cacheTimestamp > CACHE_TTL || inventoryCache.size === 0) {
-    console.log("RepairDesk: Refreshing inventory cache...");
-    inventoryCache = await loadFullInventory(apiKey);
-    cacheTimestamp = now;
-  }
-
-  // Look up SKUs from cache
-  for (const sku of skus) {
-    const qty = inventoryCache.get(sku);
-    if (qty !== undefined) {
-      stockMap.set(sku, qty);
-      console.log(`RepairDesk: SKU ${sku} has ${qty} in stock`);
-    }
-  }
-
-  return stockMap;
+  // Search for specific SKUs page by page
+  const targetSkus = new Set(skus);
+  const results = await searchSkuInPages(apiKey, targetSkus);
+  
+  return results;
 }
 
 export async function isRepairDeskConnected(): Promise<boolean> {
