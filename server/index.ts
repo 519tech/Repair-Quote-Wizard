@@ -1,5 +1,6 @@
 import express, { type Request, Response, NextFunction } from "express";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
@@ -39,19 +40,36 @@ if (!process.env.SESSION_SECRET) {
   console.error("WARNING: SESSION_SECRET not set - using a default for development only");
 }
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || "dev-only-secret-not-for-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      secure: process.env.NODE_ENV === "production",
-      httpOnly: true,
-      sameSite: "lax",
-      maxAge: 24 * 60 * 60 * 1000, // 24 hours
+// Use PostgreSQL session store for production to support autoscale deployments
+const PgStore = connectPgSimple(session);
+const sessionConfig: session.SessionOptions = {
+  secret: process.env.SESSION_SECRET || "dev-only-secret-not-for-production",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === "production",
+    httpOnly: true,
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 1 week
+  },
+};
+
+// Use PostgreSQL session store if DATABASE_URL is available
+if (process.env.DATABASE_URL) {
+  sessionConfig.store = new PgStore({
+    conString: process.env.DATABASE_URL,
+    createTableIfMissing: false, // Table already exists
+    tableName: "session",
+    errorLog: (err: Error) => {
+      // Ignore "already exists" errors during startup
+      if (!err.message?.includes("already exists")) {
+        console.error("Session store error:", err);
+      }
     },
-  })
-);
+  });
+}
+
+app.use(session(sessionConfig));
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
