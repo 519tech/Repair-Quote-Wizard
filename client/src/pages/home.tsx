@@ -56,6 +56,7 @@ export default function Home() {
     inStock?: boolean;
   }>>([]);
   const [stockData, setStockData] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
@@ -267,6 +268,21 @@ export default function Home() {
       }
       
       setAllQuotes(quotes);
+      
+      // Check stock for all parts with SKUs (runs in background)
+      const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
+      if (skus.length > 0) {
+        setStockLoading(true);
+        fetch('/api/repairdesk/check-stock', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ skus }),
+        })
+          .then(res => res.ok ? res.json() : {})
+          .then(stockInfo => setStockData(stockInfo))
+          .catch(() => console.log('Stock check not available'))
+          .finally(() => setStockLoading(false));
+      }
     } finally {
       setQuotesLoading(false);
     }
@@ -303,27 +319,8 @@ export default function Home() {
     });
   };
 
-  const handleContinueToQuote = async () => {
+  const handleContinueToQuote = () => {
     setView('quote');
-    
-    // Check stock for selected services with SKUs
-    const selectedQuotes = allQuotes.filter(q => selectedServices.has(q.serviceId));
-    const skus = selectedQuotes.filter(q => q.partSku).map(q => q.partSku!);
-    if (skus.length > 0) {
-      try {
-        const stockRes = await fetch('/api/repairdesk/check-stock', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ skus }),
-        });
-        if (stockRes.ok) {
-          const stockInfo = await stockRes.json();
-          setStockData(stockInfo);
-        }
-      } catch (error) {
-        console.log('Stock check not available');
-      }
-    }
   };
 
   const getSelectedQuotes = () => {
@@ -742,6 +739,18 @@ export default function Home() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
+                              {quote.partSku && (
+                                stockLoading ? (
+                                  <span className="flex items-center gap-1 text-muted-foreground">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Checking stock...</span>
+                                  </span>
+                                ) : stockData[quote.partSku] && stockData[quote.partSku] > 0 ? (
+                                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                                    In Stock
+                                  </Badge>
+                                ) : null
+                              )}
                             </div>
                           )}
                         </div>
