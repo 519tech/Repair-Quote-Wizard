@@ -27,6 +27,7 @@ interface CombinedQuoteSmsData {
     warranty?: string;
   }>;
   grandTotal: string;
+  multiServiceDiscount?: string;
 }
 
 interface UnknownDeviceSmsData {
@@ -161,7 +162,8 @@ async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsDat
     .replace(/\{price\}/g, data.grandTotal)
     .replace(/\{repairTime\}/g, repairTimes)
     .replace(/\{warranty\}/g, warranties)
-    .replace(/\{servicesList\}/g, servicesList);
+    .replace(/\{servicesList\}/g, servicesList)
+    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `$${data.multiServiceDiscount}` : '');
 }
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {

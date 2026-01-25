@@ -140,6 +140,7 @@ interface CombinedQuoteEmailData {
     warranty?: string;
   }>;
   grandTotal: string;
+  multiServiceDiscount?: string;
 }
 
 const defaultServiceItemTemplate = `{serviceName}
@@ -175,7 +176,8 @@ async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteE
     .replace(/\{price\}/g, data.grandTotal)
     .replace(/\{repairTime\}/g, repairTimes)
     .replace(/\{warranty\}/g, warranties)
-    .replace(/\{servicesList\}/g, servicesList);
+    .replace(/\{servicesList\}/g, servicesList)
+    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `$${data.multiServiceDiscount}` : '');
 }
 
 export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
@@ -250,6 +252,7 @@ interface AdminNotificationData {
     warranty?: string;
   }>;
   grandTotal: string;
+  multiServiceDiscount?: string;
   notes?: string;
 }
 
@@ -269,6 +272,7 @@ export async function sendAdminNotificationEmail(data: AdminNotificationData): P
     ).join('\n');
 
     const subject = `New Quote Request - ${data.customerName} - $${data.grandTotal}`;
+    const discountLine = data.multiServiceDiscount ? `\nMulti-Service Discount: -$${data.multiServiceDiscount}` : '';
     const emailBody = `New Quote Request Received
 
 Customer Information:
@@ -280,7 +284,7 @@ Device: ${data.deviceName}
 
 Selected Services:
 ${servicesList}
-
+${discountLine}
 Grand Total: $${data.grandTotal} plus taxes
 
 ${data.notes ? `Customer Notes:\n${data.notes}` : ''}

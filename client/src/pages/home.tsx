@@ -54,6 +54,7 @@ export default function Home() {
     categoryImageUrl?: string;
     partSku?: string;
     inStock?: boolean;
+    bypassMultiDiscount?: boolean;
   }>>([]);
   const [stockData, setStockData] = useState<Record<string, number>>({});
   const [stockLoading, setStockLoading] = useState(false);
@@ -90,6 +91,11 @@ export default function Home() {
 
   const { data: partsLastUpdated } = useQuery<MessageTemplate>({
     queryKey: ["/api/message-templates", "parts_last_updated"],
+  });
+
+  // Multi-service discount settings
+  const { data: multiDiscountSettings } = useQuery<{ enabled: boolean; amount: number }>({
+    queryKey: ["/api/settings/multi-discount"],
   });
 
   const formatLastUpdated = (isoDate: string | undefined) => {
@@ -146,6 +152,7 @@ export default function Home() {
       deviceId: string;
       deviceServiceIds: string[];
       notes?: string;
+      multiServiceDiscount?: number;
     }) => {
       const res = await apiRequest("POST", "/api/quote-requests/combined", data);
       return res.json();
@@ -227,6 +234,7 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: quote.partSku || undefined,
+              bypassMultiDiscount: quote.bypassMultiDiscount || false,
             };
           } catch {
             return {
@@ -245,6 +253,7 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: undefined,
+              bypassMultiDiscount: false,
             };
           }
         })
@@ -333,8 +342,27 @@ export default function Home() {
     return allQuotes.filter(q => selectedServices.has(q.serviceId));
   };
 
-  const getGrandTotal = () => {
+  // Calculate if multi-service discount applies
+  const getMultiServiceDiscount = () => {
+    if (!multiDiscountSettings?.enabled) return 0;
+    
+    const selectedQuotes = getSelectedQuotes();
+    // Count eligible services (those that don't bypass discount)
+    const eligibleCount = selectedQuotes.filter(q => !q.bypassMultiDiscount).length;
+    
+    // Apply discount if 2 or more eligible services
+    if (eligibleCount >= 2) {
+      return multiDiscountSettings.amount || 0;
+    }
+    return 0;
+  };
+
+  const getSubtotal = () => {
     return getSelectedQuotes().reduce((sum, q) => sum + parseFloat(q.price), 0);
+  };
+
+  const getGrandTotal = () => {
+    return getSubtotal() - getMultiServiceDiscount();
   };
 
   const handleSendCombinedQuote = (e: React.FormEvent) => {
@@ -352,6 +380,7 @@ export default function Home() {
       deviceId: selectedDeviceId,
       deviceServiceIds,
       notes: notes || undefined,
+      multiServiceDiscount: getMultiServiceDiscount(),
     });
   };
 
@@ -778,6 +807,9 @@ export default function Home() {
                               <p className="text-sm text-muted-foreground">
                                 {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
                               </p>
+                              {getMultiServiceDiscount() > 0 && (
+                                <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
+                              )}
                               <p className="text-xl font-bold text-primary">
                                 Total: ${getGrandTotal().toFixed(2)}
                               </p>
@@ -885,6 +917,12 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
+                  {getMultiServiceDiscount() > 0 && (
+                    <div className="flex justify-between items-center pt-2 text-green-600">
+                      <span className="text-sm font-medium">Multi-Service Discount</span>
+                      <span className="font-semibold">-${getMultiServiceDiscount().toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pt-2 border-t">
                     <span className="font-semibold">Grand Total</span>
                     <div className="text-right">

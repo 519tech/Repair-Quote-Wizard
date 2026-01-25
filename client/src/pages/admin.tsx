@@ -2218,6 +2218,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [secondaryPartPercentage, setSecondaryPartPercentage] = useState("50");
   const [notes, setNotes] = useState("");
   const [labourOnly, setLabourOnly] = useState(false);
+  const [bypassMultiDiscount, setBypassMultiDiscount] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
 
@@ -2242,7 +2243,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; imageUrl?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; bypassMultiDiscount?: boolean; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -2307,6 +2308,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       secondaryPartPercentage: secondaryPartPercentage === "" ? 50 : parseInt(secondaryPartPercentage),
       notes: notes || undefined,
       labourOnly,
+      bypassMultiDiscount,
       imageUrl: imageUrl || undefined
     });
   };
@@ -2367,6 +2369,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         partsMarkup: editItem.partsMarkup,
         notes: editItem.notes || undefined,
         labourOnly: editItem.labourOnly,
+        bypassMultiDiscount: editItem.bypassMultiDiscount,
         imageUrl: editItem.imageUrl || undefined
       } 
     });
@@ -2443,6 +2446,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 <div className="flex items-center space-x-2">
                   <Checkbox id="labour-only" checked={labourOnly} onCheckedChange={(checked) => setLabourOnly(checked === true)} data-testid="checkbox-labour-only" />
                   <Label htmlFor="labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="bypass-discount" checked={bypassMultiDiscount} onCheckedChange={(checked) => setBypassMultiDiscount(checked === true)} data-testid="checkbox-bypass-discount" />
+                  <Label htmlFor="bypass-discount" className="text-sm font-normal cursor-pointer">Bypass multi-service discount (this service won't trigger discount)</Label>
                 </div>
                 <ImageInput
                   value={imageUrl}
@@ -2522,6 +2529,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 <div className="flex items-center space-x-2">
                   <Checkbox id="edit-labour-only" checked={editItem?.labourOnly || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, labourOnly: checked === true} : null)} data-testid="checkbox-edit-labour-only" />
                   <Label htmlFor="edit-labour-only" className="text-sm font-normal cursor-pointer">Labour only (no parts required - will show price even without parts)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="edit-bypass-discount" checked={editItem?.bypassMultiDiscount || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, bypassMultiDiscount: checked === true} : null)} data-testid="checkbox-edit-bypass-discount" />
+                  <Label htmlFor="edit-bypass-discount" className="text-sm font-normal cursor-pointer">Bypass multi-service discount (this service won't trigger discount)</Label>
                 </div>
                 <ImageInput
                   value={editItem?.imageUrl || ""}
@@ -4059,6 +4070,25 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // Multi-service discount settings
+  const { data: multiDiscountSettings } = useQuery<{ enabled: boolean; amount: number }>({
+    queryKey: ["/api/settings/multi-discount"],
+  });
+
+  const updateMultiDiscount = useMutation({
+    mutationFn: async (data: { enabled?: boolean; amount?: number }) => {
+      const current = multiDiscountSettings || { enabled: false, amount: 10 };
+      await apiRequest("POST", "/api/settings/multi-discount", {
+        enabled: data.enabled ?? current.enabled,
+        amount: data.amount ?? current.amount
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/multi-discount"] });
+      toast({ title: "Discount settings updated" });
+    },
+  });
+
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
   });
@@ -4198,6 +4228,7 @@ $\{servicePrice} plus taxes
     { name: "{deviceName}", description: "Device name (e.g., iPhone 15 Pro)" },
     { name: "{serviceName}", description: "Service name(s) - comma-separated for multiple" },
     { name: "{serviceDescription}", description: "Service description(s) - semicolon-separated for multiple" },
+    { name: "{multiServiceDiscount}", description: "Multi-service discount amount (e.g., $10.00)" },
     { name: "{price}", description: "Total quoted price (number only, add $ manually)" },
     { name: "{repairTime}", description: "Repair time(s) - comma-separated for multiple" },
     { name: "{warranty}", description: "Warranty info - comma-separated for multiple" },
@@ -4269,6 +4300,55 @@ $\{servicePrice} plus taxes
                 disabled={toggleStockCheck.isPending}
                 data-testid="switch-stock-check"
               />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Multi-Service Discount */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Layers className="h-5 w-5" />
+            Multi-Service Discount
+          </CardTitle>
+          <CardDescription>Automatic discount when customers select multiple services</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div>
+              <p className="font-medium text-sm">Enable Multi-Service Discount</p>
+              <p className="text-xs text-muted-foreground">Apply discount when 2+ eligible services are selected</p>
+            </div>
+            <Switch
+              checked={multiDiscountSettings?.enabled ?? false}
+              onCheckedChange={(checked) => updateMultiDiscount.mutate({ enabled: checked })}
+              disabled={updateMultiDiscount.isPending}
+              data-testid="switch-multi-discount"
+            />
+          </div>
+          
+          {multiDiscountSettings?.enabled && (
+            <div className="space-y-2">
+              <Label htmlFor="discount-amount">Discount Amount ($)</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="discount-amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  defaultValue={multiDiscountSettings?.amount ?? 10}
+                  className="w-32"
+                  onBlur={(e) => {
+                    const value = parseFloat(e.target.value);
+                    if (!isNaN(value) && value >= 0) {
+                      updateMultiDiscount.mutate({ amount: value });
+                    }
+                  }}
+                  data-testid="input-discount-amount"
+                />
+                <span className="text-sm text-muted-foreground self-center">off total when multiple services selected</span>
+              </div>
             </div>
           )}
         </CardContent>

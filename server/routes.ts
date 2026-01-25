@@ -1248,6 +1248,7 @@ export async function registerRoutes(
         hasPart,
         isLabourOnly,
         isAvailable,
+        bypassMultiDiscount: service.bypassMultiDiscount || false,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to calculate quote" });
@@ -1337,6 +1338,7 @@ export async function registerRoutes(
     deviceId: z.string(),
     deviceServiceIds: z.array(z.string()).min(1),
     notes: z.string().optional(),
+    multiServiceDiscount: z.number().optional(),
   });
 
   app.post("/api/quote-requests/combined", async (req, res) => {
@@ -1391,13 +1393,18 @@ export async function registerRoutes(
         });
       }
 
+      // Apply multi-service discount
+      const discountAmount = input.multiServiceDiscount || 0;
+      const finalTotal = grandTotal - discountAmount;
+
       // Send combined email
       sendCombinedQuoteEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         deviceName,
         services: servicesData,
-        grandTotal: grandTotal.toFixed(2),
+        grandTotal: finalTotal.toFixed(2),
+        multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
       }).catch(err => console.error('Combined email send error:', err));
 
       // Send combined SMS if phone provided
@@ -1407,7 +1414,8 @@ export async function registerRoutes(
           customerPhone: input.customerPhone,
           deviceName,
           services: servicesData,
-          grandTotal: grandTotal.toFixed(2),
+          grandTotal: finalTotal.toFixed(2),
+          multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         }).catch(err => console.error('Combined SMS send error:', err));
       }
 
@@ -1418,14 +1426,15 @@ export async function registerRoutes(
         customerPhone: input.customerPhone,
         deviceName,
         services: servicesData,
-        grandTotal: grandTotal.toFixed(2),
+        grandTotal: finalTotal.toFixed(2),
+        multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         notes: input.notes,
       }).catch(err => console.error('Admin notification error:', err));
 
       res.status(201).json({ 
         success: true, 
         servicesCount: servicesData.length,
-        grandTotal: grandTotal.toFixed(2)
+        grandTotal: finalTotal.toFixed(2)
       });
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create combined quote request" });
@@ -1567,6 +1576,61 @@ export async function registerRoutes(
       res.json({ success: true, enabled });
     } catch (error) {
       res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  // Multi-service discount settings
+  app.get("/api/settings/multi-discount", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const enabledSetting = templates.find(t => t.type === 'multi_discount_enabled');
+      const amountSetting = templates.find(t => t.type === 'multi_discount_amount');
+      
+      res.json({
+        enabled: enabledSetting ? enabledSetting.content === 'true' : false,
+        amount: amountSetting ? parseFloat(amountSetting.content) : 10
+      });
+    } catch (error) {
+      res.json({ enabled: false, amount: 10 });
+    }
+  });
+
+  app.post("/api/settings/multi-discount", requireAdmin, async (req, res) => {
+    try {
+      const { enabled, amount } = req.body;
+      const templates = await storage.getMessageTemplates();
+      
+      // Update enabled setting
+      const existingEnabled = templates.find(t => t.type === 'multi_discount_enabled');
+      if (existingEnabled) {
+        await storage.updateMessageTemplate(existingEnabled.id, {
+          content: enabled ? 'true' : 'false'
+        });
+      } else {
+        await storage.createMessageTemplate({
+          type: 'multi_discount_enabled',
+          subject: 'Multi-Service Discount Enabled',
+          content: enabled ? 'true' : 'false'
+        });
+      }
+      
+      // Update amount setting
+      const existingAmount = templates.find(t => t.type === 'multi_discount_amount');
+      if (existingAmount) {
+        await storage.updateMessageTemplate(existingAmount.id, {
+          content: String(amount)
+        });
+      } else {
+        await storage.createMessageTemplate({
+          type: 'multi_discount_amount',
+          subject: 'Multi-Service Discount Amount',
+          content: String(amount)
+        });
+      }
+      
+      res.json({ success: true, enabled, amount });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to update settings" });
     }
   });
 
