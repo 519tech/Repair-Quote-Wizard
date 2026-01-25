@@ -13,7 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
