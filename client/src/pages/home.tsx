@@ -631,6 +631,35 @@ export default function Home() {
                       </div>
                     </div>
                   )}
+
+                  {/* "Other / Not Listed" option - always shown at the end of categories */}
+                  <div
+                    className="p-3 rounded-lg border border-dashed transition-all cursor-pointer hover:border-primary/50 hover-elevate"
+                    onClick={() => {
+                      const deviceName = selectedDevice?.name || "";
+                      const brandName = selectedDevice?.brand?.name || "";
+                      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+                      setUnknownDeviceInfo(prev => ({
+                        ...prev,
+                        deviceDescription: fullDeviceName
+                      }));
+                      setView('unknown');
+                    }}
+                    data-testid="category-not-listed"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium">Other / Not Listed</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Describe your issue and we'll provide a custom quote
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                  </div>
                 </div>
               ) : (
                 // Service selection with images
@@ -690,35 +719,6 @@ export default function Home() {
                       </div>
                     </div>
                   ))}
-
-                  {/* "Other" option - always shown at the end */}
-                  <div
-                    className="p-3 rounded-lg border border-dashed transition-all cursor-pointer hover:border-primary/50 hover-elevate"
-                    onClick={() => {
-                      const deviceName = selectedDevice?.name || "";
-                      const brandName = selectedDevice?.brand?.name || "";
-                      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
-                      setUnknownDeviceInfo(prev => ({
-                        ...prev,
-                        deviceDescription: fullDeviceName
-                      }));
-                      setView('unknown');
-                    }}
-                    data-testid="service-other"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">Other / Not Listed</p>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Describe your issue and we'll provide a custom quote
-                        </p>
-                      </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </div>
-                  </div>
 
                   {/* Selected Services Summary */}
                   {selectedServices.size > 0 && (
