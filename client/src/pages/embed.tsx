@@ -39,6 +39,7 @@ export default function Embed() {
     serviceId: string;
     serviceName: string;
     serviceDescription?: string;
+    serviceImageUrl?: string;
     deviceName: string;
     price: string;
     repairTime?: string;
@@ -47,6 +48,8 @@ export default function Embed() {
     hasPart: boolean;
     categoryId?: string;
     categoryName?: string;
+    categoryDescription?: string;
+    categoryImageUrl?: string;
   }>>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
@@ -202,6 +205,7 @@ export default function Embed() {
               serviceId: ds.service.id,
               serviceName: ds.service.name,
               serviceDescription: ds.service.description || undefined,
+              serviceImageUrl: ds.service.imageUrl || undefined,
               deviceName: ds.device.name,
               price: quote.totalPrice,
               repairTime: ds.service.repairTime || undefined,
@@ -210,12 +214,15 @@ export default function Embed() {
               hasPart: quote.hasPart,
               categoryId: ds.service.category?.id,
               categoryName: ds.service.category?.name,
+              categoryDescription: ds.service.category?.description || undefined,
+              categoryImageUrl: ds.service.category?.imageUrl || undefined,
             };
           } catch {
             return {
               serviceId: ds.service.id,
               serviceName: ds.service.name,
               serviceDescription: ds.service.description || undefined,
+              serviceImageUrl: ds.service.imageUrl || undefined,
               deviceName: ds.device.name,
               price: "0.00",
               repairTime: ds.service.repairTime || undefined,
@@ -224,6 +231,8 @@ export default function Embed() {
               hasPart: false,
               categoryId: ds.service.category?.id,
               categoryName: ds.service.category?.name,
+              categoryDescription: ds.service.category?.description || undefined,
+              categoryImageUrl: ds.service.category?.imageUrl || undefined,
             };
           }
         })
@@ -540,42 +549,74 @@ export default function Embed() {
               ) : allQuotes.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
               ) : !selectedCategoryId && categories.length > 0 ? (
-                // Category selection
-                <div className="space-y-2">
+                // Category selection with images and descriptions
+                <div className="space-y-3">
                   {categories.map(catId => {
                     const catQuotes = allQuotes.filter(q => q.categoryId === catId);
-                    const catName = deviceServices.find(ds => ds.service.category?.id === catId)?.service.category?.name || "Other";
+                    const firstQuote = catQuotes[0];
+                    const catName = firstQuote?.categoryName || "Other";
+                    const catDescription = firstQuote?.categoryDescription;
+                    const catImageUrl = firstQuote?.categoryImageUrl;
                     return (
-                      <Button
+                      <div
                         key={catId}
-                        variant="outline"
-                        className="w-full justify-between"
+                        className="p-3 rounded-lg border transition-all cursor-pointer hover:border-primary/50 hover-elevate"
                         onClick={() => handleCategorySelect(catId!)}
                         data-testid={`category-${catId}`}
                       >
-                        <span>{catName}</span>
-                        <span className="text-xs text-muted-foreground">
-                          {catQuotes.length} option{catQuotes.length > 1 ? 's' : ''}
-                        </span>
-                      </Button>
+                        <div className="flex items-center gap-3">
+                          {catImageUrl ? (
+                            <img 
+                              src={catImageUrl} 
+                              alt={catName}
+                              className="w-12 h-12 object-contain rounded-lg bg-muted p-1 shrink-0"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                              <Wrench className="h-5 w-5 text-muted-foreground" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex justify-between items-start gap-2">
+                              <p className="font-medium">{catName}</p>
+                              <span className="text-xs text-muted-foreground shrink-0">
+                                {catQuotes.length} option{catQuotes.length > 1 ? 's' : ''}
+                              </span>
+                            </div>
+                            {catDescription && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{catDescription}</p>
+                            )}
+                          </div>
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        </div>
+                      </div>
                     );
                   })}
                   {allQuotes.filter(q => !q.categoryId).length > 0 && (
-                    <Button
-                      variant="outline"
-                      className="w-full justify-between"
+                    <div
+                      className="p-3 rounded-lg border transition-all cursor-pointer hover:border-primary/50 hover-elevate"
                       onClick={() => handleCategorySelect("other")}
                       data-testid="category-other"
                     >
-                      <span>Other Services</span>
-                      <span className="text-xs text-muted-foreground">
-                        {allQuotes.filter(q => !q.categoryId).length} option{allQuotes.filter(q => !q.categoryId).length > 1 ? 's' : ''}
-                      </span>
-                    </Button>
+                      <div className="flex items-center gap-3">
+                        <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                          <Wrench className="h-5 w-5 text-muted-foreground" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex justify-between items-start gap-2">
+                            <p className="font-medium">Other Services</p>
+                            <span className="text-xs text-muted-foreground shrink-0">
+                              {allQuotes.filter(q => !q.categoryId).length} option{allQuotes.filter(q => !q.categoryId).length > 1 ? 's' : ''}
+                            </span>
+                          </div>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </div>
+                    </div>
                   )}
                 </div>
               ) : (
-                // Service selection
+                // Service selection with images
                 <div className="space-y-3">
                   {(selectedCategoryId === "other" 
                     ? allQuotes.filter(q => !q.categoryId) 
@@ -599,6 +640,17 @@ export default function Embed() {
                           disabled={!quote.isAvailable}
                           className="mt-1"
                         />
+                        {quote.serviceImageUrl ? (
+                          <img 
+                            src={quote.serviceImageUrl} 
+                            alt={quote.serviceName}
+                            className="w-10 h-10 object-contain rounded-lg bg-muted p-1 shrink-0"
+                          />
+                        ) : (
+                          <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                            <Wrench className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-sm">{quote.serviceName}</p>
@@ -621,6 +673,35 @@ export default function Embed() {
                       </div>
                     </div>
                   ))}
+
+                  {/* "Other" option - always shown at the end */}
+                  <div
+                    className="p-3 rounded-lg border border-dashed transition-all cursor-pointer hover:border-primary/50 hover-elevate"
+                    onClick={() => {
+                      const deviceName = selectedDevice?.name || "";
+                      const brandName = selectedDevice?.brand?.name || "";
+                      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+                      setUnknownDeviceInfo(prev => ({
+                        ...prev,
+                        deviceDescription: fullDeviceName
+                      }));
+                      setView('unknown');
+                    }}
+                    data-testid="service-other"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
+                        <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm">Other / Not Listed</p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Describe your issue and we'll provide a custom quote
+                        </p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                  </div>
 
                   {/* Selected Services Summary */}
                   {selectedServices.size > 0 && (
