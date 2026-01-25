@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -22,7 +22,7 @@ export default function Home() {
   const { toast } = useToast();
   
   // Main flow: 'search' | 'services' | 'quote' | 'unknown' | 'success'
-  const [view, setView] = useState<'search' | 'services' | 'quote' | 'unknown' | 'success'>('search');
+  const [view, setView] = useState<'search' | 'services' | 'quote' | 'contact' | 'unknown' | 'success'>('search');
   
   // Device search
   const [searchQuery, setSearchQuery] = useState("");
@@ -826,7 +826,7 @@ export default function Home() {
                     </p>
                   )}
                   <CardTitle className="text-lg">Your Repair Quote</CardTitle>
-                  <CardDescription className="text-xs">Review and provide contact details</CardDescription>
+                  <CardDescription className="text-xs">Review your selected services</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -895,76 +895,126 @@ export default function Home() {
                   </div>
                 </div>
 
-                {/* Contact Form */}
-                <form onSubmit={handleSendCombinedQuote} className="space-y-3">
-                  <h3 className="font-semibold text-sm">Send Quote To</h3>
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-name" className="text-xs">Name *</Label>
-                      <Input
-                        id="quote-name"
-                        value={contactInfo.name}
-                        onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                        placeholder="Your name"
-                        required
-                        className="h-9"
-                        data-testid="input-quote-name"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-email" className="text-xs">Email *</Label>
-                      <Input
-                        id="quote-email"
-                        type="email"
-                        value={contactInfo.email}
-                        onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                        placeholder="your@email.com"
-                        required
-                        className="h-9"
-                        data-testid="input-quote-email"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-phone" className="text-xs">Phone (optional)</Label>
-                      <Input
-                        id="quote-phone"
-                        type="tel"
-                        value={contactInfo.phone}
-                        onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                        placeholder="For SMS quote"
-                        className="h-9"
-                        data-testid="input-quote-phone"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-notes" className="text-xs">Notes (optional)</Label>
-                      <Textarea
-                        id="quote-notes"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Any additional information..."
-                        className="resize-none"
-                        rows={2}
-                        data-testid="input-quote-notes"
-                      />
-                    </div>
-                  </div>
-                  <Button
-                    type="submit"
-                    size="sm"
-                    className="w-full"
-                    disabled={submitCombinedQuoteMutation.isPending}
-                    data-testid="button-send-quote"
-                  >
-                    {submitCombinedQuoteMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    ) : (
-                      <Check className="h-4 w-4 mr-2" />
-                    )}
-                    Send My Quote
-                  </Button>
-                </form>
+                {/* Send Me Quote Button */}
+                <Button
+                  className="w-full"
+                  onClick={() => setView('contact')}
+                  data-testid="button-send-me-quote"
+                >
+                  <Mail className="h-4 w-4 mr-2" />
+                  Send Me Quote
+                </Button>
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Contact Form View */}
+        {view === 'contact' && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
+                {selectedDevice && (
+                  <div className="shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''} · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes
+                  </p>
+                  <CardTitle className="text-lg">Send Your Quote</CardTitle>
+                  <CardDescription className="text-xs">Enter your contact details</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="mb-4" 
+                onClick={() => setView('quote')}
+                data-testid="button-back-quote"
+              >
+                Back to quote
+              </Button>
+
+              <form onSubmit={handleSendCombinedQuote} className="space-y-3">
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-name" className="text-xs">Name *</Label>
+                    <Input
+                      id="quote-name"
+                      value={contactInfo.name}
+                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                      placeholder="Your name"
+                      required
+                      className="h-9"
+                      data-testid="input-quote-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-email" className="text-xs">Email *</Label>
+                    <Input
+                      id="quote-email"
+                      type="email"
+                      value={contactInfo.email}
+                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                      placeholder="your@email.com"
+                      required
+                      className="h-9"
+                      data-testid="input-quote-email"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-phone" className="text-xs">Phone (optional)</Label>
+                    <Input
+                      id="quote-phone"
+                      type="tel"
+                      value={contactInfo.phone}
+                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                      placeholder="For SMS quote"
+                      className="h-9"
+                      data-testid="input-quote-phone"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-notes" className="text-xs">Notes (optional)</Label>
+                    <Textarea
+                      id="quote-notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Any additional information..."
+                      className="resize-none"
+                      rows={2}
+                      data-testid="input-quote-notes"
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={submitCombinedQuoteMutation.isPending}
+                  data-testid="button-send-quote"
+                >
+                  {submitCombinedQuoteMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-2" />
+                  )}
+                  Send My Quote
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
