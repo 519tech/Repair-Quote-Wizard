@@ -99,6 +99,12 @@ export default function Home() {
     queryKey: ["/api/settings/multi-discount"],
   });
 
+  // Hide prices until contact setting
+  const { data: hidePricesSettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/hide-prices-until-contact"],
+  });
+  const hidePricesUntilContact = hidePricesSettings?.enabled ?? false;
+
   const formatLastUpdated = (isoDate: string | undefined) => {
     if (!isoDate) return null;
     try {
@@ -773,7 +779,7 @@ export default function Home() {
                           <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-sm">{quote.serviceName}</p>
                             {quote.isAvailable ? (
-                              <span className="font-bold text-primary shrink-0">${quote.price}</span>
+                              !hidePricesUntilContact && <span className="font-bold text-primary shrink-0">${quote.price}</span>
                             ) : (
                               <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                             )}
@@ -818,15 +824,19 @@ export default function Home() {
                               <p className="text-sm text-muted-foreground">
                                 {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
                               </p>
-                              {getMultiServiceDiscount() > 0 && (
-                                <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
+                              {!hidePricesUntilContact && (
+                                <>
+                                  {getMultiServiceDiscount() > 0 && (
+                                    <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
+                                  )}
+                                  <p className="text-xl font-bold text-primary">
+                                    Total: ${getGrandTotal().toFixed(2)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">plus taxes</p>
+                                </>
                               )}
-                              <p className="text-xl font-bold text-primary">
-                                Total: ${getGrandTotal().toFixed(2)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">plus taxes</p>
                             </div>
-                            <Button size="sm" onClick={handleContinueToQuote} data-testid="button-continue-quote">
+                            <Button size="sm" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
                               <ChevronRight className="h-4 w-4 mr-1" />
                               Continue
                             </Button>
@@ -878,10 +888,10 @@ export default function Home() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView('services')}
+                onClick={() => setView(hidePricesUntilContact ? 'contact' : 'services')}
                 data-testid="button-back-services-quote"
               >
-                Back to services
+                {hidePricesUntilContact ? "Edit contact info" : "Back to services"}
               </Button>
 
               <div className="space-y-4">
@@ -952,14 +962,30 @@ export default function Home() {
                 </div>
 
                 {/* Send Me Quote Button */}
-                <Button
-                  className="w-full"
-                  onClick={() => setView('contact')}
-                  data-testid="button-send-me-quote"
-                >
-                  <Mail className="h-4 w-4 mr-2" />
-                  Send Me Quote
-                </Button>
+                {hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
+                  <Button
+                    className="w-full"
+                    onClick={() => handleSendCombinedQuote({ preventDefault: () => {} } as React.FormEvent)}
+                    disabled={submitCombinedQuoteMutation.isPending}
+                    data-testid="button-send-me-quote"
+                  >
+                    {submitCombinedQuoteMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Mail className="h-4 w-4 mr-2" />
+                    )}
+                    Send Quote
+                  </Button>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={() => setView('contact')}
+                    data-testid="button-send-me-quote"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send Me Quote
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -987,10 +1013,10 @@ export default function Home() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-1">
-                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''} · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes
+                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
                   </p>
-                  <CardTitle className="text-lg">Send Your Quote</CardTitle>
-                  <CardDescription className="text-xs">Enter your contact details</CardDescription>
+                  <CardTitle className="text-lg">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
+                  <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -999,13 +1025,13 @@ export default function Home() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView('quote')}
+                onClick={() => setView(hidePricesUntilContact ? 'services' : 'quote')}
                 data-testid="button-back-quote"
               >
-                Back to quote
+                {hidePricesUntilContact ? "Back to services" : "Back to quote"}
               </Button>
 
-              <form onSubmit={handleSendCombinedQuote} className="space-y-3">
+              <form onSubmit={hidePricesUntilContact ? (e) => { e.preventDefault(); if (contactInfo.name && contactInfo.email) setView('quote'); } : handleSendCombinedQuote} className="space-y-3">
                 <div className="space-y-2">
                   <div className="space-y-1">
                     <Label htmlFor="quote-name" className="text-xs">Name *</Label>
@@ -1065,10 +1091,12 @@ export default function Home() {
                 >
                   {submitCombinedQuoteMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : hidePricesUntilContact ? (
+                    <ChevronRight className="h-4 w-4 mr-2" />
                   ) : (
                     <Check className="h-4 w-4 mr-2" />
                   )}
-                  Send My Quote
+                  {hidePricesUntilContact ? "View My Quote" : "Send My Quote"}
                 </Button>
               </form>
             </CardContent>
