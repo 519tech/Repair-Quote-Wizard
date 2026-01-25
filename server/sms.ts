@@ -44,8 +44,16 @@ interface OpenPhoneNumber {
   userId?: string;
 }
 
+function cleanupSingleServicePlaceholders(text: string): string {
+  return text
+    .replace(/\{[a-zA-Z]+\}/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\.\s*\./g, '.')
+    .trim();
+}
+
 function replaceMacros(template: string, data: QuoteSmsData): string {
-  return template
+  const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, data.serviceName)
@@ -53,6 +61,8 @@ function replaceMacros(template: string, data: QuoteSmsData): string {
     .replace(/\{price\}/g, data.price)
     .replace(/\{repairTime\}/g, data.repairTime || '')
     .replace(/\{warranty\}/g, data.warranty || '');
+  
+  return cleanupSingleServicePlaceholders(result);
 }
 
 function formatPhoneE164(phone: string): string {
@@ -145,6 +155,14 @@ function buildSmsServicesList(services: CombinedQuoteSmsData['services'], servic
   }).join('\n\n');
 }
 
+function cleanupEmptyPlaceholders(text: string): string {
+  return text
+    .replace(/\{[a-zA-Z]+\}/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .replace(/\.\s*\./g, '.')
+    .trim();
+}
+
 async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): Promise<string> {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
@@ -154,7 +172,7 @@ async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsDat
   const serviceItemTemplate = await storage.getMessageTemplate('sms_service_item_template');
   const servicesList = buildSmsServicesList(data.services, serviceItemTemplate?.content || defaultSmsServiceItemTemplate);
   
-  return template
+  const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, serviceNames)
@@ -163,7 +181,9 @@ async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsDat
     .replace(/\{repairTime\}/g, repairTimes)
     .replace(/\{warranty\}/g, warranties)
     .replace(/\{servicesList\}/g, servicesList)
-    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `$${data.multiServiceDiscount}` : '');
+    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '');
+  
+  return cleanupEmptyPlaceholders(result);
 }
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {

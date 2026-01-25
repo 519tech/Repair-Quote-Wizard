@@ -56,8 +56,16 @@ interface QuoteEmailData {
   warranty?: string;
 }
 
+function cleanupSingleServicePlaceholders(text: string): string {
+  return text
+    .replace(/\{[a-zA-Z]+\}/g, '')
+    .replace(/^\s*[\r\n]/gm, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 function replaceMacros(template: string, data: QuoteEmailData): string {
-  return template
+  const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, data.serviceName)
@@ -65,6 +73,8 @@ function replaceMacros(template: string, data: QuoteEmailData): string {
     .replace(/\{price\}/g, data.price)
     .replace(/\{repairTime\}/g, data.repairTime ? `Repair Time: ${data.repairTime}` : '')
     .replace(/\{warranty\}/g, data.warranty ? `Warranty: ${data.warranty}` : '');
+  
+  return cleanupSingleServicePlaceholders(result);
 }
 
 const defaultEmailSubject = "Your Repair Quote: {serviceName} - ${price} plus taxes";
@@ -159,6 +169,14 @@ function buildServicesList(services: CombinedQuoteEmailData['services'], service
   }).join('\n\n');
 }
 
+function cleanupEmptyPlaceholders(text: string): string {
+  return text
+    .replace(/\{[a-zA-Z]+\}/g, '')
+    .replace(/^\s*[\r\n]/gm, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): Promise<string> {
   const serviceNames = data.services.map(s => s.serviceName).join(', ');
   const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
@@ -168,7 +186,7 @@ async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteE
   const serviceItemTemplate = await storage.getMessageTemplate('service_item_template');
   const servicesList = buildServicesList(data.services, serviceItemTemplate?.content || defaultServiceItemTemplate);
   
-  return template
+  const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
     .replace(/\{serviceName\}/g, serviceNames)
@@ -177,7 +195,9 @@ async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteE
     .replace(/\{repairTime\}/g, repairTimes)
     .replace(/\{warranty\}/g, warranties)
     .replace(/\{servicesList\}/g, servicesList)
-    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `$${data.multiServiceDiscount}` : '');
+    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '');
+  
+  return cleanupEmptyPlaceholders(result);
 }
 
 export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
