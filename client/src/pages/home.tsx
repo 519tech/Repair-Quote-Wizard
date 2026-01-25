@@ -737,12 +737,6 @@ export default function Home() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
-                              {quote.partSku && stockData[quote.partSku] && stockData[quote.partSku] > 0 && (
-                                <Badge variant="secondary" className="text-xs py-0 px-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                  <Package className="h-3 w-3 mr-1" />
-                                  In Stock
-                                </Badge>
-                              )}
                             </div>
                           )}
                         </div>
@@ -838,6 +832,12 @@ export default function Home() {
                             <p className="text-sm font-medium">{q.serviceName}</p>
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
+                            )}
+                            {q.partSku && stockData[q.partSku] && stockData[q.partSku] > 0 && (
+                              <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                <Package className="h-3 w-3 mr-1" />
+                                In Stock
+                              </Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
