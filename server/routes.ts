@@ -1598,38 +1598,22 @@ export async function registerRoutes(
   app.post("/api/settings/multi-discount", requireAdmin, async (req, res) => {
     try {
       const { enabled, amount } = req.body;
-      const templates = await storage.getMessageTemplates();
       
-      // Update enabled setting
-      const existingEnabled = templates.find(t => t.type === 'multi_discount_enabled');
-      if (existingEnabled) {
-        await storage.updateMessageTemplate(existingEnabled.id, {
-          content: enabled ? 'true' : 'false'
-        });
-      } else {
-        await storage.createMessageTemplate({
-          type: 'multi_discount_enabled',
-          subject: 'Multi-Service Discount Enabled',
-          content: enabled ? 'true' : 'false'
-        });
-      }
+      // Upsert enabled setting
+      await storage.upsertMessageTemplate({
+        type: 'multi_discount_enabled',
+        content: enabled ? 'true' : 'false'
+      });
       
-      // Update amount setting
-      const existingAmount = templates.find(t => t.type === 'multi_discount_amount');
-      if (existingAmount) {
-        await storage.updateMessageTemplate(existingAmount.id, {
-          content: String(amount)
-        });
-      } else {
-        await storage.createMessageTemplate({
-          type: 'multi_discount_amount',
-          subject: 'Multi-Service Discount Amount',
-          content: String(amount)
-        });
-      }
+      // Upsert amount setting
+      await storage.upsertMessageTemplate({
+        type: 'multi_discount_amount',
+        content: String(amount)
+      });
       
       res.json({ success: true, enabled, amount });
     } catch (error) {
+      console.error('Multi-discount settings error:', error);
       res.status(500).json({ error: "Failed to update settings" });
     }
   });
