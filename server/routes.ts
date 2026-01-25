@@ -23,7 +23,7 @@ import connectPg from "connect-pg-simple";
 import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, sendTestEmail } from "./gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
-import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku } from "./repairdesk";
+import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
 
 // Extend express-session types
 declare module "express-session" {
@@ -1443,6 +1443,34 @@ export async function registerRoutes(
         notes: input.notes,
       }).catch(err => console.error('Admin notification error:', err));
 
+      // Create RepairDesk lead if enabled
+      const templates = await storage.getMessageTemplates();
+      const rdLeadSetting = templates.find(t => t.type === 'repairdesk_leads_enabled');
+      if (rdLeadSetting && rdLeadSetting.content === 'true') {
+        const nameParts = input.customerName.trim().split(/\s+/);
+        const firstName = nameParts[0] || input.customerName;
+        const lastName = nameParts.slice(1).join(' ') || '';
+        
+        createLead({
+          summary: {
+            firstName,
+            lastName,
+            email: input.customerEmail,
+            mobile: input.customerPhone,
+            referredBy: 'Website Quote',
+          },
+          devices: [{
+            price: finalTotal.toFixed(2),
+            repairProdItems: servicesData.map((s, idx) => ({
+              id: String(idx + 1),
+              name: s.serviceName,
+            })),
+            additionalProblem: servicesData.map(s => s.serviceName).join(', '),
+            customerNotes: input.notes,
+          }],
+        }).catch(err => console.error('RepairDesk lead creation error:', err));
+      }
+
       res.status(201).json({ 
         success: true, 
         servicesCount: servicesData.length,
@@ -1651,6 +1679,31 @@ export async function registerRoutes(
       res.json({ success: true, enabled });
     } catch (error) {
       console.error('Hide prices setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  // RepairDesk lead creation setting
+  app.get("/api/settings/repairdesk-leads", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'repairdesk_leads_enabled');
+      res.json({ enabled: setting ? setting.content === 'true' : false });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get setting" });
+    }
+  });
+
+  app.post("/api/settings/repairdesk-leads", requireAdmin, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      await storage.upsertMessageTemplate({
+        type: 'repairdesk_leads_enabled',
+        content: enabled ? 'true' : 'false'
+      });
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error('RepairDesk leads setting error:', error);
       res.status(500).json({ error: "Failed to update setting" });
     }
   });

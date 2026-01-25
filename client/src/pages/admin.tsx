@@ -4104,6 +4104,21 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // RepairDesk leads setting
+  const { data: rdLeadsSettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/repairdesk-leads"],
+  });
+
+  const updateRdLeads = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("POST", "/api/settings/repairdesk-leads", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/repairdesk-leads"] });
+      toast({ title: "Setting updated" });
+    },
+  });
+
   const { data: templates = [], isLoading } = useQuery<MessageTemplate[]>({
     queryKey: ["/api/message-templates"],
   });
@@ -4391,6 +4406,32 @@ $\{servicePrice} plus taxes
               data-testid="switch-hide-prices"
             />
           </div>
+        </CardContent>
+      </Card>
+
+      {/* RepairDesk Lead Creation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5" />
+            RepairDesk Lead Integration
+          </CardTitle>
+          <CardDescription>Automatically create leads in RepairDesk when customers request quotes</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between p-3 rounded-lg border">
+            <div>
+              <p className="font-medium text-sm">Create Lead on Quote Request</p>
+              <p className="text-xs text-muted-foreground">When enabled, a lead will be created in RepairDesk for each quote submitted</p>
+            </div>
+            <Switch
+              checked={rdLeadsSettings?.enabled ?? false}
+              onCheckedChange={(checked) => updateRdLeads.mutate(checked)}
+              disabled={updateRdLeads.isPending}
+              data-testid="switch-repairdesk-leads"
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">Note: Requires RepairDesk API key to be configured</p>
         </CardContent>
       </Card>
 
