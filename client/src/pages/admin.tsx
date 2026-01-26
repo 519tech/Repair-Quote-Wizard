@@ -14,7 +14,8 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -3550,6 +3551,20 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: services = [] } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
+  const { data: dismissedAlertIds = [] } = useQuery<string[]>({ queryKey: ["/api/dismissed-alerts/active-ids"] });
+
+  const dismissAlertMutation = useMutation({
+    mutationFn: async ({ deviceServiceId, dismissType }: { deviceServiceId: string; dismissType: "1month" | "indefinite" }) => {
+      return apiRequest("POST", "/api/dismissed-alerts", { deviceServiceId, dismissType });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dismissed-alerts/active-ids"] });
+      toast({ title: "Alert dismissed" });
+    },
+    onError: () => {
+      toast({ title: "Failed to dismiss alert", variant: "destructive" });
+    },
+  });
 
   // Filter devices based on search
   const filteredDevices = useMemo(() => {
@@ -3681,17 +3696,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   }, [deviceServices]);
   
   // Separate orphaned SKU errors from missing part errors for better messaging
+  // Filter out dismissed alerts
   const orphanedSkuLinks = useMemo(() => {
-    return deviceServices.filter(ds => ds.partSku && !ds.part);
-  }, [deviceServices]);
+    return deviceServices.filter(ds => ds.partSku && !ds.part && !dismissedAlertIds.includes(ds.id));
+  }, [deviceServices, dismissedAlertIds]);
   
   const missingPartLinks = useMemo(() => {
     return deviceServices.filter(ds => {
       const hasPart = ds.part !== null;
       const isLabourOnly = ds.service?.labourOnly === true;
-      return !hasPart && !isLabourOnly && !ds.partSku;
+      return !hasPart && !isLabourOnly && !ds.partSku && !dismissedAlertIds.includes(ds.id);
     });
-  }, [deviceServices]);
+  }, [deviceServices, dismissedAlertIds]);
 
   const { data: editSkuPartData } = useQuery<Part | null>({
     queryKey: [`/api/parts/sku/${encodeURIComponent(editPartSku)}`],
@@ -4467,21 +4483,40 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border gap-2"
                   data-testid={`orphaned-link-${ds.id}`}
                 >
-                  <span className="flex-1">
+                  <span className="flex-1 min-w-0">
                     <span className="font-medium">{ds.device?.name || "Unknown"}</span>
                     <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
                     <span className="mx-2">→</span>
                     <span>{ds.service?.name || "Unknown"}</span>
                   </span>
-                  <Badge variant="outline" className="font-mono text-xs">{ds.partSku}</Badge>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleEdit(ds)}
-                    data-testid={`button-fix-orphaned-${ds.id}`}
-                  >
-                    Reassign Part
-                  </Button>
+                  <Badge variant="outline" className="font-mono text-xs shrink-0">{ds.partSku}</Badge>
+                  <div className="flex gap-1 shrink-0">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleEdit(ds)}
+                      data-testid={`button-fix-orphaned-${ds.id}`}
+                    >
+                      Reassign Part
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-orphaned-${ds.id}`}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-${ds.id}`}>
+                          <Clock className="h-4 w-4 mr-2" />
+                          Dismiss for 1 month
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-${ds.id}`}>
+                          <EyeOff className="h-4 w-4 mr-2" />
+                          Dismiss indefinitely
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               ))}
             </div>
@@ -4504,23 +4539,42 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
               {missingPartLinks.map((ds) => (
                 <div 
                   key={ds.id} 
-                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border"
+                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border gap-2"
                   data-testid={`error-link-${ds.id}`}
                 >
-                  <span>
+                  <span className="flex-1 min-w-0">
                     <span className="font-medium">{ds.device?.name || "Unknown"}</span>
                     <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
                     <span className="mx-2">→</span>
                     <span>{ds.service?.name || "Unknown"}</span>
                   </span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => handleEdit(ds)}
-                    data-testid={`button-fix-link-${ds.id}`}
-                  >
-                    Assign Part
-                  </Button>
+                  <div className="flex gap-1 shrink-0">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleEdit(ds)}
+                      data-testid={`button-fix-link-${ds.id}`}
+                    >
+                      Assign Part
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-link-${ds.id}`}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-link-${ds.id}`}>
+                          <Clock className="h-4 w-4 mr-2" />
+                          Dismiss for 1 month
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-link-${ds.id}`}>
+                          <EyeOff className="h-4 w-4 mr-2" />
+                          Dismiss indefinitely
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                 </div>
               ))}
             </div>
@@ -4657,6 +4711,116 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
           <p className="text-sm text-muted-foreground mt-2">
             Showing {filteredDeviceServices.length} of {deviceServices.length} links
           </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type DismissedAlertWithInfo = {
+  id: string;
+  deviceServiceId: string;
+  dismissType: string;
+  dismissedAt: string;
+  expiresAt: string | null;
+  deviceName?: string;
+  brandName?: string;
+  serviceName?: string;
+};
+
+function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const { data: indefiniteAlerts = [], isLoading } = useQuery<DismissedAlertWithInfo[]>({
+    queryKey: ["/api/dismissed-alerts/indefinite"],
+  });
+  
+  const { data: deviceServices = [] } = useQuery<DeviceServiceWithRelations[]>({ 
+    queryKey: ["/api/device-services"] 
+  });
+  
+  const undismissMutation = useMutation({
+    mutationFn: async (deviceServiceId: string) => {
+      return apiRequest("DELETE", `/api/dismissed-alerts/${deviceServiceId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dismissed-alerts/indefinite"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dismissed-alerts/active-ids"] });
+      toast({ title: "Alert restored" });
+    },
+    onError: () => {
+      toast({ title: "Failed to restore alert", variant: "destructive" });
+    },
+  });
+
+  const alertsWithInfo = useMemo(() => {
+    return indefiniteAlerts.map(alert => {
+      const ds = deviceServices.find(d => d.id === alert.deviceServiceId);
+      return {
+        ...alert,
+        deviceName: ds?.device?.name || "Unknown Device",
+        brandName: ds?.device?.brand?.name || "-",
+        serviceName: ds?.service?.name || "Unknown Service",
+      };
+    });
+  }, [indefiniteAlerts, deviceServices]);
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <EyeOff className="h-5 w-5" />
+            Dismissed Missing Parts Alerts
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex justify-center py-4">
+            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <EyeOff className="h-5 w-5" />
+          Dismissed Missing Parts Alerts
+        </CardTitle>
+        <CardDescription>
+          Service links that have been permanently dismissed from the "Missing Parts" warnings
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {alertsWithInfo.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No permanently dismissed alerts</p>
+        ) : (
+          <div className="space-y-2 max-h-64 overflow-y-auto">
+            {alertsWithInfo.map((alert) => (
+              <div 
+                key={alert.id} 
+                className="flex items-center justify-between text-sm py-2 px-3 bg-muted/50 rounded-md border gap-2"
+                data-testid={`dismissed-alert-${alert.deviceServiceId}`}
+              >
+                <span className="flex-1 min-w-0">
+                  <span className="font-medium">{alert.deviceName}</span>
+                  <span className="text-muted-foreground"> ({alert.brandName})</span>
+                  <span className="mx-2">→</span>
+                  <span>{alert.serviceName}</span>
+                </span>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => undismissMutation.mutate(alert.deviceServiceId)}
+                  disabled={undismissMutation.isPending}
+                  data-testid={`button-restore-alert-${alert.deviceServiceId}`}
+                >
+                  Restore
+                </Button>
+              </div>
+            ))}
+          </div>
         )}
       </CardContent>
     </Card>
@@ -5014,6 +5178,9 @@ $\{servicePrice} plus taxes
             </Button>
           </CardContent>
         </Card>
+
+        {/* Dismissed Alerts */}
+        <DismissedAlertsSection toast={toast} />
       </TabsContent>
 
       {/* Quote Templates Sub-Tab */}

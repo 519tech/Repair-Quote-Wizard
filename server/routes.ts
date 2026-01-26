@@ -1675,6 +1675,56 @@ export async function registerRoutes(
     }
   });
 
+  // Dismissed Service Link Alerts Routes
+  app.get("/api/dismissed-alerts", requireAdmin, async (req, res) => {
+    try {
+      const alerts = await storage.getDismissedAlerts();
+      res.json(alerts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch dismissed alerts" });
+    }
+  });
+
+  app.get("/api/dismissed-alerts/active-ids", requireAdmin, async (req, res) => {
+    try {
+      const ids = await storage.getActiveDismissedAlertIds();
+      res.json(ids);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch active dismissed alert IDs" });
+    }
+  });
+
+  app.get("/api/dismissed-alerts/indefinite", requireAdmin, async (req, res) => {
+    try {
+      const alerts = await storage.getIndefinitelyDismissedAlerts();
+      res.json(alerts);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch indefinitely dismissed alerts" });
+    }
+  });
+
+  app.post("/api/dismissed-alerts", requireAdmin, async (req, res) => {
+    try {
+      const { deviceServiceId, dismissType } = req.body;
+      if (!deviceServiceId || !dismissType || !["1month", "indefinite"].includes(dismissType)) {
+        return res.status(400).json({ error: "Invalid request body" });
+      }
+      const alert = await storage.dismissAlert(deviceServiceId, dismissType);
+      res.json(alert);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to dismiss alert" });
+    }
+  });
+
+  app.delete("/api/dismissed-alerts/:deviceServiceId", requireAdmin, async (req, res) => {
+    try {
+      await storage.undismissAlert(req.params.deviceServiceId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to undismiss alert" });
+    }
+  });
+
   // RepairDesk API Routes (using API key authentication)
   app.get("/api/repairdesk/status", requireAdmin, async (req, res) => {
     try {
@@ -1709,17 +1759,10 @@ export async function registerRoutes(
       const templates = await storage.getMessageTemplates();
       const existing = templates.find(t => t.type === 'stock_check_enabled');
       
-      if (existing) {
-        await storage.updateMessageTemplate(existing.id, {
-          content: enabled ? 'true' : 'false'
-        });
-      } else {
-        await storage.createMessageTemplate({
-          type: 'stock_check_enabled',
-          subject: 'Stock Check Setting',
-          content: enabled ? 'true' : 'false'
-        });
-      }
+      await storage.upsertMessageTemplate({
+        type: 'stock_check_enabled',
+        content: enabled ? 'true' : 'false'
+      });
       res.json({ success: true, enabled });
     } catch (error) {
       res.status(500).json({ error: "Failed to update setting" });

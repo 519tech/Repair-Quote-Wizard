@@ -275,6 +275,19 @@ export const insertMessageTemplateSchema = createInsertSchema(messageTemplates).
 export type InsertMessageTemplate = z.infer<typeof insertMessageTemplateSchema>;
 export type MessageTemplate = typeof messageTemplates.$inferSelect;
 
+// Dismissed service link alerts (for hiding missing parts warnings)
+export const dismissedServiceLinkAlerts = pgTable("dismissed_service_link_alerts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
+  dismissType: text("dismiss_type").notNull(), // "1month" or "indefinite"
+  dismissedAt: text("dismissed_at").notNull().default(sql`now()`),
+  expiresAt: text("expires_at"), // null for indefinite, timestamp for 1month
+});
+
+export const insertDismissedAlertSchema = createInsertSchema(dismissedServiceLinkAlerts).omit({ id: true, dismissedAt: true });
+export type InsertDismissedAlert = z.infer<typeof insertDismissedAlertSchema>;
+export type DismissedServiceLinkAlert = typeof dismissedServiceLinkAlerts.$inferSelect;
+
 // RepairDesk OAuth tokens storage
 export const repairDeskTokens = pgTable("repairdesk_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

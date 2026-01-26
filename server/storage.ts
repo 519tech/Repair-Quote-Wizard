@@ -12,6 +12,7 @@ import {
   brandDeviceTypes,
   brandServiceCategories,
   messageTemplates,
+  dismissedServiceLinkAlerts,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -42,6 +43,7 @@ import {
   type BrandServiceCategoryWithRelations,
   type MessageTemplate,
   type InsertMessageTemplate,
+  type DismissedServiceLinkAlert,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, ilike, sql } from "drizzle-orm";
@@ -135,6 +137,13 @@ export interface IStorage {
   getMessageTemplates(): Promise<MessageTemplate[]>;
   getMessageTemplate(type: string): Promise<MessageTemplate | undefined>;
   upsertMessageTemplate(data: InsertMessageTemplate): Promise<MessageTemplate>;
+
+  // Dismissed Service Link Alerts
+  getDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
+  getActiveDismissedAlertIds(): Promise<string[]>;
+  getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
+  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert>;
+  undismissAlert(deviceServiceId: string): Promise<void>;
 
   // Users
   getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined>;
@@ -574,6 +583,45 @@ export class DatabaseStorage implements IStorage {
     }
     const [template] = await db.insert(messageTemplates).values(data).returning();
     return template;
+  }
+
+  // Dismissed Service Link Alerts
+  async getDismissedAlerts(): Promise<DismissedServiceLinkAlert[]> {
+    return db.select().from(dismissedServiceLinkAlerts);
+  }
+
+  async getActiveDismissedAlertIds(): Promise<string[]> {
+    const now = new Date().toISOString();
+    const alerts = await db.select().from(dismissedServiceLinkAlerts).where(
+      or(
+        eq(dismissedServiceLinkAlerts.dismissType, "indefinite"),
+        sql`${dismissedServiceLinkAlerts.expiresAt} > ${now}`
+      )
+    );
+    return alerts.map(a => a.deviceServiceId);
+  }
+
+  async getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]> {
+    return db.select().from(dismissedServiceLinkAlerts).where(
+      eq(dismissedServiceLinkAlerts.dismissType, "indefinite")
+    );
+  }
+
+  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert> {
+    await db.delete(dismissedServiceLinkAlerts).where(eq(dismissedServiceLinkAlerts.deviceServiceId, deviceServiceId));
+    const expiresAt = dismissType === "1month" 
+      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
+      : null;
+    const [alert] = await db.insert(dismissedServiceLinkAlerts).values({
+      deviceServiceId,
+      dismissType,
+      expiresAt,
+    }).returning();
+    return alert;
+  }
+
+  async undismissAlert(deviceServiceId: string): Promise<void> {
+    await db.delete(dismissedServiceLinkAlerts).where(eq(dismissedServiceLinkAlerts.deviceServiceId, deviceServiceId));
   }
 
   // Users
