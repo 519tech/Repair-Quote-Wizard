@@ -1571,6 +1571,78 @@ export async function registerRoutes(
     }
   });
 
+  // Get unknown device quotes
+  app.get("/api/unknown-device-quotes", requireAdmin, async (req, res) => {
+    try {
+      const quotes = await storage.getUnknownDeviceQuotes();
+      res.json(quotes);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch unknown device quotes" });
+    }
+  });
+
+  // Search all past submissions (combines quote requests and unknown device quotes)
+  app.get("/api/submissions/search", requireAdmin, async (req, res) => {
+    try {
+      const query = (req.query.q as string || "").toLowerCase().trim();
+      
+      // Get all quote requests with device/service info
+      const quoteRequests = await storage.getQuoteRequests();
+      const unknownQuotes = await storage.getUnknownDeviceQuotes();
+      
+      // Get device and service info for quote requests
+      const enrichedQuoteRequests = await Promise.all(
+        quoteRequests.map(async (qr) => {
+          const device = await storage.getDevice(qr.deviceId);
+          const deviceService = await storage.getDeviceServiceWithRelations(qr.deviceServiceId);
+          return {
+            id: qr.id,
+            type: 'quote' as const,
+            customerName: qr.customerName,
+            customerEmail: qr.customerEmail,
+            customerPhone: qr.customerPhone,
+            deviceName: device?.name || 'Unknown Device',
+            serviceName: deviceService?.service.name || 'Unknown Service',
+            quotedPrice: qr.quotedPrice,
+            notes: qr.notes,
+            createdAt: qr.createdAt,
+          };
+        })
+      );
+      
+      const enrichedUnknownQuotes = unknownQuotes.map((uq) => ({
+        id: uq.id,
+        type: 'unknown' as const,
+        customerName: uq.customerName,
+        customerEmail: uq.customerEmail,
+        customerPhone: uq.customerPhone,
+        deviceDescription: uq.deviceDescription,
+        issueDescription: uq.issueDescription,
+        createdAt: uq.createdAt,
+      }));
+      
+      // Combine and filter
+      const allSubmissions = [...enrichedQuoteRequests, ...enrichedUnknownQuotes];
+      
+      // Filter by search query if provided
+      const filtered = query
+        ? allSubmissions.filter(s => 
+            s.customerName.toLowerCase().includes(query) ||
+            s.customerEmail.toLowerCase().includes(query) ||
+            (s.customerPhone && s.customerPhone.toLowerCase().includes(query))
+          )
+        : allSubmissions;
+      
+      // Sort by date (newest first)
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      
+      res.json(filtered);
+    } catch (error) {
+      console.error('Search submissions error:', error);
+      res.status(500).json({ error: "Failed to search submissions" });
+    }
+  });
+
   // Message Templates
   app.get("/api/message-templates", async (req, res) => {
     try {
