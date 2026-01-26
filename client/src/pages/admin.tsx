@@ -892,6 +892,10 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [linkPartId, setLinkPartId] = useState<string | undefined>();
   const [debouncedLinkPartSearch, setDebouncedLinkPartSearch] = useState("");
   const [additionalPartSku, setAdditionalPartSku] = useState("");
+  const [linkAlternativePartSkus, setLinkAlternativePartSkus] = useState<string[]>([]);
+  const [linkAlternativePartInfo, setLinkAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
+  const [linkAltPartSearch, setLinkAltPartSearch] = useState("");
+  const [debouncedLinkAltPartSearch, setDebouncedLinkAltPartSearch] = useState("");
 
   // Bulk add links state
   const [bulkLinkOpen, setBulkLinkOpen] = useState(false);
@@ -903,6 +907,11 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     const timer = setTimeout(() => setDebouncedLinkPartSearch(linkPartSearch), 300);
     return () => clearTimeout(timer);
   }, [linkPartSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedLinkAltPartSearch(linkAltPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [linkAltPartSearch]);
 
   const { data: devices = [], isLoading } = useQuery<Device[]>({ queryKey: ["/api/devices"] });
   const { data: deviceTypes = [] } = useQuery<DeviceType[]>({ queryKey: ["/api/device-types"] });
@@ -941,6 +950,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     queryKey: [`/api/parts/sku/${encodeURIComponent(additionalPartSku)}`],
     enabled: additionalPartSku.length > 0
   });
+
+  // Alternative part SKU search for link dialog
+  const linkAltPartSearchUrl = useMemo(() => {
+    if (!debouncedLinkAltPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedLinkAltPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedLinkAltPartSearch]);
+
+  const { data: linkAltSearchedParts } = useQuery<{ parts: Part[]; total: number }>({
+    queryKey: [linkAltPartSearchUrl || "/api/parts-disabled-link-alt"],
+    enabled: !!linkAltPartSearchUrl
+  });
+
+  const linkAltFilteredParts = (linkAltSearchedParts?.parts || []).filter(
+    p => !linkAlternativePartSkus.includes(p.sku) && p.sku !== linkPartSku
+  );
 
   // Query for additional parts for the current edit link
   const { data: additionalParts = [], refetch: refetchAdditionalParts } = useQuery<{ id: string; partId: string | null; partSku: string | null; isPrimary: boolean; part: Part | null }[]>({
@@ -1202,11 +1227,33 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     });
   };
 
-  const handleEditLink = (link: DeviceServiceWithRelations) => {
+  const handleEditLink = async (link: DeviceServiceWithRelations) => {
     setEditLinkItem(link);
     setLinkPartSku(link.part?.sku || link.partSku || "");
     setLinkPartSearch("");
+    const altSkus = (link as any).alternativePartSkus || [];
+    setLinkAlternativePartSkus(altSkus);
+    setLinkAltPartSearch("");
     setEditLinkOpen(true);
+    
+    // Fetch part info for existing alternative SKUs
+    if (altSkus.length > 0) {
+      const infoMap: Record<string, { name: string; price: string }> = {};
+      for (const sku of altSkus) {
+        try {
+          const res = await fetch(`/api/parts/sku/${encodeURIComponent(sku)}`);
+          if (res.ok) {
+            const part = await res.json();
+            if (part) {
+              infoMap[sku] = { name: part.name, price: part.price };
+            }
+          }
+        } catch {}
+      }
+      setLinkAlternativePartInfo(infoMap);
+    } else {
+      setLinkAlternativePartInfo({});
+    }
   };
 
   const handleEditLinkSubmit = (e: React.FormEvent) => {
@@ -1217,6 +1264,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       data: {
         serviceId: editLinkItem.serviceId,
         partSku: linkPartSku || undefined,
+        alternativePartSkus: linkAlternativePartSkus,
       },
     });
   };
@@ -1771,7 +1819,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       </Dialog>
 
       {/* Edit Service Link Dialog */}
-      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) setAdditionalPartSku(""); }}>
+      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); } }}>
         <DialogContent className="max-w-lg">
           <form onSubmit={handleEditLinkSubmit}>
             <DialogHeader>
@@ -1871,6 +1919,82 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 {additionalPartSku && !additionalSkuPart && additionalPartSku.length > 0 && (
                   <p className="text-sm text-destructive">SKU not found</p>
                 )}
+              </div>
+              
+              {/* Alternative Primary Parts Section */}
+              <div className="space-y-2 border-t pt-4">
+                <Label>Alternative Primary Parts</Label>
+                <p className="text-xs text-muted-foreground">Add alternative parts that can be used instead of the primary part. The cheapest available option will be used for pricing.</p>
+                
+                {/* Display selected alternative parts */}
+                {linkAlternativePartSkus.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {linkAlternativePartSkus.map((sku) => (
+                      <Tooltip key={sku}>
+                        <TooltipTrigger asChild>
+                          <Badge variant="secondary" className="cursor-help" data-testid={`badge-link-alt-sku-${sku}`}>
+                            {sku}
+                            <button
+                              type="button"
+                              className="ml-1 hover:text-destructive"
+                              data-testid={`button-remove-link-alt-sku-${sku}`}
+                              onClick={() => {
+                                setLinkAlternativePartSkus(prev => prev.filter(s => s !== sku));
+                                setLinkAlternativePartInfo(prev => {
+                                  const newInfo = { ...prev };
+                                  delete newInfo[sku];
+                                  return newInfo;
+                                });
+                              }}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        </TooltipTrigger>
+                        {linkAlternativePartInfo[sku] && (
+                          <TooltipContent>
+                            <p className="font-medium">{linkAlternativePartInfo[sku].name}</p>
+                            <p className="text-xs text-muted-foreground">${linkAlternativePartInfo[sku].price}</p>
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Search to add alternative parts */}
+                <div className="relative">
+                  <Input
+                    value={linkAltPartSearch}
+                    onChange={(e) => setLinkAltPartSearch(e.target.value)}
+                    placeholder="Search to add alternative part..."
+                    data-testid="input-link-alt-part-search"
+                  />
+                  {linkAltFilteredParts.length > 0 && linkAltPartSearch && (
+                    <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                      {linkAltFilteredParts.slice(0, 10).map((p) => (
+                        <div
+                          key={p.id}
+                          className="px-3 py-2 hover-elevate cursor-pointer text-sm"
+                          data-testid={`option-link-alt-part-${p.sku}`}
+                          onClick={() => {
+                            if (!linkAlternativePartSkus.includes(p.sku)) {
+                              setLinkAlternativePartSkus(prev => [...prev, p.sku]);
+                              setLinkAlternativePartInfo(prev => ({
+                                ...prev,
+                                [p.sku]: { name: p.name, price: p.price }
+                              }));
+                            }
+                            setLinkAltPartSearch("");
+                          }}
+                        >
+                          <span className="font-medium">{p.sku}</span>
+                          <span className="ml-2 text-muted-foreground">{p.name} (${p.price})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <DialogFooter>
