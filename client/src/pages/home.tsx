@@ -627,21 +627,40 @@ export default function Home() {
               </div>
             </CardHeader>
             <CardContent>
-              <Button 
-                variant="secondary" 
-                size="sm"
-                className="mb-4" 
-                onClick={() => {
-                  if (selectedCategoryId) {
+              <div className="flex items-center justify-between gap-2 mb-4">
+                <Button 
+                  variant="secondary" 
+                  size="sm"
+                  onClick={() => {
+                    if (selectedCategoryId) {
+                      setSelectedCategoryId(null);
+                    } else {
+                      resetForm();
+                    }
+                  }}
+                  data-testid="button-back-services"
+                >
+                  {selectedServices.size > 0 ? "Add another service" : "Back"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedDevice(null);
+                    setSelectedDeviceId(null);
                     setSelectedCategoryId(null);
-                  } else {
-                    resetForm();
-                  }
-                }}
-                data-testid="button-back-services"
-              >
-                {selectedCategoryId ? "Add another service" : "Search again"}
-              </Button>
+                    setSelectedServices(new Set());
+                    setAllQuotes([]);
+                    setSearchQuery("");
+                    setSearchResults([]);
+                    setView('search');
+                  }}
+                  data-testid="button-start-over"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Start over
+                </Button>
+              </div>
 
               {servicesLoading || quotesLoading ? (
                 <div className="flex justify-center py-8">
