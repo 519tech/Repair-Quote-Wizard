@@ -28,6 +28,7 @@ interface QuoteData {
   warranty?: string;
   isAvailable: boolean;
   partSku?: string;
+  primaryPartSkus?: string[];
   additionalPartSkus?: string[];
 }
 
@@ -100,7 +101,8 @@ export default function Internal() {
                 warranty: data.warranty,
                 isAvailable: data.isAvailable ?? true,
                 partSku: data.partSku,
-                additionalPartSkus: data.additionalPartSkus,
+                primaryPartSkus: data.primaryPartSkus || [],
+                additionalPartSkus: data.additionalPartSkus || [],
               };
             }
           } catch {
@@ -115,10 +117,13 @@ export default function Internal() {
       // Fetch stock status for all SKUs
       const allSkus = new Set<string>();
       validQuotes.forEach(q => {
+        // Collect all primary part SKUs
+        if (q.primaryPartSkus?.length) {
+          q.primaryPartSkus.forEach(sku => allSkus.add(sku));
+        }
+        // Collect all secondary part SKUs
         if (q.additionalPartSkus?.length) {
           q.additionalPartSkus.forEach(sku => allSkus.add(sku));
-        } else if (q.partSku) {
-          allSkus.add(q.partSku);
         }
       });
       const skus = Array.from(allSkus);
@@ -340,7 +345,7 @@ export default function Internal() {
                                   )}
                                 </div>
                               )}
-                              {quote.isAvailable && (quote.partSku || quote.additionalPartSkus?.length) && (
+                              {quote.isAvailable && (quote.primaryPartSkus?.length || 0) > 0 && (
                                 <div className="mt-1">
                                   {stockLoading ? (
                                     <Badge variant="secondary" className="text-xs">
@@ -348,19 +353,22 @@ export default function Internal() {
                                       Checking stock...
                                     </Badge>
                                   ) : (() => {
-                                    const skusToCheck = quote.additionalPartSkus?.length 
-                                      ? quote.additionalPartSkus 
-                                      : quote.partSku ? [quote.partSku] : [];
-                                    const allInStock = skusToCheck.length > 0 && skusToCheck.every(sku => stockData[sku] && stockData[sku] > 0);
+                                    // For primary parts: ANY in stock = show "In Stock"
+                                    const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                    // For secondary parts: ALL must be in stock (if any exist)
+                                    const allSecondaryInStock = !quote.additionalPartSkus?.length || 
+                                      quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
                                     
-                                    if (allInStock) {
+                                    if (Object.keys(stockData).length === 0) return null;
+                                    
+                                    if (anyPrimaryInStock && allSecondaryInStock) {
                                       return (
                                         <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                                           <Package className="h-3 w-3 mr-1" />
                                           In Stock
                                         </Badge>
                                       );
-                                    } else if (Object.keys(stockData).length > 0) {
+                                    } else {
                                       return (
                                         <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
                                           <Package className="h-3 w-3 mr-1 shrink-0" />
@@ -368,7 +376,6 @@ export default function Internal() {
                                         </Badge>
                                       );
                                     }
-                                    return null;
                                   })()}
                                 </div>
                               )}

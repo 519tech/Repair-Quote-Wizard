@@ -53,7 +53,8 @@ export default function Home() {
     categoryDescription?: string;
     categoryImageUrl?: string;
     partSku?: string;
-    allPartSkus?: string[];
+    primaryPartSkus?: string[]; // All primary parts (any in stock = in stock)
+    additionalPartSkus?: string[]; // Secondary parts
     inStock?: boolean;
     bypassMultiDiscount?: boolean;
   }>>([]);
@@ -241,7 +242,8 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: quote.partSku || undefined,
-              allPartSkus: quote.allPartSkus || [],
+              primaryPartSkus: quote.primaryPartSkus || [],
+              additionalPartSkus: quote.additionalPartSkus || [],
               bypassMultiDiscount: quote.bypassMultiDiscount || false,
             };
           } catch {
@@ -261,7 +263,8 @@ export default function Home() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: undefined,
-              allPartSkus: [],
+              primaryPartSkus: [],
+              additionalPartSkus: [],
               bypassMultiDiscount: false,
             };
           }
@@ -290,10 +293,13 @@ export default function Home() {
       // Check stock for all parts with SKUs (runs in background)
       const allSkus = new Set<string>();
       quotes.forEach(q => {
-        if (q.allPartSkus && q.allPartSkus.length > 0) {
-          q.allPartSkus.forEach(sku => allSkus.add(sku));
-        } else if (q.partSku) {
-          allSkus.add(q.partSku);
+        // Collect all primary part SKUs
+        if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
+          q.primaryPartSkus.forEach(sku => allSkus.add(sku));
+        }
+        // Collect all secondary part SKUs
+        if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
+          q.additionalPartSkus.forEach(sku => allSkus.add(sku));
         }
       });
       const skus = Array.from(allSkus);
@@ -791,21 +797,35 @@ export default function Home() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
-                              {quote.partSku && (
+                              {(quote.primaryPartSkus?.length || 0) > 0 && (
                                 stockLoading ? (
                                   <span className="flex items-center gap-1 text-muted-foreground">
                                     <Loader2 className="h-3 w-3 animate-spin" />
                                     <span>Checking stock...</span>
                                   </span>
-                                ) : stockData[quote.partSku] && stockData[quote.partSku] > 0 ? (
-                                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
-                                    In Stock
-                                  </Badge>
-                                ) : Object.keys(stockData).length > 0 ? (
-                                  <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs whitespace-normal text-left">
-                                    Out of stock, parts order may be required. Contact us for confirmation
-                                  </Badge>
-                                ) : null
+                                ) : (() => {
+                                  // For primary parts: ANY in stock = show "In Stock"
+                                  const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                  // For secondary parts: ALL must be in stock (if any exist)
+                                  const allSecondaryInStock = !quote.additionalPartSkus?.length || 
+                                    quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                  
+                                  if (Object.keys(stockData).length === 0) return null;
+                                  
+                                  if (anyPrimaryInStock && allSecondaryInStock) {
+                                    return (
+                                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                                        In Stock
+                                      </Badge>
+                                    );
+                                  } else {
+                                    return (
+                                      <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs whitespace-normal text-left">
+                                        Out of stock, parts order may be required. Contact us for confirmation
+                                      </Badge>
+                                    );
+                                  }
+                                })()
                               )}
                             </div>
                           )}
@@ -910,23 +930,37 @@ export default function Home() {
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
-                            {q.partSku && (
+                            {(q.primaryPartSkus?.length || 0) > 0 && (
                               stockLoading ? (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                   <span>Checking stock...</span>
                                 </span>
-                              ) : stockData[q.partSku] && stockData[q.partSku] > 0 ? (
-                                <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                  <Package className="h-3 w-3 mr-1" />
-                                  In Stock
-                                </Badge>
-                              ) : Object.keys(stockData).length > 0 ? (
-                                <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
-                                  <Package className="h-3 w-3 mr-1 shrink-0" />
-                                  Out of stock, parts order may be required. Contact us for confirmation
-                                </Badge>
-                              ) : null
+                              ) : (() => {
+                                // For primary parts: ANY in stock = show "In Stock"
+                                const anyPrimaryInStock = q.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                // For secondary parts: ALL must be in stock (if any exist)
+                                const allSecondaryInStock = !q.additionalPartSkus?.length || 
+                                  q.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                
+                                if (Object.keys(stockData).length === 0) return null;
+                                
+                                if (anyPrimaryInStock && allSecondaryInStock) {
+                                  return (
+                                    <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                      <Package className="h-3 w-3 mr-1" />
+                                      In Stock
+                                    </Badge>
+                                  );
+                                } else {
+                                  return (
+                                    <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
+                                      <Package className="h-3 w-3 mr-1 shrink-0" />
+                                      Out of stock, parts order may be required. Contact us for confirmation
+                                    </Badge>
+                                  );
+                                }
+                              })()
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">

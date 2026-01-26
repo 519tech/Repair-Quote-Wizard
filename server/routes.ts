@@ -918,6 +918,7 @@ export async function registerRoutes(
     serviceId: z.string(),
     partSku: z.string().optional(),
     partId: z.string().optional(),
+    alternativePartSkus: z.array(z.string()).optional(),
   });
 
   app.post("/api/device-services", requireAdmin, async (req, res) => {
@@ -947,6 +948,7 @@ export async function registerRoutes(
         serviceId: input.serviceId,
         partId: partId || null,
         partSku: partSku,
+        alternativePartSkus: input.alternativePartSkus || null,
       };
       
       const deviceService = await storage.createDeviceService(data);
@@ -1110,6 +1112,7 @@ export async function registerRoutes(
       if (input.serviceId) data.serviceId = input.serviceId;
       if (partId !== undefined) data.partId = partId || null;
       if (partSku !== undefined) data.partSku = partSku || null;
+      if (input.alternativePartSkus !== undefined) data.alternativePartSkus = input.alternativePartSkus || null;
       
       const deviceService = await storage.updateDeviceService(req.params.id, data);
       if (!deviceService) {
@@ -1205,8 +1208,39 @@ export async function registerRoutes(
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
       const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
       
-      // Primary part cost (100%)
-      const primaryPartCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+      // Collect all primary part options (main part + alternatives)
+      const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
+      if (deviceService.part) {
+        primaryPartOptions.push({
+          sku: deviceService.part.sku,
+          price: parseFloat(deviceService.part.price),
+          name: deviceService.part.name,
+        });
+      }
+      
+      // Add alternative primary parts
+      const alternativeSkus = (deviceService as any).alternativePartSkus || [];
+      if (alternativeSkus.length > 0) {
+        const allParts = await storage.getParts();
+        for (const altSku of alternativeSkus) {
+          const altPart = allParts.find(p => p.sku === altSku);
+          if (altPart) {
+            primaryPartOptions.push({
+              sku: altPart.sku,
+              price: parseFloat(altPart.price),
+              name: altPart.name,
+            });
+          }
+        }
+      }
+      
+      // Use the cheapest primary part option
+      let cheapestPrimaryPart: typeof primaryPartOptions[0] | null = null;
+      if (primaryPartOptions.length > 0) {
+        cheapestPrimaryPart = primaryPartOptions.reduce((min, p) => p.price < min.price ? p : min, primaryPartOptions[0]);
+      }
+      
+      const primaryPartCost = cheapestPrimaryPart?.price || 0;
       
       // Get additional parts and calculate their cost at secondary percentage
       const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
@@ -1223,19 +1257,19 @@ export async function registerRoutes(
       const totalPrice = roundToNearestFiveMinus1(rawTotal);
       
       // Check if service has parts or is labour-only
-      const hasPart = !!deviceService.part || additionalParts.some(ap => !!ap.part);
+      const hasPart = primaryPartOptions.length > 0 || additionalParts.some(ap => !!ap.part);
       const isLabourOnly = service.labourOnly === true;
       // Service is available if it has parts OR is marked as labour-only
       const isAvailable = hasPart || isLabourOnly;
       
-      // Collect all part SKUs for stock checking
-      const allPartSkus: string[] = [];
-      if (deviceService.part?.sku) {
-        allPartSkus.push(deviceService.part.sku);
-      }
+      // Collect all PRIMARY part SKUs for stock checking (any in stock = show in stock)
+      const primaryPartSkus: string[] = primaryPartOptions.map(p => p.sku);
+      
+      // Collect SECONDARY part SKUs separately
+      const secondaryPartSkus: string[] = [];
       for (const ap of additionalParts) {
-        if (ap.part?.sku) {
-          allPartSkus.push(ap.part.sku);
+        if (ap.part?.sku && !ap.isPrimary) {
+          secondaryPartSkus.push(ap.part.sku);
         }
       }
       
@@ -1249,10 +1283,11 @@ export async function registerRoutes(
         laborPrice: service.laborPrice,
         partsMarkup: service.partsMarkup,
         secondaryPartPercentage: service.secondaryPartPercentage,
-        partCost: deviceService.part?.price || "0.00",
-        partSku: deviceService.part?.sku || null,
-        partName: deviceService.part?.name || null,
-        allPartSkus: allPartSkus,
+        partCost: cheapestPrimaryPart?.price?.toFixed(2) || "0.00",
+        partSku: cheapestPrimaryPart?.sku || null,
+        partName: cheapestPrimaryPart?.name || null,
+        primaryPartSkus, // All primary part SKUs (for stock: any in stock = in stock)
+        additionalPartSkus: secondaryPartSkus, // Secondary parts (all must be in stock)
         additionalPartsCount: additionalParts.filter(ap => !ap.isPrimary).length,
         additionalPartsCost: additionalPartsCost.toFixed(2),
         totalPartCost: totalPartCost.toFixed(2),

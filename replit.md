@@ -35,6 +35,7 @@ The application's data model includes:
 - **Multi-Service Selection**: Customers can select multiple services within a repair category or across categories, with a running total displayed.
 - **Pricing Logic**: Server-side quote calculation ensures accurate pricing. Services without parts can be marked as "Labour only" to display prices.
 - **Multi-Part Pricing**: Services can require multiple parts. Primary parts are charged at 100%, while additional parts are charged at the service's "Secondary Part %" (configurable, default 50%). Quote calculation sums: labor + (primary part cost × markup) + (sum of additional parts × secondary% × markup).
+- **Alternative Primary Parts**: Device-service links can specify multiple alternative primary parts via the `alternativePartSkus` array. The quote calculation automatically uses the cheapest available option for pricing. Stock status shows "In Stock" if ANY primary part is available, while ALL secondary parts must be in stock.
 - **Unique Constraints**: Database-level constraints prevent duplicate entries for devices, services, and device-service links.
 
 ## External Dependencies

@@ -3174,11 +3174,17 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [partSku, setPartSku] = useState("");
   const [partSearch, setPartSearch] = useState("");
   const [partId, setPartId] = useState<string | undefined>();
+  const [alternativePartSkus, setAlternativePartSkus] = useState<string[]>([]);
+  const [altPartSearch, setAltPartSearch] = useState("");
   const [editPartSku, setEditPartSku] = useState("");
   const [editPartSearch, setEditPartSearch] = useState("");
   const [editDeviceSearch, setEditDeviceSearch] = useState("");
+  const [editAlternativePartSkus, setEditAlternativePartSkus] = useState<string[]>([]);
+  const [editAltPartSearch, setEditAltPartSearch] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
+  const [debouncedAltPartSearch, setDebouncedAltPartSearch] = useState("");
+  const [debouncedEditAltPartSearch, setDebouncedEditAltPartSearch] = useState("");
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedPartSearch(partSearch), 300);
@@ -3189,6 +3195,16 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     const timer = setTimeout(() => setDebouncedEditPartSearch(editPartSearch), 300);
     return () => clearTimeout(timer);
   }, [editPartSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedAltPartSearch(altPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [altPartSearch]);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedEditAltPartSearch(editAltPartSearch), 300);
+    return () => clearTimeout(timer);
+  }, [editAltPartSearch]);
 
   const [filterBrand, setFilterBrand] = useState<string>("all");
   const [filterDevice, setFilterDevice] = useState<string>("all");
@@ -3256,6 +3272,28 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: editSearchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
     queryKey: [editPartSearchUrl || "/api/parts-disabled-edit"],
     enabled: !!editPartSearchUrl
+  });
+
+  const altPartSearchUrl = useMemo(() => {
+    if (!debouncedAltPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedAltPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedAltPartSearch]);
+  
+  const { data: altSearchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: [altPartSearchUrl || "/api/parts-disabled-alt"],
+    enabled: !!altPartSearchUrl
+  });
+
+  const editAltPartSearchUrl = useMemo(() => {
+    if (!debouncedEditAltPartSearch) return null;
+    const params = new URLSearchParams({ page: "1", limit: "50", search: debouncedEditAltPartSearch });
+    return `/api/parts?${params}`;
+  }, [debouncedEditAltPartSearch]);
+  
+  const { data: editAltSearchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
+    queryKey: [editAltPartSearchUrl || "/api/parts-disabled-edit-alt"],
+    enabled: !!editAltPartSearchUrl
   });
 
   const uniqueBrands = useMemo(() => {
@@ -3385,7 +3423,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string }) => {
+    mutationFn: async (data: { deviceId: string; serviceId: string; partSku?: string; partId?: string; alternativePartSkus?: string[] }) => {
       const res = await apiRequest("POST", "/api/device-services", data);
       return res.json();
     },
@@ -3398,6 +3436,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setPartSku("");
       setPartSearch("");
       setPartId(undefined);
+      setAlternativePartSkus([]);
+      setAltPartSearch("");
       toast({ title: "Device-service link created" });
     },
     onError: (error: Error) => {
@@ -3406,7 +3446,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[] } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -3416,6 +3456,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setEditItem(null);
       setEditPartSku("");
       setEditPartSearch("");
+      setEditAlternativePartSkus([]);
+      setEditAltPartSearch("");
       toast({ title: "Link updated" });
     },
     onError: (error: Error) => {
@@ -3471,6 +3513,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       serviceId,
       partSku: partSku || undefined,
       partId: partId === "none" ? undefined : partId,
+      alternativePartSkus: alternativePartSkus.length > 0 ? alternativePartSkus : undefined,
     });
   };
 
@@ -3479,6 +3522,8 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     setEditPartSku(ds.part?.sku || ds.partSku || "");
     setEditPartSearch("");
     setEditDeviceSearch("");
+    setEditAlternativePartSkus((ds as any).alternativePartSkus || []);
+    setEditAltPartSearch("");
     setEditOpen(true);
   };
 
@@ -3492,6 +3537,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         serviceId: editItem.serviceId,
         partSku: editPartSku || undefined,
         partId: editItem.partId || undefined,
+        alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
       },
     });
   };
@@ -3575,6 +3621,47 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                     <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
                   )}
                   {selectedPart && <p className="text-sm text-muted-foreground">Part cost ${selectedPart.price} will be marked up per service settings</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Alternative Primary Parts (optional)</Label>
+                  <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
+                  <Input 
+                    value={altPartSearch} 
+                    onChange={(e) => setAltPartSearch(e.target.value)} 
+                    placeholder="Search alternative parts..." 
+                    data-testid="input-alt-part-search" 
+                  />
+                  {altPartSearch.length > 0 && altSearchedParts?.parts && (
+                    <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                      {altSearchedParts.parts.map((part) => (
+                        <div 
+                          key={part.id} 
+                          className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
+                          onClick={() => {
+                            if (!alternativePartSkus.includes(part.sku)) {
+                              setAlternativePartSkus([...alternativePartSkus, part.sku]);
+                            }
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>{part.sku} - {part.name} (${part.price})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {alternativePartSkus.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {alternativePartSkus.map((sku) => (
+                        <Badge key={sku} variant="secondary" className="flex items-center gap-1">
+                          {sku}
+                          <X 
+                            className="h-3 w-3 cursor-pointer" 
+                            onClick={() => setAlternativePartSkus(alternativePartSkus.filter(s => s !== sku))} 
+                          />
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
               <DialogFooter>
@@ -3664,6 +3751,47 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   )}
                   {editPartSearch.length === 0 && !editPartSku && (
                     <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <Label>Alternative Primary Parts (optional)</Label>
+                  <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
+                  <Input 
+                    value={editAltPartSearch} 
+                    onChange={(e) => setEditAltPartSearch(e.target.value)} 
+                    placeholder="Search alternative parts..." 
+                    data-testid="input-edit-alt-part-search" 
+                  />
+                  {editAltPartSearch.length > 0 && editAltSearchedParts?.parts && (
+                    <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                      {editAltSearchedParts.parts.map((part) => (
+                        <div 
+                          key={part.id} 
+                          className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
+                          onClick={() => {
+                            if (!editAlternativePartSkus.includes(part.sku)) {
+                              setEditAlternativePartSkus([...editAlternativePartSkus, part.sku]);
+                            }
+                          }}
+                        >
+                          <Plus className="h-3 w-3" />
+                          <span>{part.sku} - {part.name} (${part.price})</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {editAlternativePartSkus.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {editAlternativePartSkus.map((sku) => (
+                        <Badge key={sku} variant="secondary" className="flex items-center gap-1">
+                          {sku}
+                          <X 
+                            className="h-3 w-3 cursor-pointer" 
+                            onClick={() => setEditAlternativePartSkus(editAlternativePartSkus.filter(s => s !== sku))} 
+                          />
+                        </Badge>
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>

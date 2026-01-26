@@ -173,6 +173,7 @@ export const deviceServices = pgTable("device_services", {
   serviceId: varchar("service_id").notNull().references(() => services.id, { onDelete: "cascade" }),
   partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
   partSku: varchar("part_sku"), // Stored separately so it persists when part is deleted
+  alternativePartSkus: text("alternative_part_skus").array(), // Alternative primary parts (cheapest used)
 }, (table) => [
   unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
 ]);
