@@ -291,15 +291,15 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <a href="/" className="flex items-center gap-2 text-muted-foreground hover:text-foreground" data-testid="link-home">
+        <div className="container mx-auto px-4 py-3 sm:py-4 flex items-center justify-between gap-2 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+            <a href="/" className="flex items-center gap-1 sm:gap-2 text-muted-foreground hover:text-foreground shrink-0" data-testid="link-home">
               <ArrowLeft className="h-4 w-4" />
               <span className="hidden sm:inline">Back to Quote</span>
             </a>
-            <div className="flex items-center gap-2">
-              <Wrench className="h-6 w-6 text-primary" />
-              <span className="text-xl font-semibold">Admin Panel</span>
+            <div className="flex items-center gap-2 min-w-0">
+              <Wrench className="h-5 w-5 sm:h-6 sm:w-6 text-primary shrink-0" />
+              <span className="text-lg sm:text-xl font-semibold truncate">Admin</span>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -323,17 +323,17 @@ export default function Admin() {
         </div>
       </header>
 
-      <main className="container mx-auto px-4 py-8">
-        <Tabs defaultValue="device-types" className="space-y-6">
-          <TabsList className="flex flex-wrap gap-1 h-auto">
-            <TabsTrigger value="device-types" data-testid="tab-device-types">Types</TabsTrigger>
-            <TabsTrigger value="devices" data-testid="tab-devices">Devices</TabsTrigger>
-            <TabsTrigger value="categories" data-testid="tab-categories">Categories</TabsTrigger>
-            <TabsTrigger value="services" data-testid="tab-services">Services</TabsTrigger>
-            <TabsTrigger value="parts" data-testid="tab-parts">Parts</TabsTrigger>
-            <TabsTrigger value="links" data-testid="tab-links">Service Links</TabsTrigger>
-            <TabsTrigger value="submissions" data-testid="tab-submissions">Submissions</TabsTrigger>
-            <TabsTrigger value="settings" data-testid="tab-settings">Settings</TabsTrigger>
+      <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
+        <Tabs defaultValue="device-types" className="space-y-4 sm:space-y-6">
+          <TabsList className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
+            <TabsTrigger value="device-types" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-device-types">Types</TabsTrigger>
+            <TabsTrigger value="devices" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-devices">Devices</TabsTrigger>
+            <TabsTrigger value="categories" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-categories">Categories</TabsTrigger>
+            <TabsTrigger value="services" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-services">Services</TabsTrigger>
+            <TabsTrigger value="parts" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-parts">Parts</TabsTrigger>
+            <TabsTrigger value="links" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-links">Links</TabsTrigger>
+            <TabsTrigger value="submissions" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-submissions">History</TabsTrigger>
+            <TabsTrigger value="settings" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-settings">Settings</TabsTrigger>
           </TabsList>
 
           <TabsContent value="device-types">
@@ -541,6 +541,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
         ) : deviceTypes.length === 0 ? (
           <p className="text-center py-8 text-muted-foreground">No device types yet. Add your first one!</p>
         ) : (
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -564,6 +565,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </CardContent>
     </Card>
@@ -2167,7 +2169,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               <DialogDescription>Link multiple services to multiple devices at once. No parts will be attached.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Device Type</Label>
                   <Select value={bulkLinkTypeId} onValueChange={setBulkLinkTypeId}>
@@ -2721,7 +2723,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Description (optional)</Label>
                   <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description" data-testid="input-service-description" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Labor Price ($)</Label>
                     <Input type="number" step="0.01" min="0" value={laborPrice} onChange={(e) => setLaborPrice(e.target.value)} placeholder="0.00" required data-testid="input-service-labor-price" />
@@ -2736,7 +2738,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Input type="number" step="1" min="0" max="100" value={secondaryPartPercentage} onChange={(e) => setSecondaryPartPercentage(e.target.value)} placeholder="50" data-testid="input-service-secondary-part-percentage" />
                   <p className="text-xs text-muted-foreground">When a repair needs multiple parts, secondary parts are charged at this % of their cost (e.g., 50% means a $10 secondary part adds $5)</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Warranty (optional)</Label>
                     <Input value={warranty} onChange={(e) => setWarranty(e.target.value)} placeholder="e.g., 90 days" data-testid="input-service-warranty" />
@@ -2804,7 +2806,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Label>Description (optional)</Label>
                   <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, description: e.target.value} : null)} data-testid="input-edit-service-description" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Labor Price ($)</Label>
                     <Input type="number" step="0.01" min="0" value={editItem?.laborPrice || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, laborPrice: e.target.value} : null)} required data-testid="input-edit-service-labor-price" />
@@ -2819,7 +2821,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Input type="number" step="1" min="0" max="100" value={editItem?.secondaryPartPercentage ?? 100} onChange={(e) => setEditItem(prev => prev ? {...prev, secondaryPartPercentage: e.target.value === "" ? 50 : parseInt(e.target.value)} : null)} data-testid="input-edit-service-secondary-part-percentage" />
                   <p className="text-xs text-muted-foreground">When a repair needs multiple parts, secondary parts are charged at this % of their cost</p>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Warranty (optional)</Label>
                     <Input value={editItem?.warranty || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, warranty: e.target.value} : null)} data-testid="input-edit-service-warranty" />
@@ -4297,7 +4299,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   <DialogDescription>Link a service to multiple devices at once. Filter by device type and/or brand.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Device Type</Label>
                       <Select value={bulkTypeId} onValueChange={setBulkTypeId}>
@@ -4903,10 +4905,10 @@ $\{servicePrice} plus taxes
 
   return (
     <Tabs defaultValue="quote-settings" className="space-y-4">
-      <TabsList className="flex flex-wrap gap-1 h-auto">
-        <TabsTrigger value="quote-settings" data-testid="subtab-quote-settings">Quote Settings</TabsTrigger>
-        <TabsTrigger value="quote-templates" data-testid="subtab-quote-templates">Quote Templates</TabsTrigger>
-        <TabsTrigger value="repairdesk" data-testid="subtab-repairdesk">RepairDesk Integration</TabsTrigger>
+      <TabsList className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
+        <TabsTrigger value="quote-settings" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-settings">Settings</TabsTrigger>
+        <TabsTrigger value="quote-templates" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-templates">Templates</TabsTrigger>
+        <TabsTrigger value="repairdesk" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-repairdesk">RepairDesk</TabsTrigger>
       </TabsList>
 
       {/* Quote Settings Sub-Tab */}
