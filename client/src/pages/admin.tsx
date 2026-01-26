@@ -4902,438 +4902,451 @@ $\{servicePrice} plus taxes
   }
 
   return (
-    <div className="space-y-6">
-      {/* RepairDesk Integration */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Link2 className="h-5 w-5" />
-            RepairDesk Integration
-          </CardTitle>
-          <CardDescription>API key connection for real-time parts inventory status</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center gap-3">
-            {repairDeskStatus?.connected ? (
-              <>
-                <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                  <Check className="h-3 w-3 mr-1" />
-                  Connected
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  API key configured
-                </span>
-              </>
-            ) : (
-              <>
-                <Badge variant="secondary" className="bg-muted">
-                  Not Connected
-                </Badge>
-                <span className="text-sm text-muted-foreground">
-                  Add REPAIRDESK_API_KEY to Secrets to enable
-                </span>
-              </>
-            )}
-          </div>
-          
-          {repairDeskStatus?.connected && (
+    <Tabs defaultValue="quote-settings" className="space-y-4">
+      <TabsList className="flex flex-wrap gap-1 h-auto">
+        <TabsTrigger value="quote-settings" data-testid="subtab-quote-settings">Quote Settings</TabsTrigger>
+        <TabsTrigger value="quote-templates" data-testid="subtab-quote-templates">Quote Templates</TabsTrigger>
+        <TabsTrigger value="repairdesk" data-testid="subtab-repairdesk">RepairDesk Integration</TabsTrigger>
+      </TabsList>
+
+      {/* Quote Settings Sub-Tab */}
+      <TabsContent value="quote-settings" className="space-y-6">
+        {/* Multi-Service Discount */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              Multi-Service Discount
+            </CardTitle>
+            <CardDescription>Automatic discount when customers select multiple services</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 rounded-lg border">
               <div>
-                <p className="font-medium text-sm">Show Stock Status</p>
-                <p className="text-xs text-muted-foreground">Display "In Stock" / "Parts order may be required" on quotes</p>
+                <p className="font-medium text-sm">Enable Multi-Service Discount</p>
+                <p className="text-xs text-muted-foreground">Apply discount when 2+ eligible services are selected</p>
               </div>
               <Switch
-                checked={repairDeskStatus?.stockCheckEnabled ?? true}
-                onCheckedChange={(checked) => toggleStockCheck.mutate(checked)}
-                disabled={toggleStockCheck.isPending}
-                data-testid="switch-stock-check"
+                checked={multiDiscountSettings?.enabled ?? false}
+                onCheckedChange={(checked) => updateMultiDiscount.mutate({ enabled: checked })}
+                disabled={updateMultiDiscount.isPending}
+                data-testid="switch-multi-discount"
               />
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Multi-Service Discount */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Layers className="h-5 w-5" />
-            Multi-Service Discount
-          </CardTitle>
-          <CardDescription>Automatic discount when customers select multiple services</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg border">
-            <div>
-              <p className="font-medium text-sm">Enable Multi-Service Discount</p>
-              <p className="text-xs text-muted-foreground">Apply discount when 2+ eligible services are selected</p>
-            </div>
-            <Switch
-              checked={multiDiscountSettings?.enabled ?? false}
-              onCheckedChange={(checked) => updateMultiDiscount.mutate({ enabled: checked })}
-              disabled={updateMultiDiscount.isPending}
-              data-testid="switch-multi-discount"
-            />
-          </div>
-          
-          {multiDiscountSettings?.enabled && (
-            <div className="space-y-2">
-              <Label htmlFor="discount-amount">Discount Amount ($)</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="discount-amount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  defaultValue={multiDiscountSettings?.amount ?? 10}
-                  className="w-32"
-                  onBlur={(e) => {
-                    const value = parseFloat(e.target.value);
-                    if (!isNaN(value) && value >= 0) {
-                      updateMultiDiscount.mutate({ amount: value });
-                    }
-                  }}
-                  data-testid="input-discount-amount"
-                />
-                <span className="text-sm text-muted-foreground self-center">off total when multiple services selected</span>
+            
+            {multiDiscountSettings?.enabled && (
+              <div className="space-y-2">
+                <Label htmlFor="discount-amount">Discount Amount ($)</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="discount-amount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    defaultValue={multiDiscountSettings?.amount ?? 10}
+                    className="w-32"
+                    onBlur={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (!isNaN(value) && value >= 0) {
+                        updateMultiDiscount.mutate({ amount: value });
+                      }
+                    }}
+                    data-testid="input-discount-amount"
+                  />
+                  <span className="text-sm text-muted-foreground self-center">off total when multiple services selected</span>
+                </div>
               </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Hide Prices Until Contact */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Lock className="h-5 w-5" />
+              Quote Flow Settings
+            </CardTitle>
+            <CardDescription>Control when customers see pricing information</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <p className="font-medium text-sm">Require Contact Info Before Showing Prices</p>
+                <p className="text-xs text-muted-foreground">When enabled, customers must enter their contact details before seeing prices</p>
+              </div>
+              <Switch
+                checked={hidePricesSettings?.enabled ?? false}
+                onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
+                disabled={updateHidePrices.isPending}
+                data-testid="switch-hide-prices"
+              />
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      {/* Hide Prices Until Contact */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5" />
-            Quote Flow Settings
-          </CardTitle>
-          <CardDescription>Control when customers see pricing information</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg border">
-            <div>
-              <p className="font-medium text-sm">Require Contact Info Before Showing Prices</p>
-              <p className="text-xs text-muted-foreground">When enabled, customers must enter their contact details before seeing prices</p>
+        {/* Admin Notifications */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Admin Notifications</CardTitle>
+            <CardDescription>Email address to receive quote submission notifications</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="admin-email">Admin Email Address</Label>
+              <Input 
+                id="admin-email"
+                type="email"
+                value={adminEmail} 
+                onChange={(e) => setAdminEmail(e.target.value)} 
+                placeholder="admin@example.com"
+                data-testid="input-admin-email"
+              />
+              <p className="text-sm text-muted-foreground">
+                When set, all quote submissions (both known and unknown device quotes) will send a notification to this email.
+              </p>
             </div>
-            <Switch
-              checked={hidePricesSettings?.enabled ?? false}
-              onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
-              disabled={updateHidePrices.isPending}
-              data-testid="switch-hide-prices"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* RepairDesk Lead Creation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            RepairDesk Lead Integration
-          </CardTitle>
-          <CardDescription>Automatically create leads in RepairDesk when customers request quotes</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between p-3 rounded-lg border">
-            <div>
-              <p className="font-medium text-sm">Create Lead on Quote Request</p>
-              <p className="text-xs text-muted-foreground">When enabled, a lead will be created in RepairDesk for each quote submitted</p>
-            </div>
-            <Switch
-              checked={rdLeadsSettings?.enabled ?? false}
-              onCheckedChange={(checked) => updateRdLeads.mutate(checked)}
-              disabled={updateRdLeads.isPending}
-              data-testid="switch-repairdesk-leads"
-            />
-          </div>
-          <p className="text-xs text-muted-foreground">Note: Requires RepairDesk API key to be configured</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Available Macros</CardTitle>
-          <CardDescription>Use these placeholders in your message templates</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            {macros.map((macro) => (
-              <Badge key={macro.name} variant="secondary" className="text-sm" data-testid={`macro-${macro.name}`}>
-                {macro.name} - {macro.description}
-              </Badge>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Service Item Template (Email)</CardTitle>
-          <CardDescription>
-            Format for each service in the {"{servicesList}"} placeholder for emails. Each service will be formatted using this template and separated by blank lines.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {serviceItemMacros.map((macro) => (
-              <Badge key={macro.name} variant="outline" className="text-sm">
-                {macro.name} - {macro.description}
-              </Badge>
-            ))}
-          </div>
-          <Textarea 
-            value={serviceItemTemplate} 
-            onChange={(e) => setServiceItemTemplate(e.target.value)} 
-            placeholder="Enter service item template..."
-            className="min-h-[120px] font-mono text-sm"
-            data-testid="textarea-service-item-template"
-          />
-          <Button onClick={handleSaveServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-service-item-template">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Service Item Template
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Service Item Template (SMS)</CardTitle>
-          <CardDescription>
-            Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by blank lines.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {serviceItemMacros.map((macro) => (
-              <Badge key={macro.name} variant="outline" className="text-sm">
-                {macro.name} - {macro.description}
-              </Badge>
-            ))}
-          </div>
-          <Textarea 
-            value={smsServiceItemTemplate} 
-            onChange={(e) => setSmsServiceItemTemplate(e.target.value)} 
-            placeholder="Enter SMS service item template..."
-            className="min-h-[120px] font-mono text-sm"
-            data-testid="input-sms-service-item-template"
-          />
-          <Button onClick={handleSaveSmsServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-sms-service-item-template">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save SMS Service Item Template
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Email Subject Template</CardTitle>
-          <CardDescription>Subject line for quote emails</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Input 
-            value={emailSubject} 
-            onChange={(e) => setEmailSubject(e.target.value)} 
-            placeholder="Enter email subject..."
-            data-testid="input-email-subject"
-          />
-          <Button onClick={handleSaveEmailSubject} disabled={saveMutation.isPending} data-testid="button-save-email-subject">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Subject
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Email Body Template</CardTitle>
-          <CardDescription>Main content of quote emails</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea 
-            value={emailBody} 
-            onChange={(e) => setEmailBody(e.target.value)} 
-            placeholder="Enter email body..."
-            className="min-h-[250px] font-mono text-sm"
-            data-testid="textarea-email-body"
-          />
-          <Button onClick={handleSaveEmailBody} disabled={saveMutation.isPending} data-testid="button-save-email-body">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Body
-          </Button>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>SMS Template</CardTitle>
-          <CardDescription>Text message content for quotes (keep it concise)</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Textarea 
-            value={smsTemplate} 
-            onChange={(e) => setSmsTemplate(e.target.value)} 
-            placeholder="Enter SMS template..."
-            className="min-h-[100px]"
-            data-testid="textarea-sms"
-          />
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-muted-foreground">{smsTemplate.length} characters (160 recommended max)</p>
-            <Button onClick={handleSaveSms} disabled={saveMutation.isPending} data-testid="button-save-sms">
+            <Button onClick={handleSaveAdminEmail} disabled={saveMutation.isPending} data-testid="button-save-admin-email">
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save SMS
+              Save Admin Email
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </TabsContent>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>"I Don't Know My Device" Email Template</CardTitle>
-          <CardDescription>Email sent to customers who submit unknown device quote requests</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {unknownDeviceMacros.map((macro) => (
-              <Badge key={macro.name} variant="secondary" className="text-xs">
-                {macro.name} - {macro.description}
-              </Badge>
-            ))}
-          </div>
-          <Textarea 
-            value={unknownDeviceEmail} 
-            onChange={(e) => setUnknownDeviceEmail(e.target.value)} 
-            placeholder="Enter email template..."
-            className="min-h-[200px] font-mono text-sm"
-            data-testid="textarea-unknown-device-email"
-          />
-          <Button onClick={handleSaveUnknownDeviceEmail} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-email">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Unknown Device Email
-          </Button>
-        </CardContent>
-      </Card>
+      {/* Quote Templates Sub-Tab */}
+      <TabsContent value="quote-templates" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Available Macros</CardTitle>
+            <CardDescription>Use these placeholders in your message templates</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-wrap gap-2">
+              {macros.map((macro) => (
+                <Badge key={macro.name} variant="secondary" className="text-sm" data-testid={`macro-${macro.name}`}>
+                  {macro.name} - {macro.description}
+                </Badge>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>"I Don't Know My Device" SMS Template</CardTitle>
-          <CardDescription>SMS sent to customers who submit unknown device quote requests</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2 mb-4">
-            {unknownDeviceMacros.map((macro) => (
-              <Badge key={macro.name} variant="secondary" className="text-xs">
-                {macro.name} - {macro.description}
-              </Badge>
-            ))}
-          </div>
-          <Textarea 
-            value={unknownDeviceSms} 
-            onChange={(e) => setUnknownDeviceSms(e.target.value)} 
-            placeholder="Enter SMS template..."
-            className="min-h-[80px]"
-            data-testid="textarea-unknown-device-sms"
-          />
-          <div className="flex items-center justify-between flex-wrap gap-2">
-            <p className="text-sm text-muted-foreground">{unknownDeviceSms.length} characters (160 recommended max)</p>
-            <Button onClick={handleSaveUnknownDeviceSms} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-sms">
+        <Card>
+          <CardHeader>
+            <CardTitle>Service Item Template (Email)</CardTitle>
+            <CardDescription>
+              Format for each service in the {"{servicesList}"} placeholder for emails. Each service will be formatted using this template and separated by blank lines.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {serviceItemMacros.map((macro) => (
+                <Badge key={macro.name} variant="outline" className="text-sm">
+                  {macro.name} - {macro.description}
+                </Badge>
+              ))}
+            </div>
+            <Textarea 
+              value={serviceItemTemplate} 
+              onChange={(e) => setServiceItemTemplate(e.target.value)} 
+              placeholder="Enter service item template..."
+              className="min-h-[120px] font-mono text-sm"
+              data-testid="textarea-service-item-template"
+            />
+            <Button onClick={handleSaveServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-service-item-template">
               {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Save Unknown Device SMS
+              Save Service Item Template
             </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Admin Notifications</CardTitle>
-          <CardDescription>Email address to receive quote submission notifications</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="admin-email">Admin Email Address</Label>
+        <Card>
+          <CardHeader>
+            <CardTitle>Service Item Template (SMS)</CardTitle>
+            <CardDescription>
+              Format for each service in the {"{servicesList}"} placeholder for SMS. Each service will be formatted using this template and separated by blank lines.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {serviceItemMacros.map((macro) => (
+                <Badge key={macro.name} variant="outline" className="text-sm">
+                  {macro.name} - {macro.description}
+                </Badge>
+              ))}
+            </div>
+            <Textarea 
+              value={smsServiceItemTemplate} 
+              onChange={(e) => setSmsServiceItemTemplate(e.target.value)} 
+              placeholder="Enter SMS service item template..."
+              className="min-h-[120px] font-mono text-sm"
+              data-testid="input-sms-service-item-template"
+            />
+            <Button onClick={handleSaveSmsServiceItemTemplate} disabled={saveMutation.isPending} data-testid="button-save-sms-service-item-template">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save SMS Service Item Template
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Email Subject Template</CardTitle>
+            <CardDescription>Subject line for quote emails</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <Input 
-              id="admin-email"
-              type="email"
-              value={adminEmail} 
-              onChange={(e) => setAdminEmail(e.target.value)} 
-              placeholder="admin@example.com"
-              data-testid="input-admin-email"
+              value={emailSubject} 
+              onChange={(e) => setEmailSubject(e.target.value)} 
+              placeholder="Enter email subject..."
+              data-testid="input-email-subject"
             />
-            <p className="text-sm text-muted-foreground">
-              When set, all quote submissions (both known and unknown device quotes) will send a notification to this email.
-            </p>
-          </div>
-          <Button onClick={handleSaveAdminEmail} disabled={saveMutation.isPending} data-testid="button-save-admin-email">
-            {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-            Save Admin Email
-          </Button>
-        </CardContent>
-      </Card>
+            <Button onClick={handleSaveEmailSubject} disabled={saveMutation.isPending} data-testid="button-save-email-subject">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Subject
+            </Button>
+          </CardContent>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Test Message Recipients</CardTitle>
-          <CardDescription>Configure where test emails and SMS messages should be sent</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="test-email">Test Email Address</Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="test-email"
-                  type="email"
-                  value={testEmail} 
-                  onChange={(e) => setTestEmail(e.target.value)} 
-                  placeholder="test@example.com"
-                  data-testid="input-test-email"
-                />
-                <Button 
-                  onClick={handleSendTestEmail} 
-                  disabled={testEmailMutation.isPending}
-                  variant="outline"
-                  data-testid="button-send-test-email"
-                >
-                  {testEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
-                  Send Test
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Send a test email with sample quote data to verify your email templates.
-              </p>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="test-phone">Test Phone Number</Label>
-              <div className="flex gap-2">
-                <Input 
-                  id="test-phone"
-                  type="tel"
-                  value={testPhone} 
-                  onChange={(e) => setTestPhone(e.target.value)} 
-                  placeholder="+1 (555) 123-4567"
-                  data-testid="input-test-phone"
-                />
-                <Button 
-                  onClick={handleSendTestSms} 
-                  disabled={testSmsMutation.isPending}
-                  variant="outline"
-                  data-testid="button-send-test-sms"
-                >
-                  {testSmsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
-                  Send Test
-                </Button>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Send a test SMS with sample quote data to verify your SMS templates.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Email Body Template</CardTitle>
+            <CardDescription>Main content of quote emails</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea 
+              value={emailBody} 
+              onChange={(e) => setEmailBody(e.target.value)} 
+              placeholder="Enter email body..."
+              className="min-h-[250px] font-mono text-sm"
+              data-testid="textarea-email-body"
+            />
+            <Button onClick={handleSaveEmailBody} disabled={saveMutation.isPending} data-testid="button-save-email-body">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Body
+            </Button>
+          </CardContent>
+        </Card>
 
-    </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>SMS Template</CardTitle>
+            <CardDescription>Text message content for quotes (keep it concise)</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Textarea 
+              value={smsTemplate} 
+              onChange={(e) => setSmsTemplate(e.target.value)} 
+              placeholder="Enter SMS template..."
+              className="min-h-[100px]"
+              data-testid="textarea-sms"
+            />
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted-foreground">{smsTemplate.length} characters (160 recommended max)</p>
+              <Button onClick={handleSaveSms} disabled={saveMutation.isPending} data-testid="button-save-sms">
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save SMS
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>"I Don't Know My Device" Email Template</CardTitle>
+            <CardDescription>Email sent to customers who submit unknown device quote requests</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {unknownDeviceMacros.map((macro) => (
+                <Badge key={macro.name} variant="secondary" className="text-xs">
+                  {macro.name} - {macro.description}
+                </Badge>
+              ))}
+            </div>
+            <Textarea 
+              value={unknownDeviceEmail} 
+              onChange={(e) => setUnknownDeviceEmail(e.target.value)} 
+              placeholder="Enter email template..."
+              className="min-h-[200px] font-mono text-sm"
+              data-testid="textarea-unknown-device-email"
+            />
+            <Button onClick={handleSaveUnknownDeviceEmail} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-email">
+              {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+              Save Unknown Device Email
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>"I Don't Know My Device" SMS Template</CardTitle>
+            <CardDescription>SMS sent to customers who submit unknown device quote requests</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-2 mb-4">
+              {unknownDeviceMacros.map((macro) => (
+                <Badge key={macro.name} variant="secondary" className="text-xs">
+                  {macro.name} - {macro.description}
+                </Badge>
+              ))}
+            </div>
+            <Textarea 
+              value={unknownDeviceSms} 
+              onChange={(e) => setUnknownDeviceSms(e.target.value)} 
+              placeholder="Enter SMS template..."
+              className="min-h-[80px]"
+              data-testid="textarea-unknown-device-sms"
+            />
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-sm text-muted-foreground">{unknownDeviceSms.length} characters (160 recommended max)</p>
+              <Button onClick={handleSaveUnknownDeviceSms} disabled={saveMutation.isPending} data-testid="button-save-unknown-device-sms">
+                {saveMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                Save Unknown Device SMS
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Test Message Recipients</CardTitle>
+            <CardDescription>Configure where test emails and SMS messages should be sent</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="test-email">Test Email Address</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="test-email"
+                    type="email"
+                    value={testEmail} 
+                    onChange={(e) => setTestEmail(e.target.value)} 
+                    placeholder="test@example.com"
+                    data-testid="input-test-email"
+                  />
+                  <Button 
+                    onClick={handleSendTestEmail} 
+                    disabled={testEmailMutation.isPending}
+                    variant="outline"
+                    data-testid="button-send-test-email"
+                  >
+                    {testEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
+                    Send Test
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Send a test email with sample quote data to verify your email templates.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="test-phone">Test Phone Number</Label>
+                <div className="flex gap-2">
+                  <Input 
+                    id="test-phone"
+                    type="tel"
+                    value={testPhone} 
+                    onChange={(e) => setTestPhone(e.target.value)} 
+                    placeholder="+1 (555) 123-4567"
+                    data-testid="input-test-phone"
+                  />
+                  <Button 
+                    onClick={handleSendTestSms} 
+                    disabled={testSmsMutation.isPending}
+                    variant="outline"
+                    data-testid="button-send-test-sms"
+                  >
+                    {testSmsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
+                    Send Test
+                  </Button>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Send a test SMS with sample quote data to verify your SMS templates.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      {/* RepairDesk Integration Sub-Tab */}
+      <TabsContent value="repairdesk" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              RepairDesk API Connection
+            </CardTitle>
+            <CardDescription>API key connection for real-time parts inventory status</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              {repairDeskStatus?.connected ? (
+                <>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <Check className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    API key configured
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Badge variant="secondary" className="bg-muted">
+                    Not Connected
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Add REPAIRDESK_API_KEY to Secrets to enable
+                  </span>
+                </>
+              )}
+            </div>
+            
+            {repairDeskStatus?.connected && (
+              <div className="flex items-center justify-between p-3 rounded-lg border">
+                <div>
+                  <p className="font-medium text-sm">Show Stock Status</p>
+                  <p className="text-xs text-muted-foreground">Display "In Stock" / "Parts order may be required" on quotes</p>
+                </div>
+                <Switch
+                  checked={repairDeskStatus?.stockCheckEnabled ?? true}
+                  onCheckedChange={(checked) => toggleStockCheck.mutate(checked)}
+                  disabled={toggleStockCheck.isPending}
+                  data-testid="switch-stock-check"
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              RepairDesk Lead Integration
+            </CardTitle>
+            <CardDescription>Automatically create leads in RepairDesk when customers request quotes</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <p className="font-medium text-sm">Create Lead on Quote Request</p>
+                <p className="text-xs text-muted-foreground">When enabled, a lead will be created in RepairDesk for each quote submitted</p>
+              </div>
+              <Switch
+                checked={rdLeadsSettings?.enabled ?? false}
+                onCheckedChange={(checked) => updateRdLeads.mutate(checked)}
+                disabled={updateRdLeads.isPending}
+                data-testid="switch-repairdesk-leads"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">Note: Requires RepairDesk API key to be configured</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
