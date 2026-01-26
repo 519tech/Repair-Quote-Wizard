@@ -2367,6 +2367,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         repairTime: editItem.repairTime || undefined,
         laborPrice: editItem.laborPrice,
         partsMarkup: editItem.partsMarkup,
+        secondaryPartPercentage: editItem.secondaryPartPercentage ?? 100,
         notes: editItem.notes || undefined,
         labourOnly: editItem.labourOnly,
         bypassMultiDiscount: editItem.bypassMultiDiscount,
