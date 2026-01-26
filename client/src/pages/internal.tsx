@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X, Wrench } from "lucide-react";
+import { Search, Loader2, X, Wrench, Package } from "lucide-react";
 import type { DeviceServiceWithRelations, ServiceCategory } from "@shared/schema";
 
 interface DeviceSearchResult {
@@ -27,6 +27,8 @@ interface QuoteData {
   repairTime?: string;
   warranty?: string;
   isAvailable: boolean;
+  partSku?: string;
+  additionalPartSkus?: string[];
 }
 
 export default function Internal() {
@@ -36,6 +38,8 @@ export default function Internal() {
   const [selectedDevice, setSelectedDevice] = useState<DeviceSearchResult | null>(null);
   const [allQuotes, setAllQuotes] = useState<QuoteData[]>([]);
   const [quotesLoading, setQuotesLoading] = useState(false);
+  const [stockData, setStockData] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -74,7 +78,9 @@ export default function Internal() {
 
   const fetchAllQuotes = async (services: DeviceServiceWithRelations[]) => {
     setQuotesLoading(true);
+    setStockLoading(true);
     setAllQuotes([]);
+    setStockData({});
     try {
       const quotes = await Promise.all(
         services.map(async (ds) => {
@@ -93,6 +99,8 @@ export default function Internal() {
                 repairTime: data.repairTime,
                 warranty: data.warranty,
                 isAvailable: data.isAvailable ?? true,
+                partSku: data.partSku,
+                additionalPartSkus: data.additionalPartSkus,
               };
             }
           } catch {
@@ -101,7 +109,40 @@ export default function Internal() {
           return null;
         })
       );
-      setAllQuotes(quotes.filter((q): q is NonNullable<typeof q> => q !== null));
+      const validQuotes = quotes.filter((q): q is NonNullable<typeof q> => q !== null);
+      setAllQuotes(validQuotes);
+      
+      // Fetch stock status for all SKUs
+      const allSkus = new Set<string>();
+      validQuotes.forEach(q => {
+        if (q.additionalPartSkus?.length) {
+          q.additionalPartSkus.forEach(sku => allSkus.add(sku));
+        } else if (q.partSku) {
+          allSkus.add(q.partSku);
+        }
+      });
+      const skus = Array.from(allSkus);
+      if (skus.length > 0) {
+        fetch('/api/repairdesk/stock-enabled')
+          .then(res => res.json())
+          .then(({ enabled }) => {
+            if (!enabled) {
+              setStockLoading(false);
+              return;
+            }
+            return fetch('/api/repairdesk/check-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ skus }),
+            });
+          })
+          .then(res => res?.ok ? res.json() : {})
+          .then(stockInfo => stockInfo && setStockData(stockInfo))
+          .catch(() => console.log('Stock check not available'))
+          .finally(() => setStockLoading(false));
+      } else {
+        setStockLoading(false);
+      }
     } finally {
       setQuotesLoading(false);
     }
@@ -122,6 +163,7 @@ export default function Internal() {
   const clearSelection = () => {
     setSelectedDevice(null);
     setAllQuotes([]);
+    setStockData({});
     setSearchQuery("");
     setTimeout(() => inputRef.current?.focus(), 100);
   };
@@ -289,13 +331,45 @@ export default function Internal() {
                                 <p className="text-sm text-muted-foreground truncate">{quote.serviceDescription}</p>
                               )}
                               {quote.isAvailable && (quote.repairTime || quote.warranty) && (
-                                <div className="flex gap-2 mt-1">
+                                <div className="flex flex-wrap gap-2 mt-1">
                                   {quote.repairTime && (
                                     <Badge variant="secondary" className="text-xs">{quote.repairTime}</Badge>
                                   )}
                                   {quote.warranty && (
                                     <Badge variant="secondary" className="text-xs">{quote.warranty} warranty</Badge>
                                   )}
+                                </div>
+                              )}
+                              {quote.isAvailable && (quote.partSku || quote.additionalPartSkus?.length) && (
+                                <div className="mt-1">
+                                  {stockLoading ? (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Checking stock...
+                                    </Badge>
+                                  ) : (() => {
+                                    const skusToCheck = quote.additionalPartSkus?.length 
+                                      ? quote.additionalPartSkus 
+                                      : quote.partSku ? [quote.partSku] : [];
+                                    const allInStock = skusToCheck.length > 0 && skusToCheck.every(sku => stockData[sku] && stockData[sku] > 0);
+                                    
+                                    if (allInStock) {
+                                      return (
+                                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                          <Package className="h-3 w-3 mr-1" />
+                                          In Stock
+                                        </Badge>
+                                      );
+                                    } else if (Object.keys(stockData).length > 0) {
+                                      return (
+                                        <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
+                                          <Package className="h-3 w-3 mr-1 shrink-0" />
+                                          Out of stock, parts order may be required. Contact us for confirmation
+                                        </Badge>
+                                      );
+                                    }
+                                    return null;
+                                  })()}
                                 </div>
                               )}
                             </div>
