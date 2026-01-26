@@ -1115,7 +1115,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateLinkMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[] } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -3338,6 +3338,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editAlternativePartSkus, setEditAlternativePartSkus] = useState<string[]>([]);
   const [editAlternativePartInfo, setEditAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
+  const [additionalPartSku, setAdditionalPartSku] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
   const [debouncedAltPartSearch, setDebouncedAltPartSearch] = useState("");
@@ -3451,6 +3452,18 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const { data: editAltSearchedParts } = useQuery<{ parts: Part[]; total: number }>({ 
     queryKey: [editAltPartSearchUrl || "/api/parts-disabled-edit-alt"],
     enabled: !!editAltPartSearchUrl
+  });
+
+  // Additional parts for the current edit item
+  const { data: dsAdditionalParts = [], refetch: refetchDsAdditionalParts } = useQuery<{ id: string; partId: string | null; partSku: string | null; isPrimary: boolean; part: Part | null }[]>({
+    queryKey: [`/api/device-services/${editItem?.id}/parts`],
+    enabled: !!editItem?.id
+  });
+
+  // Additional part SKU lookup
+  const { data: dsAdditionalSkuPart } = useQuery<Part | null>({
+    queryKey: [`/api/parts/sku/${encodeURIComponent(additionalPartSku)}`],
+    enabled: additionalPartSku.length > 0
   });
 
   const uniqueBrands = useMemo(() => {
@@ -3648,6 +3661,33 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const dsAddAdditionalPartMutation = useMutation({
+    mutationFn: async ({ deviceServiceId, partId, partSku }: { deviceServiceId: string; partId?: string; partSku?: string }) => {
+      await apiRequest("POST", `/api/device-services/${deviceServiceId}/parts`, { partId, partSku, isPrimary: false });
+    },
+    onSuccess: () => {
+      refetchDsAdditionalParts();
+      setAdditionalPartSku("");
+      toast({ title: "Additional part added" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error adding part", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const dsRemoveAdditionalPartMutation = useMutation({
+    mutationFn: async (partId: string) => {
+      await apiRequest("DELETE", `/api/device-service-parts/${partId}`);
+    },
+    onSuccess: () => {
+      refetchDsAdditionalParts();
+      toast({ title: "Part removed" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error removing part", description: error.message, variant: "destructive" });
     },
   });
 
@@ -3867,7 +3907,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
           </DialogContent>
         </Dialog>
 
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setAdditionalPartSku(""); }}>
           <DialogContent>
             <form onSubmit={handleEditSubmit}>
               <DialogHeader>
@@ -4001,6 +4041,83 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                         </Tooltip>
                       ))}
                     </div>
+                  )}
+                </div>
+                
+                {/* Additional Parts (Secondary) Section */}
+                <div className="space-y-2 border-t pt-4">
+                  <Label>Additional Parts (Secondary)</Label>
+                  <p className="text-xs text-muted-foreground mb-2">These parts will be charged at {editItem?.service?.secondaryPartPercentage || 100}% of their cost</p>
+                  
+                  {/* List existing additional parts */}
+                  {dsAdditionalParts.filter(ap => !ap.isPrimary).length > 0 && (
+                    <div className="space-y-1 mb-2">
+                      {dsAdditionalParts.filter(ap => !ap.isPrimary).map((ap) => (
+                        <div key={ap.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                          <span>
+                            {ap.part ? (
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span className="cursor-help underline decoration-dotted">{ap.part.sku}</span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="font-medium">{ap.part.name}</p>
+                                  <p className="text-xs text-muted-foreground">${ap.part.price}</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            ) : (
+                              <span>{ap.partSku || "Unknown"}</span>
+                            )}
+                            {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
+                          </span>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6"
+                            onClick={() => dsRemoveAdditionalPartMutation.mutate(ap.id)}
+                            disabled={dsRemoveAdditionalPartMutation.isPending}
+                            data-testid={`button-remove-ds-additional-part-${ap.id}`}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {/* Add new additional part */}
+                  <div className="flex gap-2">
+                    <Input 
+                      value={additionalPartSku} 
+                      onChange={(e) => setAdditionalPartSku(e.target.value)} 
+                      placeholder="Enter additional part SKU" 
+                      className="flex-1"
+                      data-testid="input-ds-additional-part-sku" 
+                    />
+                    <Button 
+                      type="button"
+                      size="sm"
+                      disabled={!dsAdditionalSkuPart || dsAddAdditionalPartMutation.isPending}
+                      onClick={() => {
+                        if (dsAdditionalSkuPart && editItem) {
+                          dsAddAdditionalPartMutation.mutate({
+                            deviceServiceId: editItem.id,
+                            partId: dsAdditionalSkuPart.id,
+                            partSku: dsAdditionalSkuPart.sku,
+                          });
+                        }
+                      }}
+                      data-testid="button-add-ds-additional-part"
+                    >
+                      {dsAddAdditionalPartMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                  {additionalPartSku && dsAdditionalSkuPart && (
+                    <p className="text-sm text-green-600">Found: {dsAdditionalSkuPart.name} (${dsAdditionalSkuPart.price})</p>
+                  )}
+                  {additionalPartSku && !dsAdditionalSkuPart && additionalPartSku.length > 0 && (
+                    <p className="text-sm text-destructive">SKU not found</p>
                   )}
                 </div>
               </div>
