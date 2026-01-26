@@ -1188,10 +1188,31 @@ export async function registerRoutes(
     }
   });
 
-  // Round price to nearest 5 minus 1 (so prices end in 9 or 4, like $99, $84, $149)
-  function roundToNearestFiveMinus1(price: number): number {
-    const rounded = Math.round(price / 5) * 5;
-    return Math.max(4, rounded - 1);
+  // Dynamic price rounding based on settings
+  async function roundPrice(price: number): Promise<number> {
+    const templates = await storage.getMessageTemplates();
+    const modeSetting = templates.find(t => t.type === 'price_rounding_mode');
+    const subtractSetting = templates.find(t => t.type === 'price_rounding_subtract');
+    
+    const mode = modeSetting?.content || "nearest5";
+    const parsedSubtract = parseInt(subtractSetting?.content || "1", 10);
+    // Clamp subtract amount to valid range 0-9, default to 1 if invalid
+    const subtractAmount = isNaN(parsedSubtract) ? 1 : Math.max(0, Math.min(9, parsedSubtract));
+    
+    if (mode === "none") {
+      return price;
+    }
+    
+    let rounded: number;
+    if (mode === "nearest10") {
+      rounded = Math.round(price / 10) * 10;
+    } else {
+      // Default to nearest5
+      rounded = Math.round(price / 5) * 5;
+    }
+    
+    // Always subtract, never increase price. Minimum result is 0.
+    return Math.max(0, rounded - subtractAmount);
   }
 
   // Quote calculation endpoint - calculates price on server side
@@ -1254,7 +1275,7 @@ export async function registerRoutes(
       const totalPartCost = primaryPartCost + additionalPartsCost;
       const markedUpPartCost = totalPartCost * partsMarkup;
       const rawTotal = laborPrice + markedUpPartCost;
-      const totalPrice = roundToNearestFiveMinus1(rawTotal);
+      const totalPrice = await roundPrice(rawTotal);
       
       // Check if service has parts or is labour-only
       const hasPart = primaryPartOptions.length > 0 || additionalParts.some(ap => !!ap.part);
@@ -1337,7 +1358,7 @@ export async function registerRoutes(
       const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
       const markedUpPartCost = partCost * partsMarkup;
       const rawTotal = laborPrice + markedUpPartCost;
-      const quotedPrice = roundToNearestFiveMinus1(rawTotal).toFixed(2);
+      const quotedPrice = (await roundPrice(rawTotal)).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
         customerName: input.customerName,
@@ -1416,7 +1437,7 @@ export async function registerRoutes(
         const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
         const markedUpPartCost = partCost * partsMarkup;
         const rawTotal = laborPrice + markedUpPartCost;
-        const quotedPrice = roundToNearestFiveMinus1(rawTotal);
+        const quotedPrice = await roundPrice(rawTotal);
         
         servicesData.push({
           serviceName: service.name,
@@ -1854,6 +1875,58 @@ export async function registerRoutes(
       res.json({ success: true, enabled });
     } catch (error) {
       console.error('RepairDesk leads setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  // Price rounding settings
+  app.get("/api/settings/price-rounding", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const modeSetting = templates.find(t => t.type === 'price_rounding_mode');
+      const subtractSetting = templates.find(t => t.type === 'price_rounding_subtract');
+      res.json({
+        mode: modeSetting?.content || "nearest5",
+        subtractAmount: parseInt(subtractSetting?.content || "1", 10)
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get rounding settings" });
+    }
+  });
+
+  app.post("/api/settings/price-rounding", requireAdmin, async (req, res) => {
+    try {
+      const { mode, subtractAmount } = req.body;
+      
+      // Validate mode
+      const validModes = ["none", "nearest5", "nearest10"];
+      if (mode !== undefined) {
+        if (!validModes.includes(mode)) {
+          return res.status(400).json({ error: "Invalid rounding mode. Must be: none, nearest5, or nearest10" });
+        }
+        await storage.upsertMessageTemplate({
+          type: 'price_rounding_mode',
+          content: mode,
+          subject: null,
+        });
+      }
+      
+      // Validate subtractAmount
+      if (subtractAmount !== undefined) {
+        const parsed = parseInt(subtractAmount, 10);
+        if (isNaN(parsed) || parsed < 0 || parsed > 9) {
+          return res.status(400).json({ error: "Invalid subtract amount. Must be a number between 0 and 9" });
+        }
+        await storage.upsertMessageTemplate({
+          type: 'price_rounding_subtract',
+          content: String(parsed),
+          subject: null,
+        });
+      }
+      
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Price rounding setting error:', error);
       res.status(500).json({ error: "Failed to update setting" });
     }
   });

@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -4888,6 +4888,21 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // Price rounding settings
+  const { data: roundingSettings } = useQuery<{ mode: string; subtractAmount: number }>({
+    queryKey: ["/api/settings/price-rounding"],
+  });
+
+  const updateRounding = useMutation({
+    mutationFn: async (data: { mode?: string; subtractAmount?: number }) => {
+      await apiRequest("POST", "/api/settings/price-rounding", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/price-rounding"] });
+      toast({ title: "Rounding settings updated" });
+    },
+  });
+
   // RepairDesk leads setting
   const { data: rdLeadsSettings } = useQuery<{ enabled: boolean }>({
     queryKey: ["/api/settings/repairdesk-leads"],
@@ -5120,6 +5135,76 @@ $\{servicePrice} plus taxes
                     data-testid="input-discount-amount"
                   />
                   <span className="text-sm text-muted-foreground self-center">off total when multiple services selected</span>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Price Rounding Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5" />
+              Price Rounding
+            </CardTitle>
+            <CardDescription>Configure how quoted prices are rounded for display</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Rounding Mode</Label>
+              <Select
+                value={roundingSettings?.mode || "nearest5"}
+                onValueChange={(value) => updateRounding.mutate({ mode: value })}
+                disabled={updateRounding.isPending}
+              >
+                <SelectTrigger className="w-full sm:w-64" data-testid="select-rounding-mode">
+                  <SelectValue placeholder="Select rounding mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No rounding (exact price)</SelectItem>
+                  <SelectItem value="nearest5">Round to nearest $5</SelectItem>
+                  <SelectItem value="nearest10">Round to nearest $10</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {roundingSettings?.mode === "none" 
+                  ? "Prices will show exact calculated values" 
+                  : roundingSettings?.mode === "nearest10"
+                    ? "Prices will be rounded to the nearest $10 increment"
+                    : "Prices will be rounded to the nearest $5 increment"}
+              </p>
+            </div>
+            
+            {roundingSettings?.mode !== "none" && (
+              <div className="space-y-2">
+                <Label htmlFor="subtract-amount">Subtract from Rounded Total ($)</Label>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <Input
+                    id="subtract-amount"
+                    type="number"
+                    step="1"
+                    min="0"
+                    max="9"
+                    defaultValue={roundingSettings?.subtractAmount ?? 1}
+                    className="w-24"
+                    onBlur={(e) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 0 && value <= 9) {
+                        updateRounding.mutate({ subtractAmount: value });
+                      }
+                    }}
+                    data-testid="input-subtract-amount"
+                  />
+                  <span className="text-sm text-muted-foreground self-center">
+                    {roundingSettings?.subtractAmount === 0 
+                      ? "Prices end in $0 (e.g., $100, $150)" 
+                      : roundingSettings?.subtractAmount === 1
+                        ? "Prices end in $9 or $4 (e.g., $99, $149)"
+                        : roundingSettings?.subtractAmount === 6
+                          ? "Prices end in $4 or $9 (e.g., $94, $144)"
+                          : `Prices end in ${10 - (roundingSettings?.subtractAmount || 1)} or ${5 - (roundingSettings?.subtractAmount || 1)}`}
+                  </span>
                 </div>
               </div>
             )}
