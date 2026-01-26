@@ -803,7 +803,7 @@ export default function Home() {
                                   </Badge>
                                 ) : Object.keys(stockData).length > 0 ? (
                                   <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs">
-                                    Parts order may be required
+                                    Out of stock, parts order may be required. Contact us for confirmation
                                   </Badge>
                                 ) : null
                               )}
@@ -924,7 +924,7 @@ export default function Home() {
                               ) : Object.keys(stockData).length > 0 ? (
                                 <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400">
                                   <Package className="h-3 w-3 mr-1" />
-                                  Parts order may be required
+                                  Out of stock, parts order may be required. Contact us for confirmation
                                 </Badge>
                               ) : null
                             )}
