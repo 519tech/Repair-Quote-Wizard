@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Package } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Package, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -21,7 +21,7 @@ export default function Embed() {
   const { toast } = useToast();
   
   // Main flow: 'search' | 'services' | 'quote' | 'unknown' | 'success'
-  const [view, setView] = useState<'search' | 'services' | 'quote' | 'unknown' | 'success'>('search');
+  const [view, setView] = useState<'search' | 'services' | 'quote' | 'contact' | 'unknown' | 'success'>('search');
   
   // Device search
   const [searchQuery, setSearchQuery] = useState("");
@@ -52,8 +52,13 @@ export default function Embed() {
     categoryDescription?: string;
     categoryImageUrl?: string;
     partSku?: string;
+    primaryPartSkus?: string[];
+    additionalPartSkus?: string[];
+    inStock?: boolean;
+    bypassMultiDiscount?: boolean;
   }>>([]);
   const [stockData, setStockData] = useState<Record<string, number>>({});
+  const [stockLoading, setStockLoading] = useState(false);
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
@@ -84,6 +89,17 @@ export default function Embed() {
   const { data: partsLastUpdated } = useQuery<MessageTemplate>({
     queryKey: ["/api/message-templates", "parts_last_updated"],
   });
+
+  // Multi-service discount settings
+  const { data: multiDiscountSettings } = useQuery<{ enabled: boolean; amount: number }>({
+    queryKey: ["/api/settings/multi-discount"],
+  });
+
+  // Hide prices until contact setting
+  const { data: hidePricesSettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/hide-prices-until-contact"],
+  });
+  const hidePricesUntilContact = hidePricesSettings?.enabled ?? false;
 
   const formatLastUpdated = (isoDate: string | undefined) => {
     if (!isoDate) return null;
@@ -139,6 +155,7 @@ export default function Embed() {
       deviceId: string;
       deviceServiceIds: string[];
       notes?: string;
+      multiServiceDiscount?: number;
     }) => {
       const res = await apiRequest("POST", "/api/quote-requests/combined", data);
       return res.json();
@@ -220,6 +237,9 @@ export default function Embed() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: quote.partSku || undefined,
+              primaryPartSkus: quote.primaryPartSkus || [],
+              additionalPartSkus: quote.additionalPartSkus || [],
+              bypassMultiDiscount: quote.bypassMultiDiscount || false,
             };
           } catch {
             return {
@@ -238,16 +258,17 @@ export default function Embed() {
               categoryDescription: ds.service.category?.description || undefined,
               categoryImageUrl: ds.service.category?.imageUrl || undefined,
               partSku: undefined,
+              primaryPartSkus: [],
+              additionalPartSkus: [],
+              bypassMultiDiscount: false,
             };
           }
         })
       );
       
       // Check if NO services are available (priced) - redirect to manual quote form
-      // A service is available if it has parts linked OR is labour-only
       const anyServiceAvailable = quotes.some(q => q.isAvailable);
       if (!anyServiceAvailable && quotes.length > 0) {
-        // No priced services available - pre-fill device info and go to manual quote form
         const deviceName = selectedDevice?.name || quotes[0]?.deviceName || "";
         const brandName = selectedDevice?.brand?.name || "";
         const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
@@ -261,23 +282,34 @@ export default function Embed() {
       }
       
       setAllQuotes(quotes);
-
-      // Check stock for all parts with SKUs
-      const skus = quotes.filter(q => q.partSku).map(q => q.partSku!);
-      if (skus.length > 0) {
-        try {
-          const stockRes = await fetch('/api/repairdesk/check-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skus }),
-          });
-          if (stockRes.ok) {
-            const stockInfo = await stockRes.json();
-            setStockData(stockInfo);
-          }
-        } catch (error) {
-          console.log('Stock check not available');
+      
+      // Check stock for all parts with SKUs (runs in background)
+      const allSkus = new Set<string>();
+      quotes.forEach(q => {
+        if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
+          q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
         }
+        if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
+          q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
+        }
+      });
+      const skus = Array.from(allSkus);
+      if (skus.length > 0) {
+        fetch('/api/repairdesk/stock-enabled')
+          .then(res => res.json())
+          .then(({ enabled }) => {
+            if (!enabled) return;
+            setStockLoading(true);
+            return fetch('/api/repairdesk/check-stock', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ skus }),
+            });
+          })
+          .then(res => res?.ok ? res.json() : {})
+          .then(stockInfo => stockInfo && setStockData(stockInfo))
+          .catch(() => console.log('Stock check not available'))
+          .finally(() => setStockLoading(false));
       }
     } finally {
       setQuotesLoading(false);
@@ -315,12 +347,33 @@ export default function Embed() {
     });
   };
 
+  const handleContinueToQuote = () => {
+    setView('quote');
+  };
+
   const getSelectedQuotes = () => {
     return allQuotes.filter(q => selectedServices.has(q.serviceId));
   };
 
-  const getGrandTotal = () => {
+  // Calculate if multi-service discount applies
+  const getMultiServiceDiscount = () => {
+    if (!multiDiscountSettings?.enabled) return 0;
+    
+    const selectedQuotes = getSelectedQuotes();
+    const eligibleCount = selectedQuotes.filter(q => !q.bypassMultiDiscount).length;
+    
+    if (eligibleCount >= 2) {
+      return multiDiscountSettings.amount || 0;
+    }
+    return 0;
+  };
+
+  const getSubtotal = () => {
     return getSelectedQuotes().reduce((sum, q) => sum + parseFloat(q.price), 0);
+  };
+
+  const getGrandTotal = () => {
+    return getSubtotal() - getMultiServiceDiscount();
   };
 
   const handleSendCombinedQuote = (e: React.FormEvent) => {
@@ -338,6 +391,7 @@ export default function Embed() {
       deviceId: selectedDeviceId,
       deviceServiceIds,
       notes: notes || undefined,
+      multiServiceDiscount: getMultiServiceDiscount(),
     });
   };
 
@@ -393,11 +447,9 @@ export default function Embed() {
       ? allQuotes.filter(q => !q.categoryId)
       : allQuotes.filter(q => q.categoryId === catId);
     
-    // Check if any service in this category is available (has parts OR is labour-only)
     const anyAvailable = catQuotes.some(q => q.isAvailable);
     
     if (!anyAvailable && catQuotes.length > 0) {
-      // No priced services in this category - pre-fill device info and go to manual quote form
       const deviceName = selectedDevice?.name || catQuotes[0]?.deviceName || "";
       const brandName = selectedDevice?.brand?.name || "";
       const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
@@ -414,8 +466,8 @@ export default function Embed() {
 
   return (
     <div className="min-h-screen bg-background p-4">
-      <div className="max-w-lg mx-auto space-y-4">
-        
+      <div className="max-w-3xl mx-auto space-y-4">
+
         {/* Search View */}
         {view === 'search' && (
           <Card>
@@ -726,7 +778,7 @@ export default function Embed() {
                           <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-sm">{quote.serviceName}</p>
                             {quote.isAvailable ? (
-                              <span className="font-bold text-primary shrink-0">${quote.price}</span>
+                              !hidePricesUntilContact && <span className="font-bold text-primary shrink-0">${quote.price}</span>
                             ) : (
                               <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                             )}
@@ -738,11 +790,33 @@ export default function Embed() {
                             <div className="flex flex-wrap gap-2 mt-1 text-xs text-muted-foreground items-center">
                               {quote.repairTime && <span>{quote.repairTime}</span>}
                               {quote.warranty && <span>· {quote.warranty} warranty</span>}
-                              {quote.partSku && stockData[quote.partSku] && stockData[quote.partSku] > 0 && (
-                                <Badge variant="secondary" className="text-xs py-0 px-1.5 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                  <Package className="h-3 w-3 mr-1" />
-                                  In Stock
-                                </Badge>
+                              {(quote.primaryPartSkus?.length || 0) > 0 && (
+                                stockLoading ? (
+                                  <span className="flex items-center gap-1 text-muted-foreground">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                    <span>Checking stock...</span>
+                                  </span>
+                                ) : (() => {
+                                  const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                  const allSecondaryInStock = !quote.additionalPartSkus?.length || 
+                                    quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                  
+                                  if (Object.keys(stockData).length === 0) return null;
+                                  
+                                  if (anyPrimaryInStock && allSecondaryInStock) {
+                                    return (
+                                      <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs">
+                                        In Stock
+                                      </Badge>
+                                    );
+                                  } else {
+                                    return (
+                                      <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs whitespace-normal text-left">
+                                        Out of stock, parts order may be required. Contact us for confirmation
+                                      </Badge>
+                                    );
+                                  }
+                                })()
                               )}
                             </div>
                           )}
@@ -761,12 +835,19 @@ export default function Embed() {
                               <p className="text-sm text-muted-foreground">
                                 {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
                               </p>
-                              <p className="text-xl font-bold text-primary">
-                                Total: ${getGrandTotal().toFixed(2)}
-                              </p>
-                              <p className="text-xs text-muted-foreground">plus taxes</p>
+                              {!hidePricesUntilContact && (
+                                <>
+                                  {getMultiServiceDiscount() > 0 && (
+                                    <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
+                                  )}
+                                  <p className="text-xl font-bold text-primary">
+                                    Total: ${getGrandTotal().toFixed(2)}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">plus taxes</p>
+                                </>
+                              )}
                             </div>
-                            <Button size="sm" onClick={() => setView('quote')} data-testid="button-continue-quote">
+                            <Button size="sm" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
                               <ChevronRight className="h-4 w-4 mr-1" />
                               Continue
                             </Button>
@@ -809,7 +890,7 @@ export default function Embed() {
                     </p>
                   )}
                   <CardTitle className="text-lg">Your Repair Quote</CardTitle>
-                  <CardDescription className="text-xs">Review and provide contact details</CardDescription>
+                  <CardDescription className="text-xs">Review your selected services</CardDescription>
                 </div>
               </div>
             </CardHeader>
@@ -818,10 +899,10 @@ export default function Embed() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView('services')}
+                onClick={() => setView(hidePricesUntilContact ? 'contact' : 'services')}
                 data-testid="button-back-services-quote"
               >
-                Back to services
+                {hidePricesUntilContact ? "Edit contact info" : "Back to services"}
               </Button>
 
               <div className="space-y-4">
@@ -840,20 +921,52 @@ export default function Embed() {
                             {q.serviceDescription && (
                               <p className="text-xs text-muted-foreground mt-0.5">{q.serviceDescription}</p>
                             )}
+                            {(q.primaryPartSkus?.length || 0) > 0 && (
+                              stockLoading ? (
+                                <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                  <span>Checking stock...</span>
+                                </span>
+                              ) : (() => {
+                                const anyPrimaryInStock = q.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                const allSecondaryInStock = !q.additionalPartSkus?.length || 
+                                  q.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                
+                                if (Object.keys(stockData).length === 0) return null;
+                                
+                                if (anyPrimaryInStock && allSecondaryInStock) {
+                                  return (
+                                    <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 text-xs mt-1">
+                                      In Stock
+                                    </Badge>
+                                  );
+                                } else {
+                                  return (
+                                    <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs mt-1 whitespace-normal text-left">
+                                      Out of stock, parts order may be required
+                                    </Badge>
+                                  );
+                                }
+                              })()
+                            )}
                           </div>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-semibold">${q.price}</span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-muted-foreground hover:text-destructive"
+                          <div className="text-right shrink-0">
+                            <span className="font-bold">${q.price}</span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 ml-2"
                               onClick={() => {
-                                toggleServiceSelection(q.serviceId);
                                 if (selectedServices.size <= 1) {
                                   setView('services');
                                 }
+                                setSelectedServices(prev => {
+                                  const next = new Set(prev);
+                                  next.delete(q.serviceId);
+                                  return next;
+                                });
                               }}
-                              data-testid={`button-remove-${q.serviceId}`}
+                              data-testid={`button-remove-service-${q.serviceId}`}
                             >
                               <X className="h-3 w-3" />
                             </Button>
@@ -862,6 +975,12 @@ export default function Embed() {
                       </div>
                     ))}
                   </div>
+                  {getMultiServiceDiscount() > 0 && (
+                    <div className="flex justify-between items-center pt-2 text-green-600">
+                      <span className="text-sm font-medium">Multi-Service Discount</span>
+                      <span className="font-semibold">-${getMultiServiceDiscount().toFixed(2)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between items-center pt-2 border-t">
                     <span className="font-semibold">Grand Total</span>
                     <div className="text-right">
@@ -872,76 +991,144 @@ export default function Embed() {
                   </div>
                 </div>
 
-                {/* Contact Form */}
-                <form onSubmit={handleSendCombinedQuote} className="space-y-3">
-                  <h3 className="font-semibold text-sm">Send Quote To</h3>
-                  <div className="space-y-2">
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-name" className="text-xs">Name *</Label>
-                      <Input
-                        id="quote-name"
-                        value={contactInfo.name}
-                        onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                        placeholder="Your name"
-                        required
-                        className="h-9"
-                        data-testid="input-quote-name"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-email" className="text-xs">Email *</Label>
-                      <Input
-                        id="quote-email"
-                        type="email"
-                        value={contactInfo.email}
-                        onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
-                        placeholder="your@email.com"
-                        required
-                        className="h-9"
-                        data-testid="input-quote-email"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-phone" className="text-xs">Phone (optional)</Label>
-                      <Input
-                        id="quote-phone"
-                        type="tel"
-                        value={contactInfo.phone}
-                        onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                        placeholder="For SMS quote"
-                        className="h-9"
-                        data-testid="input-quote-phone"
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="quote-notes" className="text-xs">Notes (optional)</Label>
-                      <Textarea
-                        id="quote-notes"
-                        value={notes}
-                        onChange={(e) => setNotes(e.target.value)}
-                        placeholder="Any additional information..."
-                        className="resize-none"
-                        rows={2}
-                        data-testid="input-quote-notes"
-                      />
-                    </div>
-                  </div>
+                {/* Send Me Quote Button */}
+                {hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
                   <Button
-                    type="submit"
-                    size="sm"
                     className="w-full"
+                    onClick={() => handleSendCombinedQuote({ preventDefault: () => {} } as React.FormEvent)}
                     disabled={submitCombinedQuoteMutation.isPending}
-                    data-testid="button-send-quote"
+                    data-testid="button-send-me-quote"
                   >
                     {submitCombinedQuoteMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
-                      <Check className="h-4 w-4 mr-2" />
+                      <Mail className="h-4 w-4 mr-2" />
                     )}
-                    Send My Quote
+                    Send Quote
                   </Button>
-                </form>
+                ) : (
+                  <Button
+                    className="w-full"
+                    onClick={() => setView('contact')}
+                    data-testid="button-send-me-quote"
+                  >
+                    <Mail className="h-4 w-4 mr-2" />
+                    Send Me Quote
+                  </Button>
+                )}
               </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Contact Form View */}
+        {view === 'contact' && (
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-start gap-3">
+                {selectedDevice && (
+                  <div className="shrink-0">
+                    {selectedDevice.imageUrl ? (
+                      <img 
+                        src={selectedDevice.imageUrl} 
+                        alt={selectedDevice.name}
+                        className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
+                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                      </div>
+                    )}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground mb-1">
+                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
+                  </p>
+                  <CardTitle className="text-lg">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
+                  <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button 
+                variant="secondary" 
+                size="sm"
+                className="mb-4" 
+                onClick={() => setView(hidePricesUntilContact ? 'services' : 'quote')}
+                data-testid="button-back-quote"
+              >
+                {hidePricesUntilContact ? "Back to services" : "Back to quote"}
+              </Button>
+
+              <form onSubmit={hidePricesUntilContact ? (e) => { e.preventDefault(); if (contactInfo.name && contactInfo.email) setView('quote'); } : handleSendCombinedQuote} className="space-y-3">
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-name" className="text-xs">Name *</Label>
+                    <Input
+                      id="quote-name"
+                      value={contactInfo.name}
+                      onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
+                      placeholder="Your name"
+                      required
+                      className="h-9"
+                      data-testid="input-quote-name"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-email" className="text-xs">Email *</Label>
+                    <Input
+                      id="quote-email"
+                      type="email"
+                      value={contactInfo.email}
+                      onChange={(e) => setContactInfo({ ...contactInfo, email: e.target.value })}
+                      placeholder="your@email.com"
+                      required
+                      className="h-9"
+                      data-testid="input-quote-email"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-phone" className="text-xs">Phone (optional)</Label>
+                    <Input
+                      id="quote-phone"
+                      type="tel"
+                      value={contactInfo.phone}
+                      onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
+                      placeholder="For SMS quote"
+                      className="h-9"
+                      data-testid="input-quote-phone"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="quote-notes" className="text-xs">Notes (optional)</Label>
+                    <Textarea
+                      id="quote-notes"
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      placeholder="Any additional information..."
+                      className="resize-none"
+                      rows={2}
+                      data-testid="input-quote-notes"
+                    />
+                  </div>
+                </div>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={submitCombinedQuoteMutation.isPending}
+                  data-testid="button-send-quote"
+                >
+                  {submitCombinedQuoteMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : hidePricesUntilContact ? (
+                    <ChevronRight className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Check className="h-4 w-4 mr-2" />
+                  )}
+                  {hidePricesUntilContact ? "View My Quote" : "Send My Quote"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         )}
