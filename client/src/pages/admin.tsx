@@ -1923,7 +1923,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
               
               {/* Alternative Primary Parts Section */}
               <div className="space-y-2 border-t pt-4">
-                <Label>Alternative Primary Parts</Label>
+                <Label>Alternative Primary Parts ({linkAlternativePartSkus.length}/10)</Label>
                 <p className="text-xs text-muted-foreground">Add alternative parts that can be used instead of the primary part. The cheapest available option will be used for pricing.</p>
                 
                 {/* Display selected alternative parts */}
@@ -1972,13 +1972,15 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   />
                   {linkAltFilteredParts.length > 0 && linkAltPartSearch && (
                     <div className="absolute z-10 w-full mt-1 bg-popover border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                      {linkAltFilteredParts.slice(0, 10).map((p) => (
+                      {linkAlternativePartSkus.length >= 10 ? (
+                        <p className="px-3 py-2 text-sm text-muted-foreground">Maximum 10 alternative parts allowed</p>
+                      ) : linkAltFilteredParts.slice(0, 10).map((p) => (
                         <div
                           key={p.id}
                           className="px-3 py-2 hover-elevate cursor-pointer text-sm"
                           data-testid={`option-link-alt-part-${p.sku}`}
                           onClick={() => {
-                            if (!linkAlternativePartSkus.includes(p.sku)) {
+                            if (!linkAlternativePartSkus.includes(p.sku) && linkAlternativePartSkus.length < 10) {
                               setLinkAlternativePartSkus(prev => [...prev, p.sku]);
                               setLinkAlternativePartInfo(prev => ({
                                 ...prev,
@@ -3842,7 +3844,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   {selectedPart && <p className="text-sm text-muted-foreground">Part cost ${selectedPart.price} will be marked up per service settings</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label>Alternative Primary Parts (optional)</Label>
+                  <Label>Alternative Primary Parts ({alternativePartSkus.length}/10)</Label>
                   <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
                   <Input 
                     value={altPartSearch} 
@@ -3852,12 +3854,14 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   />
                   {altPartSearch.length > 0 && altSearchedParts?.parts && (
                     <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
-                      {altSearchedParts.parts.map((part) => (
+                      {alternativePartSkus.length >= 10 ? (
+                        <p className="p-1 text-sm text-muted-foreground">Maximum 10 alternative parts allowed</p>
+                      ) : altSearchedParts.parts.map((part) => (
                         <div 
                           key={part.id} 
                           className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
                           onClick={() => {
-                            if (!alternativePartSkus.includes(part.sku)) {
+                            if (!alternativePartSkus.includes(part.sku) && alternativePartSkus.length < 10) {
                               setAlternativePartSkus([...alternativePartSkus, part.sku]);
                               setAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
                             }
@@ -3988,7 +3992,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label>Alternative Primary Parts (optional)</Label>
+                  <Label>Alternative Primary Parts ({editAlternativePartSkus.length}/10)</Label>
                   <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
                   <Input 
                     value={editAltPartSearch} 
@@ -3998,12 +4002,14 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   />
                   {editAltPartSearch.length > 0 && editAltSearchedParts?.parts && (
                     <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
-                      {editAltSearchedParts.parts.map((part) => (
+                      {editAlternativePartSkus.length >= 10 ? (
+                        <p className="p-1 text-sm text-muted-foreground">Maximum 10 alternative parts allowed</p>
+                      ) : editAltSearchedParts.parts.map((part) => (
                         <div 
                           key={part.id} 
                           className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
                           onClick={() => {
-                            if (!editAlternativePartSkus.includes(part.sku)) {
+                            if (!editAlternativePartSkus.includes(part.sku) && editAlternativePartSkus.length < 10) {
                               setEditAlternativePartSkus([...editAlternativePartSkus, part.sku]);
                               setEditAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
                             }
