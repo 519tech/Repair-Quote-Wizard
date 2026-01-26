@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1679,7 +1680,21 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                       <TableRow key={link.id}>
                         <TableCell className="font-medium">{link.service?.name || "Unknown"}</TableCell>
                         <TableCell>
-                          {link.part?.sku || link.partSku || <span className="text-muted-foreground">-</span>}
+                          {link.part ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help underline decoration-dotted">{link.part.sku}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="font-medium">{link.part.name}</p>
+                                <p className="text-xs text-muted-foreground">${link.part.price}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : link.partSku ? (
+                            <span>{link.partSku}</span>
+                          ) : (
+                            <span className="text-muted-foreground">-</span>
+                          )}
                           {!link.part && link.partSku && <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">missing</Badge>}
                         </TableCell>
                         <TableCell>
@@ -1792,7 +1807,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   <div className="space-y-1 mb-2">
                     {additionalParts.filter(ap => !ap.isPrimary).map((ap) => (
                       <div key={ap.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                        <span>{ap.part?.name || ap.partSku || "Unknown"} {ap.part && `($${ap.part.price})`}</span>
+                        <span>
+                          {ap.part ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help underline decoration-dotted">{ap.part.sku}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="font-medium">{ap.part.name}</p>
+                                <p className="text-xs text-muted-foreground">${ap.part.price}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <span>{ap.partSku || "Unknown"}</span>
+                          )}
+                          {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
+                        </span>
                         <Button 
                           type="button" 
                           variant="ghost" 
@@ -3176,11 +3206,13 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [partSearch, setPartSearch] = useState("");
   const [partId, setPartId] = useState<string | undefined>();
   const [alternativePartSkus, setAlternativePartSkus] = useState<string[]>([]);
+  const [alternativePartInfo, setAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [altPartSearch, setAltPartSearch] = useState("");
   const [editPartSku, setEditPartSku] = useState("");
   const [editPartSearch, setEditPartSearch] = useState("");
   const [editDeviceSearch, setEditDeviceSearch] = useState("");
   const [editAlternativePartSkus, setEditAlternativePartSkus] = useState<string[]>([]);
+  const [editAlternativePartInfo, setEditAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
@@ -3438,6 +3470,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setPartSearch("");
       setPartId(undefined);
       setAlternativePartSkus([]);
+      setAlternativePartInfo({});
       setAltPartSearch("");
       toast({ title: "Device-service link created" });
     },
@@ -3458,6 +3491,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setEditPartSku("");
       setEditPartSearch("");
       setEditAlternativePartSkus([]);
+      setEditAlternativePartInfo({});
       setEditAltPartSearch("");
       toast({ title: "Link updated" });
     },
@@ -3518,14 +3552,34 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     });
   };
 
-  const handleEdit = (ds: DeviceServiceWithRelations) => {
+  const handleEdit = async (ds: DeviceServiceWithRelations) => {
     setEditItem(ds);
     setEditPartSku(ds.part?.sku || ds.partSku || "");
     setEditPartSearch("");
     setEditDeviceSearch("");
-    setEditAlternativePartSkus((ds as any).alternativePartSkus || []);
+    const altSkus = (ds as any).alternativePartSkus || [];
+    setEditAlternativePartSkus(altSkus);
     setEditAltPartSearch("");
     setEditOpen(true);
+    
+    // Fetch part info for existing alternative SKUs to populate tooltips
+    if (altSkus.length > 0) {
+      const infoMap: Record<string, { name: string; price: string }> = {};
+      for (const sku of altSkus) {
+        try {
+          const res = await fetch(`/api/parts/sku/${encodeURIComponent(sku)}`);
+          if (res.ok) {
+            const part = await res.json();
+            if (part) {
+              infoMap[sku] = { name: part.name, price: part.price };
+            }
+          }
+        } catch {}
+      }
+      setEditAlternativePartInfo(infoMap);
+    } else {
+      setEditAlternativePartInfo({});
+    }
   };
 
   const handleEditSubmit = (e: React.FormEvent) => {
@@ -3641,6 +3695,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                           onClick={() => {
                             if (!alternativePartSkus.includes(part.sku)) {
                               setAlternativePartSkus([...alternativePartSkus, part.sku]);
+                              setAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
                             }
                           }}
                         >
@@ -3653,13 +3708,27 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   {alternativePartSkus.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {alternativePartSkus.map((sku) => (
-                        <Badge key={sku} variant="secondary" className="flex items-center gap-1">
-                          {sku}
-                          <X 
-                            className="h-3 w-3 cursor-pointer" 
-                            onClick={() => setAlternativePartSkus(alternativePartSkus.filter(s => s !== sku))} 
-                          />
-                        </Badge>
+                        <Tooltip key={sku}>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
+                              {sku}
+                              <X 
+                                className="h-3 w-3 cursor-pointer" 
+                                onClick={(e) => { e.stopPropagation(); setAlternativePartSkus(alternativePartSkus.filter(s => s !== sku)); }} 
+                              />
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {alternativePartInfo[sku] ? (
+                              <>
+                                <p className="font-medium">{alternativePartInfo[sku].name}</p>
+                                <p className="text-xs text-muted-foreground">${alternativePartInfo[sku].price}</p>
+                              </>
+                            ) : (
+                              <p className="text-muted-foreground">Part details not available</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   )}
@@ -3772,6 +3841,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                           onClick={() => {
                             if (!editAlternativePartSkus.includes(part.sku)) {
                               setEditAlternativePartSkus([...editAlternativePartSkus, part.sku]);
+                              setEditAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
                             }
                           }}
                         >
@@ -3784,13 +3854,27 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   {editAlternativePartSkus.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-2">
                       {editAlternativePartSkus.map((sku) => (
-                        <Badge key={sku} variant="secondary" className="flex items-center gap-1">
-                          {sku}
-                          <X 
-                            className="h-3 w-3 cursor-pointer" 
-                            onClick={() => setEditAlternativePartSkus(editAlternativePartSkus.filter(s => s !== sku))} 
-                          />
-                        </Badge>
+                        <Tooltip key={sku}>
+                          <TooltipTrigger asChild>
+                            <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
+                              {sku}
+                              <X 
+                                className="h-3 w-3 cursor-pointer" 
+                                onClick={(e) => { e.stopPropagation(); setEditAlternativePartSkus(editAlternativePartSkus.filter(s => s !== sku)); }} 
+                              />
+                            </Badge>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {editAlternativePartInfo[sku] ? (
+                              <>
+                                <p className="font-medium">{editAlternativePartInfo[sku].name}</p>
+                                <p className="text-xs text-muted-foreground">${editAlternativePartInfo[sku].price}</p>
+                              </>
+                            ) : (
+                              <p className="text-muted-foreground">Part details not available</p>
+                            )}
+                          </TooltipContent>
+                        </Tooltip>
                       ))}
                     </div>
                   )}
@@ -4137,7 +4221,15 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                             data-testid={`cell-sku-${ds.id}`}
                           >
                             {ds.part ? (
-                              <Badge variant="outline" className="font-mono">{ds.part.sku}</Badge>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Badge variant="outline" className="font-mono cursor-help">{ds.part.sku}</Badge>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className="font-medium">{ds.part.name}</p>
+                                  <p className="text-xs text-muted-foreground">${ds.part.price}</p>
+                                </TooltipContent>
+                              </Tooltip>
                             ) : ds.partSku ? (
                               <Badge variant="outline" className="font-mono text-orange-600 border-orange-500/50">
                                 {ds.partSku} <span className="text-xs ml-1">(missing)</span>
