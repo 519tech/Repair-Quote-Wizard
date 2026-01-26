@@ -1189,7 +1189,12 @@ export async function registerRoutes(
   });
 
   // Dynamic price rounding based on settings
-  async function roundPrice(price: number): Promise<number> {
+  async function roundPrice(price: number, bypassRounding: boolean = false): Promise<number> {
+    // If bypass is set, return the raw price without any rounding
+    if (bypassRounding) {
+      return price;
+    }
+    
     const templates = await storage.getMessageTemplates();
     const modeSetting = templates.find(t => t.type === 'price_rounding_mode');
     const subtractSetting = templates.find(t => t.type === 'price_rounding_subtract');
@@ -1275,7 +1280,7 @@ export async function registerRoutes(
       const totalPartCost = primaryPartCost + additionalPartsCost;
       const markedUpPartCost = totalPartCost * partsMarkup;
       const rawTotal = laborPrice + markedUpPartCost;
-      const totalPrice = await roundPrice(rawTotal);
+      const totalPrice = await roundPrice(rawTotal, service.bypassRounding === true);
       
       // Check if service has parts or is labour-only
       const hasPart = primaryPartOptions.length > 0 || additionalParts.some(ap => !!ap.part);
@@ -1358,7 +1363,7 @@ export async function registerRoutes(
       const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
       const markedUpPartCost = partCost * partsMarkup;
       const rawTotal = laborPrice + markedUpPartCost;
-      const quotedPrice = (await roundPrice(rawTotal)).toFixed(2);
+      const quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
         customerName: input.customerName,
@@ -1437,7 +1442,7 @@ export async function registerRoutes(
         const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
         const markedUpPartCost = partCost * partsMarkup;
         const rawTotal = laborPrice + markedUpPartCost;
-        const quotedPrice = await roundPrice(rawTotal);
+        const quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
         
         servicesData.push({
           serviceName: service.name,

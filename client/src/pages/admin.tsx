@@ -2528,6 +2528,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [notes, setNotes] = useState("");
   const [labourOnly, setLabourOnly] = useState(false);
   const [bypassMultiDiscount, setBypassMultiDiscount] = useState(false);
+  const [bypassRounding, setBypassRounding] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
 
@@ -2552,7 +2553,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   };
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; bypassMultiDiscount?: boolean; imageUrl?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; bypassMultiDiscount?: boolean; bypassRounding?: boolean; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -2569,6 +2570,8 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setSecondaryPartPercentage("50");
       setNotes("");
       setLabourOnly(false);
+      setBypassMultiDiscount(false);
+      setBypassRounding(false);
       setImageUrl("");
       toast({ title: "Service created" });
     },
@@ -2618,6 +2621,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       notes: notes || undefined,
       labourOnly,
       bypassMultiDiscount,
+      bypassRounding,
       imageUrl: imageUrl || undefined
     });
   };
@@ -2761,6 +2765,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <Checkbox id="bypass-discount" checked={bypassMultiDiscount} onCheckedChange={(checked) => setBypassMultiDiscount(checked === true)} data-testid="checkbox-bypass-discount" />
                   <Label htmlFor="bypass-discount" className="text-sm font-normal cursor-pointer">Bypass multi-service discount (this service won't trigger discount)</Label>
                 </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="bypass-rounding" checked={bypassRounding} onCheckedChange={(checked) => setBypassRounding(checked === true)} data-testid="checkbox-bypass-rounding" />
+                  <Label htmlFor="bypass-rounding" className="text-sm font-normal cursor-pointer">Bypass price rounding (show exact calculated price)</Label>
+                </div>
                 <ImageInput
                   value={imageUrl}
                   onChange={setImageUrl}
@@ -2843,6 +2851,10 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 <div className="flex items-center gap-2">
                   <Checkbox id="edit-bypass-discount" checked={editItem?.bypassMultiDiscount || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, bypassMultiDiscount: checked === true} : null)} data-testid="checkbox-edit-bypass-discount" />
                   <Label htmlFor="edit-bypass-discount" className="text-sm font-normal cursor-pointer">Bypass multi-service discount (this service won't trigger discount)</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox id="edit-bypass-rounding" checked={editItem?.bypassRounding || false} onCheckedChange={(checked) => setEditItem(prev => prev ? {...prev, bypassRounding: checked === true} : null)} data-testid="checkbox-edit-bypass-rounding" />
+                  <Label htmlFor="edit-bypass-rounding" className="text-sm font-normal cursor-pointer">Bypass price rounding (show exact calculated price)</Label>
                 </div>
                 <ImageInput
                   value={editItem?.imageUrl || ""}
