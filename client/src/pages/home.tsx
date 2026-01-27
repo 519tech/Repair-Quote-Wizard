@@ -989,7 +989,7 @@ export default function Home() {
                             )}
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
-                            <span className="font-semibold">${q.price}</span>
+                            {!hidePricesCompletely && <span className="font-semibold">${q.price}</span>}
                             <Button 
                               variant="ghost" 
                               size="icon" 
@@ -1009,20 +1009,22 @@ export default function Home() {
                       </div>
                     ))}
                   </div>
-                  {getMultiServiceDiscount() > 0 && (
+                  {!hidePricesCompletely && getMultiServiceDiscount() > 0 && (
                     <div className="flex justify-between items-center pt-2 text-green-600">
                       <span className="text-sm font-medium">Multi-Service Discount</span>
                       <span className="font-semibold">-${getMultiServiceDiscount().toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex justify-between items-center pt-2 border-t">
-                    <span className="font-semibold">Grand Total</span>
-                    <div className="text-right">
-                      <span className="text-xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
-                      <p className="text-xs text-muted-foreground">plus taxes</p>
-                      <p className="text-xs text-muted-foreground">prices include labour</p>
+                  {!hidePricesCompletely && (
+                    <div className="flex justify-between items-center pt-2 border-t">
+                      <span className="font-semibold">Grand Total</span>
+                      <div className="text-right">
+                        <span className="text-xl font-bold text-primary">${getGrandTotal().toFixed(2)}</span>
+                        <p className="text-xs text-muted-foreground">plus taxes</p>
+                        <p className="text-xs text-muted-foreground">prices include labour</p>
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
 
                 {/* Send Me Quote Button */}
