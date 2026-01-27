@@ -2,15 +2,7 @@
 
 ## Overview
 
-RepairQuote is a full-stack multi-tenant web application designed to provide instant repair quotes for electronic devices, including smartphones, tablets, and laptops. It features a customer-facing quote wizard for generating estimates and an administrative panel for comprehensive management of device types, devices, services, parts, and pricing. The application aims to streamline the repair quoting process, improve customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, "I don't know my device" functionality, embeddable widgets for external websites, and complete multi-tenant shop isolation.
-
-### URL Structure
-- `/` - Shop selection page (lists all active shops)
-- `/:slug` - Quote wizard for a specific shop (e.g., `/519-tech`, `/test-shop`)
-- `/:slug/internal` - Internal counter lookup for shop staff
-- `/:slug/embed` - Embeddable widget for external websites
-- `/admin` - Admin panel login
-- `/super-admin` - Super admin dashboard for managing all shops
+RepairQuote is a full-stack web application designed to provide instant repair quotes for electronic devices, including smartphones, tablets, and laptops. It features a customer-facing quote wizard for generating estimates and an administrative panel for comprehensive management of device types, devices, services, parts, and pricing. The application aims to streamline the repair quoting process, improve customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, "I don't know my device" functionality, and an embeddable widget for external websites.
 
 ## User Preferences
 
@@ -64,35 +56,16 @@ The application's data model includes:
 - `@replit/vite-plugin-cartographer`: Development tooling.
 - `@replit/vite-plugin-dev-banner`: Displays development environment information.
 
-### Multi-Tenant Architecture
-The application supports multiple shops (tenants) with complete data isolation:
-
-- **Shops Table**: Each shop has its own settings including name, slug, optional custom domain, logo, brand color, OpenPhone API key, RepairDesk API key, Gmail settings, quote settings (price rounding, hide prices, discounts), and SMS/email templates.
-- **Data Isolation**: All main data tables include a `shop_id` column (device_types, brands, devices, services, service_categories, parts, device_services, device_service_parts, quote_requests). Each API endpoint filters data by the session's shopId.
-- **getShopId Helper**: Routes use `getShopId(req)` to extract the shop ID from the session, defaulting to 'default-shop' for backward compatibility.
-- **Ownership Validation**: PATCH/DELETE endpoints verify that entities belong to the current shop before allowing mutations.
-- **Super Admin Role**: Platform-level super admins can manage all shops, view statistics, and impersonate shop admins via `/super-admin`.
-- **Admin Authentication**: Shop admins authenticate via username/password. Sessions store shopId and isSuperAdmin flags.
-
 ### Authentication
 - **Username/Password Auth**: The admin panel uses simple username/password authentication. Sessions are stored in PostgreSQL and persist for 1 week. Login endpoint: `/api/admin/login`, logout: `/api/admin/logout`.
-- **Super Admin Access**: Super admins access `/super-admin` for cross-shop management and can impersonate shop admins.
-- **Password Reset**: Shops can reset forgotten passwords via email. The `/api/admin/forgot-password` endpoint sends a temporary password to the shop's email address. Users must change the temporary password on their next login (forced password change screen).
-- **New Shop Welcome Email**: When creating a new shop via super admin, a welcome email with temporary credentials is automatically sent to the shop's email address. The shop admin must change their password on first login.
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
-- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications. Each shop can have its own OpenPhone API key and phone number stored in the shops table. Falls back to global `OPENPHONE_API_KEY` environment variable.
-- **Shop-Specific Templates**: SMS and email templates can be customized per shop via the shops table fields (smsTemplate, emailSubjectTemplate, emailBodyTemplate, etc.).
+- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.
 
 ### RepairDesk Integration
-- **API Key Authentication**: The application integrates with RepairDesk POS software using API key authentication. Each shop can have its own RepairDesk API key.
+- **API Key Authentication**: The application integrates with RepairDesk POS software using API key authentication.
 - **Inventory Checking**: When connected, the application queries RepairDesk's inventory API to check parts stock levels by SKU.
 - **Stock Status Display**: Services with parts in stock (quantity > 0) display a green "In Stock" badge in the quote flow.
-- **Admin Management**: Connection status is shown in the Settings tab. The API key can be per-shop or global via `REPAIRDESK_API_KEY` secret.
+- **Admin Management**: Connection status is shown in the Settings tab. The API key is managed via the `REPAIRDESK_API_KEY` secret.
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
-
-### Public Shop Detection API
-- **GET /api/shops/detect**: Detects shop from request domain or slug query parameter, returns public shop settings.
-- **GET /api/shops/by-slug/:slug**: Gets shop public settings by URL slug.
-- **Security**: Public endpoints do not accept client-provided shopId to prevent spoofing. Shop context is derived from authenticated session or device data.

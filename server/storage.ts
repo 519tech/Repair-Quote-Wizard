@@ -13,7 +13,6 @@ import {
   brandServiceCategories,
   messageTemplates,
   dismissedServiceLinkAlerts,
-  shops,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -45,35 +44,21 @@ import {
   type MessageTemplate,
   type InsertMessageTemplate,
   type DismissedServiceLinkAlert,
-  type Shop,
-  type InsertShop,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, ilike, sql, gt } from "drizzle-orm";
+import { eq, and, or, ilike, sql } from "drizzle-orm";
 import { users } from "@shared/models/auth";
 
-// Default shop ID for backward compatibility during migration
-export const DEFAULT_SHOP_ID = "default-shop";
-
 export interface IStorage {
-  // Shops
-  getShops(): Promise<Shop[]>;
-  getShop(id: string): Promise<Shop | undefined>;
-  getShopBySlug(slug: string): Promise<Shop | undefined>;
-  getShopByDomain(domain: string): Promise<Shop | undefined>;
-  createShop(data: InsertShop): Promise<Shop>;
-  updateShop(id: string, data: Partial<InsertShop>): Promise<Shop | undefined>;
-  deleteShop(id: string): Promise<void>;
-
   // Device Types
-  getDeviceTypes(shopId?: string): Promise<DeviceType[]>;
+  getDeviceTypes(): Promise<DeviceType[]>;
   getDeviceType(id: string): Promise<DeviceType | undefined>;
   createDeviceType(data: InsertDeviceType): Promise<DeviceType>;
   updateDeviceType(id: string, data: Partial<InsertDeviceType>): Promise<DeviceType | undefined>;
   deleteDeviceType(id: string): Promise<void>;
 
   // Brands
-  getBrands(shopId?: string): Promise<Brand[]>;
+  getBrands(): Promise<Brand[]>;
   getBrand(id: string): Promise<Brand | undefined>;
   createBrand(data: InsertBrand): Promise<Brand>;
   updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined>;
@@ -92,42 +77,42 @@ export interface IStorage {
   deleteBrandServiceCategory(id: string): Promise<void>;
 
   // Devices
-  getDevices(shopId?: string): Promise<Device[]>;
-  getDevicesByType(typeId: string, shopId?: string): Promise<Device[]>;
-  getDevicesByTypeAndBrand(typeId: string, brandId: string, shopId?: string): Promise<Device[]>;
+  getDevices(): Promise<Device[]>;
+  getDevicesByType(typeId: string): Promise<Device[]>;
+  getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]>;
   getDevice(id: string): Promise<Device | undefined>;
   createDevice(data: InsertDevice): Promise<Device>;
   updateDevice(id: string, data: Partial<InsertDevice>): Promise<Device | undefined>;
   deleteDevice(id: string): Promise<void>;
 
   // Parts
-  getParts(shopId?: string): Promise<Part[]>;
-  getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean; shopId?: string }): Promise<{ parts: Part[]; total: number }>;
+  getParts(): Promise<Part[]>;
+  getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }>;
   getPart(id: string): Promise<Part | undefined>;
-  getPartBySku(sku: string, shopId?: string): Promise<Part | undefined>;
-  deleteAllParts(shopId?: string): Promise<void>;
+  getPartBySku(sku: string): Promise<Part | undefined>;
+  deleteAllParts(): Promise<void>;
   createPart(data: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
-  bulkUpsertParts(partsData: InsertPart[], shopId?: string): Promise<{ inserted: number; updated: number }>;
+  bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
 
   // Service Categories
-  getServiceCategories(shopId?: string): Promise<ServiceCategory[]>;
+  getServiceCategories(): Promise<ServiceCategory[]>;
   getServiceCategory(id: string): Promise<ServiceCategory | undefined>;
   createServiceCategory(data: InsertServiceCategory): Promise<ServiceCategory>;
   updateServiceCategory(id: string, data: Partial<InsertServiceCategory>): Promise<ServiceCategory | undefined>;
   deleteServiceCategory(id: string): Promise<void>;
 
   // Services
-  getServices(shopId?: string): Promise<Service[]>;
+  getServices(): Promise<Service[]>;
   getService(id: string): Promise<Service | undefined>;
   createService(data: InsertService): Promise<Service>;
   updateService(id: string, data: Partial<InsertService>): Promise<Service | undefined>;
   deleteService(id: string): Promise<void>;
 
   // Device Services (links)
-  getDeviceServices(shopId?: string): Promise<DeviceServiceWithRelations[]>;
-  getDeviceServicesByDevice(deviceId: string, shopId?: string): Promise<DeviceServiceWithRelations[]>;
+  getDeviceServices(): Promise<DeviceServiceWithRelations[]>;
+  getDeviceServicesByDevice(deviceId: string): Promise<DeviceServiceWithRelations[]>;
   getDeviceService(id: string): Promise<DeviceService | undefined>;
   getDeviceServiceWithRelations(id: string): Promise<DeviceServiceWithRelations | undefined>;
   createDeviceService(data: InsertDeviceService): Promise<DeviceService>;
@@ -141,11 +126,11 @@ export interface IStorage {
   clearDeviceServiceParts(deviceServiceId: string): Promise<void>;
 
   // Quote Requests
-  getQuoteRequests(shopId?: string): Promise<QuoteRequest[]>;
+  getQuoteRequests(): Promise<QuoteRequest[]>;
   createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest>;
 
   // Unknown Device Quotes
-  getUnknownDeviceQuotes(shopId?: string): Promise<UnknownDeviceQuote[]>;
+  getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]>;
   createUnknownDeviceQuote(data: InsertUnknownDeviceQuote): Promise<UnknownDeviceQuote>;
 
   // Message Templates
@@ -157,64 +142,17 @@ export interface IStorage {
   getDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
   getActiveDismissedAlertIds(): Promise<string[]>;
   getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
-  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite", shopId?: string): Promise<DismissedServiceLinkAlert>;
+  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert>;
   undismissAlert(deviceServiceId: string): Promise<void>;
 
   // Users
-  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean; mustChangePassword: boolean; email: string | null } | undefined>;
-  getUserByEmail(email: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null; firstName: string | null; lastName: string | null } | undefined>;
-  createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean, email?: string, mustChangePassword?: boolean): Promise<{ id: string; username: string }>;
-  getUsers(): Promise<{ id: string; username: string; email: string | null; shopId: string | null; isSuperAdmin: boolean }[]>;
-  updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void>;
-  
-  // Password reset
-  setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void>;
-  getUserByResetToken(token: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null } | undefined>;
-  clearPasswordResetToken(userId: string): Promise<void>;
-  updateUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<void>;
-  setMustChangePassword(userId: string, mustChange: boolean): Promise<void>;
+  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined>;
+  createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }>;
 }
 
 export class DatabaseStorage implements IStorage {
-  // Shops
-  async getShops(): Promise<Shop[]> {
-    return db.select().from(shops);
-  }
-
-  async getShop(id: string): Promise<Shop | undefined> {
-    const [shop] = await db.select().from(shops).where(eq(shops.id, id));
-    return shop || undefined;
-  }
-
-  async getShopBySlug(slug: string): Promise<Shop | undefined> {
-    const [shop] = await db.select().from(shops).where(eq(shops.slug, slug));
-    return shop || undefined;
-  }
-
-  async getShopByDomain(domain: string): Promise<Shop | undefined> {
-    const [shop] = await db.select().from(shops).where(eq(shops.domain, domain));
-    return shop || undefined;
-  }
-
-  async createShop(data: InsertShop): Promise<Shop> {
-    const [shop] = await db.insert(shops).values(data).returning();
-    return shop;
-  }
-
-  async updateShop(id: string, data: Partial<InsertShop>): Promise<Shop | undefined> {
-    const [shop] = await db.update(shops).set({ ...data, updatedAt: new Date() }).where(eq(shops.id, id)).returning();
-    return shop || undefined;
-  }
-
-  async deleteShop(id: string): Promise<void> {
-    await db.delete(shops).where(eq(shops.id, id));
-  }
-
   // Device Types
-  async getDeviceTypes(shopId?: string): Promise<DeviceType[]> {
-    if (shopId) {
-      return db.select().from(deviceTypes).where(eq(deviceTypes.shopId, shopId));
-    }
+  async getDeviceTypes(): Promise<DeviceType[]> {
     return db.select().from(deviceTypes);
   }
 
@@ -238,10 +176,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Brands
-  async getBrands(shopId?: string): Promise<Brand[]> {
-    if (shopId) {
-      return db.select().from(brands).where(eq(brands.shopId, shopId));
-    }
+  async getBrands(): Promise<Brand[]> {
     return db.select().from(brands);
   }
 
@@ -325,23 +260,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Devices
-  async getDevices(shopId?: string): Promise<Device[]> {
-    if (shopId) {
-      return db.select().from(devices).where(eq(devices.shopId, shopId));
-    }
+  async getDevices(): Promise<Device[]> {
     return db.select().from(devices);
   }
 
-  async getDevicesByType(typeId: string, shopId?: string): Promise<Device[]> {
-    const conditions = [eq(devices.deviceTypeId, typeId)];
-    if (shopId) conditions.push(eq(devices.shopId, shopId));
-    return db.select().from(devices).where(and(...conditions));
+  async getDevicesByType(typeId: string): Promise<Device[]> {
+    return db.select().from(devices).where(eq(devices.deviceTypeId, typeId));
   }
 
-  async getDevicesByTypeAndBrand(typeId: string, brandId: string, shopId?: string): Promise<Device[]> {
-    const conditions = [eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId)];
-    if (shopId) conditions.push(eq(devices.shopId, shopId));
-    return db.select().from(devices).where(and(...conditions));
+  async getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]> {
+    return db.select().from(devices).where(
+      and(eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId))
+    );
   }
 
   async getDevice(id: string): Promise<Device | undefined> {
@@ -364,23 +294,15 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Parts
-  async getParts(shopId?: string): Promise<Part[]> {
-    if (shopId) {
-      return db.select().from(parts).where(eq(parts.shopId, shopId));
-    }
+  async getParts(): Promise<Part[]> {
     return db.select().from(parts);
   }
 
-  async getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean; shopId?: string }): Promise<{ parts: Part[]; total: number }> {
-    const { page, limit, search, isCustom, shopId } = options;
+  async getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }> {
+    const { page, limit, search, isCustom } = options;
     const offset = (page - 1) * limit;
     
     const conditions: any[] = [];
-    
-    // Filter by shopId if specified
-    if (shopId) {
-      conditions.push(eq(parts.shopId, shopId));
-    }
     
     // Filter by isCustom if specified
     if (isCustom !== undefined) {
@@ -413,11 +335,9 @@ export class DatabaseStorage implements IStorage {
     return { parts: result, total };
   }
 
-  async deleteAllParts(shopId?: string): Promise<void> {
+  async deleteAllParts(): Promise<void> {
     // Only delete non-custom parts (preserve custom parts during bulk upload)
-    const conditions = [eq(parts.isCustom, false)];
-    if (shopId) conditions.push(eq(parts.shopId, shopId));
-    await db.delete(parts).where(and(...conditions));
+    await db.delete(parts).where(eq(parts.isCustom, false));
   }
 
   async getPart(id: string): Promise<Part | undefined> {
@@ -425,10 +345,8 @@ export class DatabaseStorage implements IStorage {
     return part || undefined;
   }
 
-  async getPartBySku(sku: string, shopId?: string): Promise<Part | undefined> {
-    const conditions = [eq(parts.sku, sku)];
-    if (shopId) conditions.push(eq(parts.shopId, shopId));
-    const [part] = await db.select().from(parts).where(and(...conditions));
+  async getPartBySku(sku: string): Promise<Part | undefined> {
+    const [part] = await db.select().from(parts).where(eq(parts.sku, sku));
     return part || undefined;
   }
 
@@ -446,32 +364,29 @@ export class DatabaseStorage implements IStorage {
     await db.delete(parts).where(eq(parts.id, id));
   }
 
-  async bulkUpsertParts(partsData: InsertPart[], shopId?: string): Promise<{ inserted: number; updated: number }> {
+  async bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }> {
     if (partsData.length === 0) {
       return { inserted: 0, updated: 0 };
     }
 
     const BATCH_SIZE = 500;
     let totalInserted = 0;
-    const shopIdValue = shopId || 'default-shop';
 
     // Process in batches for better performance
     for (let i = 0; i < partsData.length; i += BATCH_SIZE) {
       const batch = partsData.slice(i, i + BATCH_SIZE);
       
       // Use raw SQL for efficient batch insert with ON CONFLICT
-      // Include shopId in insert to ensure parts belong to the correct shop
       const values = batch.map(p => 
-        `('${p.sku.replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}', false, '${shopIdValue}')`
+        `('${p.sku.replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}', false)`
       ).join(',');
       
       await db.execute(sql`
-        INSERT INTO parts (sku, name, price, is_custom, shop_id)
+        INSERT INTO parts (sku, name, price, is_custom)
         VALUES ${sql.raw(values)}
         ON CONFLICT (sku) DO UPDATE SET
           name = EXCLUDED.name,
-          price = EXCLUDED.price,
-          shop_id = EXCLUDED.shop_id
+          price = EXCLUDED.price
       `);
       
       totalInserted += batch.length;
@@ -481,10 +396,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Service Categories
-  async getServiceCategories(shopId?: string): Promise<ServiceCategory[]> {
-    if (shopId) {
-      return db.select().from(serviceCategories).where(eq(serviceCategories.shopId, shopId));
-    }
+  async getServiceCategories(): Promise<ServiceCategory[]> {
     return db.select().from(serviceCategories);
   }
 
@@ -508,10 +420,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Services
-  async getServices(shopId?: string): Promise<Service[]> {
-    if (shopId) {
-      return db.select().from(services).where(eq(services.shopId, shopId));
-    }
+  async getServices(): Promise<Service[]> {
     return db.select().from(services);
   }
 
@@ -535,9 +444,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Device Services (links)
-  async getDeviceServices(shopId?: string): Promise<DeviceServiceWithRelations[]> {
+  async getDeviceServices(): Promise<DeviceServiceWithRelations[]> {
     const results = await db.query.deviceServices.findMany({
-      where: shopId ? eq(deviceServices.shopId, shopId) : undefined,
       with: {
         device: {
           with: {
@@ -556,13 +464,9 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getDeviceServicesByDevice(deviceId: string, shopId?: string): Promise<DeviceServiceWithRelations[]> {
-    const conditions = [eq(deviceServices.deviceId, deviceId)];
-    if (shopId) {
-      conditions.push(eq(deviceServices.shopId, shopId));
-    }
+  async getDeviceServicesByDevice(deviceId: string): Promise<DeviceServiceWithRelations[]> {
     const results = await db.query.deviceServices.findMany({
-      where: and(...conditions),
+      where: eq(deviceServices.deviceId, deviceId),
       with: {
         device: {
           with: {
@@ -642,10 +546,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Quote Requests
-  async getQuoteRequests(shopId?: string): Promise<QuoteRequest[]> {
-    if (shopId) {
-      return db.select().from(quoteRequests).where(eq(quoteRequests.shopId, shopId));
-    }
+  async getQuoteRequests(): Promise<QuoteRequest[]> {
     return db.select().from(quoteRequests);
   }
 
@@ -655,10 +556,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Unknown Device Quotes
-  async getUnknownDeviceQuotes(shopId?: string): Promise<UnknownDeviceQuote[]> {
-    if (shopId) {
-      return db.select().from(unknownDeviceQuotes).where(eq(unknownDeviceQuotes.shopId, shopId));
-    }
+  async getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]> {
     return db.select().from(unknownDeviceQuotes);
   }
 
@@ -709,13 +607,12 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite", shopId: string = DEFAULT_SHOP_ID): Promise<DismissedServiceLinkAlert> {
+  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert> {
     await db.delete(dismissedServiceLinkAlerts).where(eq(dismissedServiceLinkAlerts.deviceServiceId, deviceServiceId));
     const expiresAt = dismissType === "1month" 
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
       : null;
     const [alert] = await db.insert(dismissedServiceLinkAlerts).values({
-      shopId,
       deviceServiceId,
       dismissType,
       expiresAt,
@@ -728,100 +625,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Users
-  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean; mustChangePassword: boolean; email: string | null } | undefined> {
+  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined> {
     const [user] = await db.select({
       id: users.id,
       username: users.username,
       passwordHash: users.passwordHash,
-      shopId: users.shopId,
-      isSuperAdmin: users.isSuperAdmin,
-      mustChangePassword: users.mustChangePassword,
-      email: users.email,
     }).from(users).where(eq(users.username, username));
     return user || undefined;
   }
 
-  async getUserByEmail(email: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null; firstName: string | null; lastName: string | null } | undefined> {
-    const [user] = await db.select({
-      id: users.id,
-      username: users.username,
-      email: users.email,
-      shopId: users.shopId,
-      firstName: users.firstName,
-      lastName: users.lastName,
-    }).from(users).where(eq(users.email, email));
-    return user || undefined;
-  }
-
-  async createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean, email?: string, mustChangePassword?: boolean): Promise<{ id: string; username: string }> {
-    const [user] = await db.insert(users).values({ 
-      username, 
-      passwordHash,
-      shopId: shopId || null,
-      isSuperAdmin: isSuperAdmin || false,
-      email: email || null,
-      mustChangePassword: mustChangePassword || false,
-    }).returning({ id: users.id, username: users.username });
+  async createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }> {
+    const [user] = await db.insert(users).values({ username, passwordHash }).returning({ id: users.id, username: users.username });
     return user;
-  }
-
-  async getUsers(): Promise<{ id: string; username: string; email: string | null; shopId: string | null; isSuperAdmin: boolean }[]> {
-    return db.select({
-      id: users.id,
-      username: users.username,
-      email: users.email,
-      shopId: users.shopId,
-      isSuperAdmin: users.isSuperAdmin,
-    }).from(users);
-  }
-
-  async updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void> {
-    await db.update(users).set(data).where(eq(users.id, id));
-  }
-
-  // Password reset methods
-  async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
-    await db.update(users).set({
-      passwordResetToken: token,
-      passwordResetExpires: expires,
-    }).where(eq(users.id, userId));
-  }
-
-  async getUserByResetToken(token: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null } | undefined> {
-    const [user] = await db.select({
-      id: users.id,
-      username: users.username,
-      email: users.email,
-      shopId: users.shopId,
-    }).from(users).where(
-      and(
-        eq(users.passwordResetToken, token),
-        gt(users.passwordResetExpires, new Date())
-      )
-    );
-    return user || undefined;
-  }
-
-  async clearPasswordResetToken(userId: string): Promise<void> {
-    await db.update(users).set({
-      passwordResetToken: null,
-      passwordResetExpires: null,
-    }).where(eq(users.id, userId));
-  }
-
-  async updateUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<void> {
-    await db.update(users).set({
-      passwordHash,
-      mustChangePassword: mustChangePassword ?? false,
-      passwordResetToken: null,
-      passwordResetExpires: null,
-    }).where(eq(users.id, userId));
-  }
-
-  async setMustChangePassword(userId: string, mustChange: boolean): Promise<void> {
-    await db.update(users).set({
-      mustChangePassword: mustChange,
-    }).where(eq(users.id, userId));
   }
 }
 

@@ -1,58 +1,14 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, unique, boolean, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique, boolean, integer } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-
-// Shops table for multi-tenancy
-export const shops = pgTable("shops", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(), // URL-friendly identifier (e.g., "519-tech")
-  domain: text("domain"), // Custom domain (e.g., "quotes.myshop.com")
-  email: text("email"), // Primary contact email for the shop (for password reset, notifications)
-  
-  // Branding
-  logoUrl: text("logo_url"),
-  brandColor: text("brand_color").default("#187908"), // Primary color
-  
-  // API Keys (encrypted/stored securely per shop)
-  openphoneApiKey: text("openphone_api_key"),
-  openphonePhoneNumber: text("openphone_phone_number"),
-  repairDeskApiKey: text("repairdesk_api_key"),
-  
-  // Email settings
-  emailFromName: text("email_from_name"),
-  emailReplyTo: text("email_reply_to"),
-  
-  // Quote settings (JSON for flexibility)
-  quoteSettings: text("quote_settings"), // JSON: { roundingMode, subtractAmount, hidePricesUntilContact, multiDiscount }
-  
-  // Message templates (JSON arrays)
-  emailSubjectTemplate: text("email_subject_template"),
-  emailBodyTemplate: text("email_body_template"),
-  smsTemplate: text("sms_template"),
-  unknownDeviceEmailTemplate: text("unknown_device_email_template"),
-  unknownDeviceSmsTemplate: text("unknown_device_sms_template"),
-  
-  // Status
-  isActive: boolean("is_active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-export const insertShopSchema = createInsertSchema(shops).omit({ id: true, createdAt: true, updatedAt: true });
-export type InsertShop = z.infer<typeof insertShopSchema>;
-export type Shop = typeof shops.$inferSelect;
 
 // Device types (smartphone, tablet, laptop, etc.)
 export const deviceTypes = pgTable("device_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   icon: text("icon").notNull().default("smartphone"),
-}, (table) => [
-  unique("device_types_shop_name_unique").on(table.shopId, table.name),
-]);
+});
 
 export const deviceTypesRelations = relations(deviceTypes, ({ many }) => ({
   devices: many(devices),
@@ -66,12 +22,9 @@ export type DeviceType = typeof deviceTypes.$inferSelect;
 // Brands (Apple, Samsung, Google, Dell, etc.)
 export const brands = pgTable("brands", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   logo: text("logo"),
-}, (table) => [
-  unique("brands_shop_name_unique").on(table.shopId, table.name),
-]);
+});
 
 export const brandsRelations = relations(brands, ({ many }) => ({
   devices: many(devices),
@@ -108,13 +61,12 @@ export type BrandDeviceType = typeof brandDeviceTypes.$inferSelect;
 // Devices (iPhone 15, Samsung Galaxy S24, MacBook Pro, etc.)
 export const devices = pgTable("devices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull(),
   name: text("name").notNull(),
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
   brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
   imageUrl: text("image_url"),
 }, (table) => [
-  unique("devices_name_brand_type_shop_unique").on(table.name, table.brandId, table.deviceTypeId, table.shopId),
+  unique("devices_name_brand_type_unique").on(table.name, table.brandId, table.deviceTypeId),
 ]);
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({
@@ -136,14 +88,11 @@ export type Device = typeof devices.$inferSelect;
 // Parts inventory with SKU and pricing
 export const parts = pgTable("parts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
-  sku: text("sku").notNull(),
+  sku: text("sku").notNull().unique(),
   name: text("name").notNull(),
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
   isCustom: boolean("is_custom").notNull().default(false),
-}, (table) => [
-  unique("parts_shop_sku_unique").on(table.shopId, table.sku),
-]);
+});
 
 export const insertPartSchema = createInsertSchema(parts).omit({ id: true });
 export type InsertPart = z.infer<typeof insertPartSchema>;
@@ -152,13 +101,10 @@ export type Part = typeof parts.$inferSelect;
 // Service categories (Battery Replacement, Screen Replacement, etc.)
 export const serviceCategories = pgTable("service_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   description: text("description"),
   imageUrl: text("image_url"),
-}, (table) => [
-  unique("service_categories_shop_name_unique").on(table.shopId, table.name),
-]);
+});
 
 export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
   services: many(services),
@@ -195,8 +141,7 @@ export type BrandServiceCategoryWithRelations = BrandServiceCategory & { brand: 
 // Services (Original, Aftermarket, Premium, Budget, etc.)
 export const services = pgTable("services", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
-  name: text("name").notNull(),
+  name: text("name").notNull().unique(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
   warranty: text("warranty"),
@@ -209,9 +154,7 @@ export const services = pgTable("services", {
   imageUrl: text("image_url"),
   bypassMultiDiscount: boolean("bypass_multi_discount").notNull().default(false),
   bypassRounding: boolean("bypass_rounding").notNull().default(false),
-}, (table) => [
-  unique("services_shop_name_unique").on(table.shopId, table.name),
-]);
+});
 
 export const servicesRelations = relations(services, ({ one }) => ({
   category: one(serviceCategories, {
@@ -282,7 +225,6 @@ export type DeviceServicePart = typeof deviceServiceParts.$inferSelect;
 // Quote requests from customers
 export const quoteRequests = pgTable("quote_requests", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
@@ -296,7 +238,6 @@ export const quoteRequests = pgTable("quote_requests", {
 // Unknown device quote requests (when customer doesn't know their device)
 export const unknownDeviceQuotes = pgTable("unknown_device_quotes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
   customerName: text("customer_name").notNull(),
   customerEmail: text("customer_email").notNull(),
   customerPhone: text("customer_phone"),
@@ -338,7 +279,6 @@ export type MessageTemplate = typeof messageTemplates.$inferSelect;
 // Dismissed service link alerts (for hiding missing parts warnings)
 export const dismissedServiceLinkAlerts = pgTable("dismissed_service_link_alerts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
   deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
   dismissType: text("dismiss_type").notNull(), // "1month" or "indefinite"
   dismissedAt: text("dismissed_at").notNull().default(sql`now()`),
@@ -349,10 +289,9 @@ export const insertDismissedAlertSchema = createInsertSchema(dismissedServiceLin
 export type InsertDismissedAlert = z.infer<typeof insertDismissedAlertSchema>;
 export type DismissedServiceLinkAlert = typeof dismissedServiceLinkAlerts.$inferSelect;
 
-// RepairDesk OAuth tokens storage (per shop)
+// RepairDesk OAuth tokens storage
 export const repairDeskTokens = pgTable("repairdesk_tokens", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
   accessToken: text("access_token").notNull(),
   refreshToken: text("refresh_token").notNull(),
   expiresAt: text("expires_at").notNull(),

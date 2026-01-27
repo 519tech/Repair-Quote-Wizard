@@ -18,8 +18,6 @@ declare module "http" {
 declare module "express-session" {
   interface SessionData {
     isAdmin?: boolean;
-    shopId?: string | null;
-    isSuperAdmin?: boolean;
   }
 }
 

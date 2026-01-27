@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext, createContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,37 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail, Store } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { Link } from "wouter";
 import type { Device, DeviceServiceWithRelations, Brand, DeviceType, MessageTemplate } from "@shared/schema";
-
-interface ShopBranding {
-  name: string;
-  logoUrl: string | null;
-  brandColor: string | null;
-}
-
-interface ShopContextValue {
-  shop: ShopBranding | null;
-}
-
-const ShopContext = createContext<ShopContextValue | null>(null);
-
-function useOptionalShop(): ShopBranding | null {
-  const context = useContext(ShopContext);
-  return context?.shop ?? null;
-}
-
-export function HomeWithShop({ shop }: { shop: ShopBranding | null }) {
-  return (
-    <ShopContext.Provider value={{ shop }}>
-      <Home />
-    </ShopContext.Provider>
-  );
-}
 
 type DeviceSearchResult = Device & {
   brand?: Brand | null;
@@ -45,7 +20,6 @@ type DeviceSearchResult = Device & {
 
 export default function Home() {
   const { toast } = useToast();
-  const shopBranding = useOptionalShop();
   
   // Main flow: 'search' | 'services' | 'quote' | 'unknown' | 'success'
   const [view, setView] = useState<'search' | 'services' | 'quote' | 'contact' | 'unknown' | 'success'>('search');
@@ -524,31 +498,12 @@ export default function Home() {
         {view === 'search' && (
           <Card>
             <CardHeader className="text-center">
-              {shopBranding?.logoUrl ? (
-                <img 
-                  src={shopBranding.logoUrl} 
-                  alt={shopBranding.name} 
-                  className="h-16 mx-auto mb-2"
-                  data-testid="img-shop-logo"
-                />
-              ) : shopBranding?.brandColor ? (
-                <div 
-                  className="h-16 w-16 mx-auto mb-2 rounded-full flex items-center justify-center"
-                  style={{ backgroundColor: shopBranding.brandColor }}
-                  data-testid="div-shop-brand"
-                >
-                  <Store className="h-8 w-8 text-white" />
-                </div>
-              ) : (
-                <img 
-                  src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
-                  alt="519 Tech Services" 
-                  className="h-16 mx-auto mb-2"
-                />
-              )}
-              <CardTitle className="text-lg" data-testid="text-quote-title">
-                {shopBranding?.name ? `Get a ${shopBranding.name} Repair Quote` : 'Get a Repair Quote'}
-              </CardTitle>
+              <img 
+                src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
+                alt="519 Tech Services" 
+                className="h-16 mx-auto mb-2"
+              />
+              <CardTitle className="text-lg">Get a Repair Quote</CardTitle>
               <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">

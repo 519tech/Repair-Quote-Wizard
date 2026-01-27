@@ -1,9 +1,7 @@
 import { db } from "./db";
 import { repairDeskTokens } from "@shared/schema";
-import { storage } from "./storage";
 
 const REPAIRDESK_API_BASE = "https://api.repairdesk.co/api/web/v1";
-const DEFAULT_SHOP_ID = 'default-shop';
 
 interface InventoryItem {
   sku: string;
@@ -13,12 +11,7 @@ interface InventoryItem {
   store_id?: string;
 }
 
-async function getApiKey(shopId: string = DEFAULT_SHOP_ID): Promise<string | null> {
-  const shop = await storage.getShop(shopId);
-  if (shop?.repairDeskApiKey) {
-    return shop.repairDeskApiKey;
-  }
-  // Fallback to global environment variable
+function getApiKey(): string | null {
   return process.env.REPAIRDESK_API_KEY || null;
 }
 
@@ -69,7 +62,7 @@ async function searchSkuInPages(apiKey: string, targetSkus: Set<string>): Promis
     }
     
     if (foundSkus.size < targetSkus.size) {
-      const notFound = Array.from(targetSkus).filter(s => !foundSkus.has(s));
+      const notFound = [...targetSkus].filter(s => !foundSkus.has(s));
       console.log(`RepairDesk: ${notFound.length} SKUs not found after ${page - 1} pages`);
     }
   } catch (error) {
@@ -79,16 +72,16 @@ async function searchSkuInPages(apiKey: string, targetSkus: Set<string>): Promis
   return stockMap;
 }
 
-export async function checkInventoryBySku(skus: string[], shopId: string = DEFAULT_SHOP_ID): Promise<Map<string, number>> {
+export async function checkInventoryBySku(skus: string[]): Promise<Map<string, number>> {
   const stockMap = new Map<string, number>();
 
   if (skus.length === 0) {
     return stockMap;
   }
 
-  const apiKey = await getApiKey(shopId);
+  const apiKey = getApiKey();
   if (!apiKey) {
-    console.log(`No RepairDesk API key configured for shop ${shopId}`);
+    console.log("No RepairDesk API key configured");
     return stockMap;
   }
 
@@ -99,8 +92,8 @@ export async function checkInventoryBySku(skus: string[], shopId: string = DEFAU
   return results;
 }
 
-export async function isRepairDeskConnected(shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
-  const apiKey = await getApiKey(shopId);
+export async function isRepairDeskConnected(): Promise<boolean> {
+  const apiKey = getApiKey();
   if (!apiKey) {
     return false;
   }
@@ -160,10 +153,10 @@ interface CreateLeadResponse {
   };
 }
 
-export async function createLead(request: CreateLeadRequest, shopId: string = DEFAULT_SHOP_ID): Promise<CreateLeadResponse> {
-  const apiKey = await getApiKey(shopId);
+export async function createLead(request: CreateLeadRequest): Promise<CreateLeadResponse> {
+  const apiKey = getApiKey();
   if (!apiKey) {
-    return { success: false, statusCode: 401, message: `No RepairDesk API key configured for shop ${shopId}` };
+    return { success: false, statusCode: 401, message: "No RepairDesk API key configured" };
   }
 
   try {

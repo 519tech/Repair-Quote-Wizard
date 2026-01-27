@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, Building2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -171,13 +171,8 @@ export default function Admin() {
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [showForgotPassword, setShowForgotPassword] = useState(false);
-  const [forgotEmail, setForgotEmail] = useState("");
-  const [showChangePassword, setShowChangePassword] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
 
-  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean; username: string | null; isSuperAdmin?: boolean; mustChangePassword?: boolean }>({
+  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean; username: string | null }>({
     queryKey: ["/api/admin/me"],
   });
 
@@ -190,56 +185,11 @@ export default function Admin() {
       }
       return res.json();
     },
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
       setUsername("");
       setPassword("");
-      if (data.mustChangePassword) {
-        setShowChangePassword(true);
-        toast({ title: "Please change your password", description: "You must set a new password to continue." });
-      } else {
-        toast({ title: "Logged in successfully" });
-      }
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const forgotPasswordMutation = useMutation({
-    mutationFn: async (email: string) => {
-      const res = await apiRequest("POST", "/api/admin/forgot-password", { email });
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || "Password reset failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      toast({ title: "Password reset email sent", description: "Check your email for instructions." });
-      setShowForgotPassword(false);
-      setForgotEmail("");
-    },
-    onError: (error: Error) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  const changePasswordMutation = useMutation({
-    mutationFn: async (data: { newPassword: string }) => {
-      const res = await apiRequest("POST", "/api/admin/change-password", data);
-      if (!res.ok) {
-        const resData = await res.json();
-        throw new Error(resData.error || "Password change failed");
-      }
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
-      setShowChangePassword(false);
-      setNewPassword("");
-      setConfirmPassword("");
-      toast({ title: "Password changed successfully" });
+      toast({ title: "Logged in successfully" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -295,176 +245,40 @@ export default function Admin() {
               <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
                 <Lock className="h-6 w-6 text-primary" />
               </div>
-              <CardTitle>{showForgotPassword ? "Reset Password" : "Admin Login"}</CardTitle>
-              <CardDescription>
-                {showForgotPassword 
-                  ? "Enter your email to receive a temporary password" 
-                  : "Enter your credentials to access the admin panel"}
-              </CardDescription>
+              <CardTitle>Admin Login</CardTitle>
+              <CardDescription>Enter your credentials to access the admin panel</CardDescription>
             </CardHeader>
             <CardContent>
-              {showForgotPassword ? (
-                <form onSubmit={(e) => { e.preventDefault(); forgotPasswordMutation.mutate(forgotEmail); }} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="forgot-email">Email Address</Label>
-                    <Input
-                      id="forgot-email"
-                      type="email"
-                      value={forgotEmail}
-                      onChange={(e) => setForgotEmail(e.target.value)}
-                      placeholder="Enter your email"
-                      required
-                      data-testid="input-forgot-email"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={forgotPasswordMutation.isPending} data-testid="button-send-reset">
-                    {forgotPasswordMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Send Reset Email"
-                    )}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="ghost" 
-                    className="w-full" 
-                    onClick={() => setShowForgotPassword(false)}
-                    data-testid="button-back-to-login"
-                  >
-                    Back to Login
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handleLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="username">Username</Label>
-                    <Input
-                      id="username"
-                      type="text"
-                      value={username}
-                      onChange={(e) => setUsername(e.target.value)}
-                      placeholder="Enter username"
-                      required
-                      data-testid="input-admin-username"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="Enter password"
-                      required
-                      data-testid="input-admin-password"
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-admin-login">
-                    {loginMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      "Login"
-                    )}
-                  </Button>
-                  <Button 
-                    type="button" 
-                    variant="link" 
-                    className="w-full text-sm" 
-                    onClick={() => setShowForgotPassword(true)}
-                    data-testid="button-forgot-password"
-                  >
-                    Forgot your password?
-                  </Button>
-                </form>
-              )}
-            </CardContent>
-          </Card>
-        </main>
-      </div>
-    );
-  }
-
-  // Force password change screen
-  if (authStatus?.mustChangePassword || showChangePassword) {
-    const handleChangePassword = (e: React.FormEvent) => {
-      e.preventDefault();
-      if (newPassword !== confirmPassword) {
-        toast({ title: "Error", description: "Passwords do not match", variant: "destructive" });
-        return;
-      }
-      if (newPassword.length < 8) {
-        toast({ title: "Error", description: "Password must be at least 8 characters", variant: "destructive" });
-        return;
-      }
-      changePasswordMutation.mutate({ newPassword });
-    };
-
-    return (
-      <div className="min-h-screen bg-background">
-        <header className="border-b bg-card">
-          <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Wrench className="h-6 w-6 text-primary" />
-              <span className="text-xl font-semibold">Change Password</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => logoutMutation.mutate()}
-                disabled={logoutMutation.isPending}
-                title="Logout"
-                data-testid="button-logout-change-password"
-              >
-                <LogOut className="h-4 w-4" />
-              </Button>
-              <ThemeToggle />
-            </div>
-          </div>
-        </header>
-
-        <main className="container mx-auto px-4 py-8 flex items-center justify-center">
-          <Card className="w-full max-w-md">
-            <CardHeader className="text-center">
-              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
-                <Lock className="h-6 w-6 text-primary" />
-              </div>
-              <CardTitle>Set New Password</CardTitle>
-              <CardDescription>You must change your password before continuing</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleChangePassword} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="new-password">New Password</Label>
+                  <Label htmlFor="username">Username</Label>
                   <Input
-                    id="new-password"
-                    type="password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    placeholder="Enter new password (min 8 characters)"
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
                     required
-                    minLength={8}
-                    data-testid="input-new-password"
+                    data-testid="input-admin-username"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm Password</Label>
+                  <Label htmlFor="password">Password</Label>
                   <Input
-                    id="confirm-password"
+                    id="password"
                     type="password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm new password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
                     required
-                    data-testid="input-confirm-password"
+                    data-testid="input-admin-password"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={changePasswordMutation.isPending} data-testid="button-change-password">
-                  {changePasswordMutation.isPending ? (
+                <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-admin-login">
+                  {loginMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    "Change Password"
+                    "Login"
                   )}
                 </Button>
               </form>
@@ -494,19 +308,6 @@ export default function Admin() {
               <span className="text-sm text-muted-foreground hidden sm:inline">
                 {authStatus.username}
               </span>
-            )}
-            {authStatus?.isSuperAdmin && (
-              <Button
-                variant="outline"
-                size="sm"
-                asChild
-                data-testid="button-super-admin"
-              >
-                <a href="/super-admin">
-                  <Building2 className="h-4 w-4 mr-1" />
-                  <span className="hidden sm:inline">Shops</span>
-                </a>
-              </Button>
             )}
             <Button 
               variant="ghost" 
