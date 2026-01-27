@@ -109,7 +109,7 @@ export interface IStorage {
   createPart(data: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
-  bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
+  bulkUpsertParts(partsData: InsertPart[], shopId?: string): Promise<{ inserted: number; updated: number }>;
 
   // Service Categories
   getServiceCategories(shopId?: string): Promise<ServiceCategory[]>;
@@ -438,29 +438,32 @@ export class DatabaseStorage implements IStorage {
     await db.delete(parts).where(eq(parts.id, id));
   }
 
-  async bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }> {
+  async bulkUpsertParts(partsData: InsertPart[], shopId?: string): Promise<{ inserted: number; updated: number }> {
     if (partsData.length === 0) {
       return { inserted: 0, updated: 0 };
     }
 
     const BATCH_SIZE = 500;
     let totalInserted = 0;
+    const shopIdValue = shopId || 'default-shop';
 
     // Process in batches for better performance
     for (let i = 0; i < partsData.length; i += BATCH_SIZE) {
       const batch = partsData.slice(i, i + BATCH_SIZE);
       
       // Use raw SQL for efficient batch insert with ON CONFLICT
+      // Include shopId in insert to ensure parts belong to the correct shop
       const values = batch.map(p => 
-        `('${p.sku.replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}', false)`
+        `('${p.sku.replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}', false, '${shopIdValue}')`
       ).join(',');
       
       await db.execute(sql`
-        INSERT INTO parts (sku, name, price, is_custom)
+        INSERT INTO parts (sku, name, price, is_custom, shop_id)
         VALUES ${sql.raw(values)}
         ON CONFLICT (sku) DO UPDATE SET
           name = EXCLUDED.name,
-          price = EXCLUDED.price
+          price = EXCLUDED.price,
+          shop_id = EXCLUDED.shop_id
       `);
       
       totalInserted += batch.length;

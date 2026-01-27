@@ -234,11 +234,14 @@ export async function registerRoutes(
 
   app.patch("/api/device-types/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertDeviceTypeSchema.partial().parse(req.body);
-      const type = await storage.updateDeviceType(req.params.id, data);
-      if (!type) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getDeviceType(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Device type not found" });
       }
+      const data = insertDeviceTypeSchema.partial().parse(req.body);
+      const type = await storage.updateDeviceType(req.params.id, data);
       res.json(type);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update device type" });
@@ -247,6 +250,12 @@ export async function registerRoutes(
 
   app.delete("/api/device-types/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getDeviceType(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Device type not found" });
+      }
       await storage.deleteDeviceType(req.params.id);
       res.status(204).send();
     } catch (error: any) {
@@ -292,11 +301,14 @@ export async function registerRoutes(
 
   app.patch("/api/brands/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertBrandSchema.partial().parse(req.body);
-      const brand = await storage.updateBrand(req.params.id, data);
-      if (!brand) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getBrand(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Brand not found" });
       }
+      const data = insertBrandSchema.partial().parse(req.body);
+      const brand = await storage.updateBrand(req.params.id, data);
       res.json(brand);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update brand" });
@@ -305,6 +317,12 @@ export async function registerRoutes(
 
   app.delete("/api/brands/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getBrand(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Brand not found" });
+      }
       await storage.deleteBrand(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -462,11 +480,14 @@ export async function registerRoutes(
 
   app.patch("/api/devices/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertDeviceSchema.partial().parse(req.body);
-      const device = await storage.updateDevice(req.params.id, data);
-      if (!device) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getDevice(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Device not found" });
       }
+      const data = insertDeviceSchema.partial().parse(req.body);
+      const device = await storage.updateDevice(req.params.id, data);
       res.json(device);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update device" });
@@ -475,6 +496,12 @@ export async function registerRoutes(
 
   app.delete("/api/devices/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getDevice(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Device not found" });
+      }
       await storage.deleteDevice(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -622,11 +649,14 @@ export async function registerRoutes(
 
   app.patch("/api/parts/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertPartSchema.partial().parse(req.body);
-      const part = await storage.updatePart(req.params.id, data);
-      if (!part) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getPart(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Part not found" });
       }
+      const data = insertPartSchema.partial().parse(req.body);
+      const part = await storage.updatePart(req.params.id, data);
       res.json(part);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update part" });
@@ -635,6 +665,12 @@ export async function registerRoutes(
 
   app.delete("/api/parts/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getPart(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Part not found" });
+      }
       await storage.deletePart(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -645,7 +681,8 @@ export async function registerRoutes(
   // Delete all supplier parts (preserves custom parts)
   app.delete("/api/parts/supplier/all", requireAdmin, async (req, res) => {
     try {
-      await storage.deleteAllParts();
+      const shopId = getShopId(req);
+      await storage.deleteAllParts(shopId);
       res.json({ success: true, message: "All supplier parts deleted" });
     } catch (error) {
       res.status(500).json({ error: "Failed to delete supplier parts" });
@@ -721,6 +758,7 @@ export async function registerRoutes(
 
   app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
     try {
+      const sessionShopId = getShopId(req);
       if (!req.file) {
         return res.status(400).json({ error: "No file uploaded" });
       }
@@ -794,7 +832,7 @@ export async function registerRoutes(
           continue;
         }
 
-        partsToUpsert.push({ shopId: DEFAULT_SHOP_ID, sku, name, price });
+        partsToUpsert.push({ shopId: sessionShopId, sku, name, price });
       }
 
       if (partsToUpsert.length === 0) {
@@ -804,10 +842,10 @@ export async function registerRoutes(
         });
       }
 
-      // Delete all existing parts before inserting new ones
-      await storage.deleteAllParts();
+      // Delete all existing parts for this shop before inserting new ones
+      await storage.deleteAllParts(sessionShopId);
       
-      const result = await storage.bulkUpsertParts(partsToUpsert);
+      const result = await storage.bulkUpsertParts(partsToUpsert, sessionShopId);
 
       // Update the parts_last_updated timestamp
       await storage.upsertMessageTemplate({ 
@@ -855,11 +893,14 @@ export async function registerRoutes(
 
   app.patch("/api/service-categories/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertServiceCategorySchema.partial().parse(req.body);
-      const category = await storage.updateServiceCategory(req.params.id, data);
-      if (!category) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getServiceCategory(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Service category not found" });
       }
+      const data = insertServiceCategorySchema.partial().parse(req.body);
+      const category = await storage.updateServiceCategory(req.params.id, data);
       res.json(category);
     } catch (error: any) {
       if (error.code === "23505") {
@@ -871,6 +912,12 @@ export async function registerRoutes(
 
   app.delete("/api/service-categories/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getServiceCategory(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Service category not found" });
+      }
       await storage.deleteServiceCategory(req.params.id);
       res.status(204).send();
     } catch (error) {
@@ -902,11 +949,14 @@ export async function registerRoutes(
 
   app.patch("/api/services/:id", requireAdmin, async (req, res) => {
     try {
-      const data = insertServiceSchema.partial().parse(req.body);
-      const service = await storage.updateService(req.params.id, data);
-      if (!service) {
+      const shopId = getShopId(req);
+      // Verify ownership before updating
+      const existing = await storage.getService(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
         return res.status(404).json({ error: "Service not found" });
       }
+      const data = insertServiceSchema.partial().parse(req.body);
+      const service = await storage.updateService(req.params.id, data);
       res.json(service);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update service" });
@@ -915,6 +965,12 @@ export async function registerRoutes(
 
   app.delete("/api/services/:id", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
+      // Verify ownership before deleting
+      const existing = await storage.getService(req.params.id);
+      if (!existing || existing.shopId !== shopId) {
+        return res.status(404).json({ error: "Service not found" });
+      }
       await storage.deleteService(req.params.id);
       res.status(204).send();
     } catch (error) {
