@@ -289,35 +289,7 @@ export default function Embed() {
       }
       
       setAllQuotes(quotes);
-      
-      // Check stock for all parts with SKUs (runs in background)
-      const allSkus = new Set<string>();
-      quotes.forEach(q => {
-        if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
-          q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
-        }
-        if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
-          q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
-        }
-      });
-      const skus = Array.from(allSkus);
-      if (skus.length > 0) {
-        fetch('/api/repairdesk/stock-enabled')
-          .then(res => res.json())
-          .then(({ enabled }) => {
-            if (!enabled) return;
-            setStockLoading(true);
-            return fetch('/api/repairdesk/check-stock', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ skus }),
-            });
-          })
-          .then(res => res?.ok ? res.json() : {})
-          .then(stockInfo => stockInfo && setStockData(stockInfo))
-          .catch(() => console.log('Stock check not available'))
-          .finally(() => setStockLoading(false));
-      }
+      // Stock check now happens when category is selected (more efficient)
     } finally {
       setQuotesLoading(false);
     }
@@ -468,8 +440,41 @@ export default function Embed() {
       return;
     }
     
-    // Show loading animation for 2 seconds before displaying services
+    // Show loading animation and start stock check immediately
     setCategoryLoading(true);
+    
+    // Check stock only for parts in this category (runs immediately)
+    const allSkus = new Set<string>();
+    catQuotes.forEach(q => {
+      if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
+        q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
+      }
+      if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
+        q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
+      }
+    });
+    const skus = Array.from(allSkus);
+    
+    if (skus.length > 0) {
+      setStockLoading(true);
+      // Check if stock checking is enabled and fetch stock data
+      fetch('/api/repairdesk/stock-enabled')
+        .then(res => res.json())
+        .then(({ enabled }) => {
+          if (!enabled) return null;
+          return fetch('/api/repairdesk/check-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skus }),
+          });
+        })
+        .then(res => res?.ok ? res.json() : {})
+        .then(stockInfo => stockInfo && setStockData(prev => ({ ...prev, ...stockInfo })))
+        .catch(() => console.log('Stock check not available'))
+        .finally(() => setStockLoading(false));
+    }
+    
+    // Show loading animation for 2 seconds before displaying services
     setTimeout(() => {
       setCategoryLoading(false);
       setSelectedCategoryId(catId);
