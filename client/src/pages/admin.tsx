@@ -3525,6 +3525,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editAlternativePartSkus, setEditAlternativePartSkus] = useState<string[]>([]);
   const [editAlternativePartInfo, setEditAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
+  const [editAdditionalFee, setEditAdditionalFee] = useState<string>("");
   const [additionalPartSku, setAdditionalPartSku] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
@@ -3819,7 +3820,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[] } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -3832,6 +3833,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setEditAlternativePartSkus([]);
       setEditAlternativePartInfo({});
       setEditAltPartSearch("");
+      setEditAdditionalFee("");
       toast({ title: "Link updated" });
     },
     onError: (error: Error) => {
@@ -3926,6 +3928,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     const altSkus = (ds as any).alternativePartSkus || [];
     setEditAlternativePartSkus(altSkus);
     setEditAltPartSearch("");
+    setEditAdditionalFee((ds as any).additionalFee ? String((ds as any).additionalFee) : "");
     setEditOpen(true);
     
     // Fetch part info for existing alternative SKUs to populate tooltips
@@ -3959,6 +3962,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         partSku: editPartSku || undefined,
         partId: editItem.partId || undefined,
         alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
+        additionalFee: editAdditionalFee ? parseFloat(editAdditionalFee) : 0,
       },
     });
   };
@@ -4248,6 +4252,22 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Additional Fee */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-additional-fee">Additional Fee ($)</Label>
+                  <Input
+                    id="edit-additional-fee"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0.00"
+                    value={editAdditionalFee}
+                    onChange={(e) => setEditAdditionalFee(e.target.value)}
+                    data-testid="input-edit-additional-fee"
+                  />
+                  <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination. Added to total before rounding.</p>
                 </div>
                 
                 {/* Additional Parts (Secondary) Section */}
