@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext, createContext } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,11 +6,36 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Package, Mail } from "lucide-react";
+import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Package, Mail, Store } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Device, DeviceServiceWithRelations, Brand, DeviceType, MessageTemplate } from "@shared/schema";
+
+interface ShopBranding {
+  name: string;
+  logoUrl: string | null;
+  brandColor: string | null;
+}
+
+interface ShopContextValue {
+  shop: ShopBranding | null;
+}
+
+const ShopContext = createContext<ShopContextValue | null>(null);
+
+function useOptionalShop(): ShopBranding | null {
+  const context = useContext(ShopContext);
+  return context?.shop ?? null;
+}
+
+export function EmbedWithShop({ shop }: { shop: ShopBranding | null }) {
+  return (
+    <ShopContext.Provider value={{ shop }}>
+      <Embed />
+    </ShopContext.Provider>
+  );
+}
 
 type DeviceSearchResult = Device & {
   brand?: Brand | null;
@@ -19,6 +44,7 @@ type DeviceSearchResult = Device & {
 
 export default function Embed() {
   const { toast } = useToast();
+  const shopBranding = useOptionalShop();
   
   // Main flow: 'search' | 'services' | 'quote' | 'unknown' | 'success'
   const [view, setView] = useState<'search' | 'services' | 'quote' | 'contact' | 'unknown' | 'success'>('search');

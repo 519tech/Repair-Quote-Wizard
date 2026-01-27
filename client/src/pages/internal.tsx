@@ -1,11 +1,36 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useContext, createContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X, Wrench, Package } from "lucide-react";
+import { Search, Loader2, X, Wrench, Package, Store } from "lucide-react";
 import type { DeviceServiceWithRelations, ServiceCategory } from "@shared/schema";
+
+interface ShopBranding {
+  name: string;
+  logoUrl: string | null;
+  brandColor: string | null;
+}
+
+interface ShopContextValue {
+  shop: ShopBranding | null;
+}
+
+const ShopContext = createContext<ShopContextValue | null>(null);
+
+function useOptionalShop(): ShopBranding | null {
+  const context = useContext(ShopContext);
+  return context?.shop ?? null;
+}
+
+export function InternalWithShop({ shop }: { shop: ShopBranding | null }) {
+  return (
+    <ShopContext.Provider value={{ shop }}>
+      <Internal />
+    </ShopContext.Provider>
+  );
+}
 
 interface DeviceSearchResult {
   id: string;
@@ -33,6 +58,7 @@ interface QuoteData {
 }
 
 export default function Internal() {
+  const shopBranding = useOptionalShop();
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);

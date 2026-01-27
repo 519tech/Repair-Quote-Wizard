@@ -2091,6 +2091,26 @@ export async function registerRoutes(
   // PUBLIC SHOP DETECTION ROUTES
   // ============================================
 
+  // List all active shops (public, for shop selection page)
+  app.get("/api/shops/public-list", async (req, res) => {
+    try {
+      const shops = await storage.getShops();
+      // Return only active shops with public-facing info (exclude API keys)
+      const publicShops = shops
+        .filter(shop => shop.isActive)
+        .map(shop => ({
+          id: shop.id,
+          name: shop.name,
+          slug: shop.slug,
+          logoUrl: shop.logoUrl,
+          brandColor: shop.brandColor,
+        }));
+      res.json(publicShops);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shops" });
+    }
+  });
+
   // Get shop by slug (public, for customer-facing pages)
   app.get("/api/shops/by-slug/:slug", async (req, res) => {
     try {

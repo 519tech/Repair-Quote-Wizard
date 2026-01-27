@@ -2,7 +2,15 @@
 
 ## Overview
 
-RepairQuote is a full-stack web application designed to provide instant repair quotes for electronic devices, including smartphones, tablets, and laptops. It features a customer-facing quote wizard for generating estimates and an administrative panel for comprehensive management of device types, devices, services, parts, and pricing. The application aims to streamline the repair quoting process, improve customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, "I don't know my device" functionality, and an embeddable widget for external websites.
+RepairQuote is a full-stack multi-tenant web application designed to provide instant repair quotes for electronic devices, including smartphones, tablets, and laptops. It features a customer-facing quote wizard for generating estimates and an administrative panel for comprehensive management of device types, devices, services, parts, and pricing. The application aims to streamline the repair quoting process, improve customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, "I don't know my device" functionality, embeddable widgets for external websites, and complete multi-tenant shop isolation.
+
+### URL Structure
+- `/` - Shop selection page (lists all active shops)
+- `/:slug` - Quote wizard for a specific shop (e.g., `/519-tech`, `/test-shop`)
+- `/:slug/internal` - Internal counter lookup for shop staff
+- `/:slug/embed` - Embeddable widget for external websites
+- `/admin` - Admin panel login
+- `/super-admin` - Super admin dashboard for managing all shops
 
 ## User Preferences
 
