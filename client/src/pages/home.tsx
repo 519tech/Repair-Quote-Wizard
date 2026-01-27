@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail } from "lucide-react";
+import { ChevronRight, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -64,6 +64,7 @@ export default function Home() {
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
+  const [autoSentQuote, setAutoSentQuote] = useState(false);
   
   // Contact info
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
@@ -383,6 +384,32 @@ export default function Home() {
     });
   };
 
+  // Auto-send quote when hidePricesUntilContact is enabled
+  const handleViewAndSendQuote = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactInfo.name || !contactInfo.email) return;
+    if (!selectedDeviceId || selectedServices.size === 0) return;
+    
+    // Set view to quote first so user sees the summary
+    setView('quote');
+    setAutoSentQuote(true);
+    
+    // Send the quote automatically
+    const deviceServiceIds = deviceServices
+      .filter(ds => selectedServices.has(ds.service.id))
+      .map(ds => ds.id);
+
+    submitCombinedQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceIds,
+      notes: notes || undefined,
+      multiServiceDiscount: getMultiServiceDiscount(),
+    });
+  };
+
   const handleSubmitUnknownDevice = (e: React.FormEvent) => {
     e.preventDefault();
     submitUnknownDeviceMutation.mutate({
@@ -404,6 +431,7 @@ export default function Home() {
     setAllQuotes([]);
     setSelectedServices(new Set());
     setCombinedQuoteSent(false);
+    setAutoSentQuote(false);
     setContactInfo({ name: "", email: "", phone: "" });
     setNotes("");
     setUnknownDeviceInfo({ name: "", email: "", phone: "", deviceDescription: "", issueDescription: "" });
@@ -1041,8 +1069,25 @@ export default function Home() {
                   )}
                 </div>
 
-                {/* Send Me Quote Button */}
-                {hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
+                {/* Send Me Quote Button - Hidden when auto-sent */}
+                {autoSentQuote ? (
+                  <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                    {submitCombinedQuoteMutation.isPending ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Sending your quote...</span>
+                      </div>
+                    ) : (
+                      <>
+                        <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
+                        <p className="font-medium text-green-700 dark:text-green-300">Quote Sent!</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Check your email{contactInfo.phone ? ' and phone' : ''} for your quote details.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                ) : hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
                   <Button
                     className="w-full"
                     onClick={() => handleSendCombinedQuote({ preventDefault: () => {} } as React.FormEvent)}
@@ -1111,7 +1156,7 @@ export default function Home() {
                 {hidePricesUntilContact ? "Back to services" : "Back to quote"}
               </Button>
 
-              <form onSubmit={hidePricesUntilContact ? (e) => { e.preventDefault(); if (contactInfo.name && contactInfo.email) setView('quote'); } : handleSendCombinedQuote} className="space-y-3">
+              <form onSubmit={hidePricesUntilContact ? handleViewAndSendQuote : handleSendCombinedQuote} className="space-y-3">
                 <div className="space-y-2">
                   <div className="space-y-1">
                     <Label htmlFor="quote-name" className="text-xs">Name *</Label>
