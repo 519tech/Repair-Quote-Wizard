@@ -56,8 +56,19 @@ The application's data model includes:
 - `@replit/vite-plugin-cartographer`: Development tooling.
 - `@replit/vite-plugin-dev-banner`: Displays development environment information.
 
+### Multi-Tenant Architecture
+The application supports multiple shops (tenants) with complete data isolation:
+
+- **Shops Table**: Each shop has its own settings including name, slug, optional custom domain, logo, brand color, OpenPhone API key, RepairDesk API key, Gmail settings, quote settings (price rounding, hide prices, discounts), and SMS/email templates.
+- **Data Isolation**: All main data tables include a `shop_id` column (device_types, brands, devices, services, service_categories, parts, device_services, device_service_parts, quote_requests). Each API endpoint filters data by the session's shopId.
+- **getShopId Helper**: Routes use `getShopId(req)` to extract the shop ID from the session, defaulting to 'default-shop' for backward compatibility.
+- **Ownership Validation**: PATCH/DELETE endpoints verify that entities belong to the current shop before allowing mutations.
+- **Super Admin Role**: Platform-level super admins can manage all shops, view statistics, and impersonate shop admins via `/super-admin`.
+- **Admin Authentication**: Shop admins authenticate via username/password. Sessions store shopId and isSuperAdmin flags.
+
 ### Authentication
 - **Username/Password Auth**: The admin panel uses simple username/password authentication. Sessions are stored in PostgreSQL and persist for 1 week. Login endpoint: `/api/admin/login`, logout: `/api/admin/logout`.
+- **Super Admin Access**: Super admins access `/super-admin` for cross-shop management and can impersonate shop admins.
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
