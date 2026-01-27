@@ -468,12 +468,12 @@ export default function Embed() {
       return;
     }
     
-    // Show loading animation for 1 second before displaying services
+    // Show loading animation for 2 seconds before displaying services
     setCategoryLoading(true);
     setTimeout(() => {
       setCategoryLoading(false);
       setSelectedCategoryId(catId);
-    }, 1000);
+    }, 2000);
   };
 
   return (
