@@ -108,7 +108,7 @@ export type BrandDeviceType = typeof brandDeviceTypes.$inferSelect;
 // Devices (iPhone 15, Samsung Galaxy S24, MacBook Pro, etc.)
 export const devices = pgTable("devices", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  shopId: varchar("shop_id").notNull().references(() => shops.id, { onDelete: "cascade" }),
+  shopId: varchar("shop_id").notNull(),
   name: text("name").notNull(),
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
   brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
