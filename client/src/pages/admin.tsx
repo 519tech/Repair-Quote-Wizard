@@ -3063,6 +3063,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
 }
 
 function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
+  const [activeSubTab, setActiveSubTab] = useState<"supplier" | "custom">("supplier");
   const [open, setOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editItem, setEditItem] = useState<Part | null>(null);
@@ -3080,6 +3081,9 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [customSku, setCustomSku] = useState("");
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
+  const [customSearchQuery, setCustomSearchQuery] = useState("");
+  const [customDebouncedSearch, setCustomDebouncedSearch] = useState("");
+  const [customPage, setCustomPage] = useState(1);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -3089,25 +3093,41 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     return () => clearTimeout(timer);
   }, [searchQuery]);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setCustomDebouncedSearch(customSearchQuery);
+      setCustomPage(1);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [customSearchQuery]);
+
   const partsQueryUrl = useMemo(() => {
     const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString(), isCustom: 'false' });
     if (debouncedSearch) params.append('search', debouncedSearch);
     return `/api/parts?${params}`;
   }, [page, debouncedSearch]);
+
+  const customPartsQueryUrl = useMemo(() => {
+    const params = new URLSearchParams({ page: customPage.toString(), limit: PARTS_PER_PAGE.toString(), isCustom: 'true' });
+    if (customDebouncedSearch) params.append('search', customDebouncedSearch);
+    return `/api/parts?${params}`;
+  }, [customPage, customDebouncedSearch]);
   
   const { data: partsData, isLoading } = useQuery<{ parts: Part[]; total: number }>({ 
     queryKey: [partsQueryUrl]
   });
 
-  // Query for custom parts (not synced with Excel upload)
+  // Query for custom parts with search and pagination
   const { data: customPartsData, isLoading: customPartsLoading } = useQuery<{ parts: Part[]; total: number }>({ 
-    queryKey: ['/api/parts?isCustom=true&limit=1000']
+    queryKey: [customPartsQueryUrl]
   });
 
   const parts = partsData?.parts || [];
   const totalParts = partsData?.total || 0;
   const totalPages = Math.ceil(totalParts / PARTS_PER_PAGE);
   const customParts = customPartsData?.parts || [];
+  const totalCustomParts = customPartsData?.total || 0;
+  const totalCustomPages = Math.ceil(totalCustomParts / PARTS_PER_PAGE);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -3244,264 +3264,333 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
 
   return (
     <div className="space-y-4">
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
-        <div>
-          <CardTitle>Supplier Parts</CardTitle>
-          <CardDescription>Manage parts inventory with SKU and pricing. Replaced when uploading new Excel file.</CardDescription>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Search SKU or name..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 w-[200px]"
-              data-testid="input-search-parts"
-            />
-          </div>
-          <label htmlFor="file-upload">
-            <Button variant="outline" asChild disabled={uploading}>
-              <span className="cursor-pointer">
-                {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                Upload Excel
-              </span>
-            </Button>
-          </label>
-          <input 
-            id="file-upload" 
-            type="file" 
-            accept=".xlsx,.xls" 
-            onChange={handleFileUpload}
-            className="hidden"
-            data-testid="input-upload-parts"
-          />
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
-              <Button variant="destructive" data-testid="button-clear-supplier-parts">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Clear All
-              </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Clear All Supplier Parts?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will permanently delete all supplier parts from the inventory. Custom parts will be preserved. This action cannot be undone.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction onClick={() => clearSupplierPartsMutation.mutate()} data-testid="button-confirm-clear-parts">
-                  Delete All Supplier Parts
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
-          <Dialog open={open} onOpenChange={setOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
-            </DialogTrigger>
-          <DialogContent>
-            <form onSubmit={handleSubmit}>
-              <DialogHeader>
-                <DialogTitle>Add Part</DialogTitle>
-                <DialogDescription>Add a new part to inventory</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>SKU</Label>
-                  <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g., SCR-IP15-BLK" required data-testid="input-part-sku" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., iPhone 15 Screen" required data-testid="input-part-name" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required data-testid="input-part-price" />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-part">
-                  {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+      {/* Sub-tabs for Supplier vs Custom parts */}
+      <div className="flex gap-2 border-b pb-2">
+        <Button
+          variant={activeSubTab === "supplier" ? "default" : "ghost"}
+          onClick={() => setActiveSubTab("supplier")}
+          data-testid="button-supplier-parts-tab"
+        >
+          Supplier Parts
+          {totalParts > 0 && <Badge variant="secondary" className="ml-2">{totalParts.toLocaleString()}</Badge>}
+        </Button>
+        <Button
+          variant={activeSubTab === "custom" ? "default" : "ghost"}
+          onClick={() => setActiveSubTab("custom")}
+          data-testid="button-custom-parts-tab"
+        >
+          Custom Parts
+          {totalCustomParts > 0 && <Badge variant="secondary" className="ml-2">{totalCustomParts.toLocaleString()}</Badge>}
+        </Button>
+      </div>
 
-        <Dialog open={editOpen} onOpenChange={setEditOpen}>
-          <DialogContent>
-            <form onSubmit={handleEditSubmit}>
-              <DialogHeader>
-                <DialogTitle>Edit Part</DialogTitle>
-                <DialogDescription>Update part details</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>SKU</Label>
-                  <Input value={editItem?.sku || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, sku: e.target.value} : null)} required data-testid="input-edit-part-sku" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Name</Label>
-                  <Input value={editItem?.name || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, name: e.target.value} : null)} required data-testid="input-edit-part-name" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Price ($)</Label>
-                  <Input type="number" step="0.01" min="0" value={editItem?.price || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, price: e.target.value} : null)} required data-testid="input-edit-part-price" />
-                </div>
+      {/* Supplier Parts Tab */}
+      {activeSubTab === "supplier" && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+            <div>
+              <CardTitle>Supplier Parts</CardTitle>
+              <CardDescription>Manage parts inventory with SKU and pricing. Replaced when uploading new Excel file.</CardDescription>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search SKU or name..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9 w-[200px]"
+                  data-testid="input-search-parts"
+                />
               </div>
-              <DialogFooter>
-                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-part">
-                  {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+              <label htmlFor="file-upload">
+                <Button variant="outline" asChild disabled={uploading}>
+                  <span className="cursor-pointer">
+                    {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                    Upload Excel
+                  </span>
                 </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-        </div>
-      </CardHeader>
-      <CardContent>
-        {isLoading ? (
-          <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-        ) : parts.length === 0 ? (
-          <p className="text-center py-8 text-muted-foreground">{searchQuery ? "No parts match your search" : "No parts yet. Add your first one!"}</p>
-        ) : (
-          <>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {parts.map((part) => (
-                  <TableRow key={part.id}>
-                    <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
-                    <TableCell className="font-medium">{part.name}</TableCell>
-                    <TableCell>${part.price}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+              </label>
+              <input 
+                id="file-upload" 
+                type="file" 
+                accept=".xlsx,.xls" 
+                onChange={handleFileUpload}
+                className="hidden"
+                data-testid="input-upload-parts"
+              />
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="destructive" data-testid="button-clear-supplier-parts">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Clear All
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear All Supplier Parts?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete all supplier parts from the inventory. Custom parts will be preserved. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearSupplierPartsMutation.mutate()} data-testid="button-confirm-clear-parts">
+                      Delete All Supplier Parts
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              <Dialog open={open} onOpenChange={setOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <form onSubmit={handleSubmit}>
+                    <DialogHeader>
+                      <DialogTitle>Add Part</DialogTitle>
+                      <DialogDescription>Add a new part to inventory</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="space-y-2">
+                        <Label>SKU</Label>
+                        <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g., SCR-IP15-BLK" required data-testid="input-part-sku" />
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-4 px-2">
-                <p className="text-sm text-muted-foreground">
-                  Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalParts)} of {totalParts.toLocaleString()} parts
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setPage(p => Math.max(1, p - 1))} 
-                    disabled={page === 1}
-                    data-testid="button-parts-prev-page"
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    Previous
-                  </Button>
-                  <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-                    disabled={page === totalPages}
-                    data-testid="button-parts-next-page"
-                  >
-                    Next
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
+                      <div className="space-y-2">
+                        <Label>Name</Label>
+                        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., iPhone 15 Screen" required data-testid="input-part-name" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Price ($)</Label>
+                        <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required data-testid="input-part-price" />
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-part">
+                        {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
+                      </Button>
+                    </DialogFooter>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+            ) : parts.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">{searchQuery ? "No parts match your search" : "No parts yet. Add your first one!"}</p>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead className="w-[120px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {parts.map((part) => (
+                      <TableRow key={part.id}>
+                        <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
+                        <TableCell className="font-medium">{part.name}</TableCell>
+                        <TableCell>${part.price}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 px-2">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalParts)} of {totalParts.toLocaleString()} parts
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setPage(p => Math.max(1, p - 1))} 
+                        disabled={page === 1}
+                        data-testid="button-parts-prev-page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
+                        disabled={page === totalPages}
+                        data-testid="button-parts-next-page"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
             )}
-          </>
-        )}
-      </CardContent>
-    </Card>
+          </CardContent>
+        </Card>
+      )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-          <div>
-            <CardTitle>Custom Parts</CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Parts you add here are preserved when bulk uploading from Excel
-            </p>
-          </div>
-          <Dialog open={customOpen} onOpenChange={setCustomOpen}>
-            <DialogTrigger asChild>
-              <Button data-testid="button-add-custom-part"><Plus className="h-4 w-4 mr-2" />Add Custom Part</Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader><DialogTitle>Add Custom Part</DialogTitle></DialogHeader>
-              <form onSubmit={handleCustomSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="customSku">SKU *</Label>
-                  <Input id="customSku" value={customSku} onChange={(e) => setCustomSku(e.target.value)} required data-testid="input-custom-part-sku" />
-                </div>
-                <div>
-                  <Label htmlFor="customName">Name *</Label>
-                  <Input id="customName" value={customName} onChange={(e) => setCustomName(e.target.value)} required data-testid="input-custom-part-name" />
-                </div>
-                <div>
-                  <Label htmlFor="customPrice">Price *</Label>
-                  <Input id="customPrice" type="number" step="0.01" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} required data-testid="input-custom-part-price" />
-                </div>
-                <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>Cancel</Button>
-                  <Button type="submit" disabled={createCustomMutation.isPending} data-testid="button-create-custom-part">
-                    {createCustomMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Create
-                  </Button>
-                </div>
-              </form>
-            </DialogContent>
-          </Dialog>
-        </CardHeader>
-        <CardContent>
-          {customPartsLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-          ) : customParts.length === 0 ? (
-            <p className="text-center py-8 text-muted-foreground">No custom parts yet. Custom parts are not overwritten during Excel imports.</p>
-          ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>SKU</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead className="w-[120px]">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {customParts.map((part) => (
-                  <TableRow key={part.id}>
-                    <TableCell><Badge variant="secondary">{part.sku}</Badge></TableCell>
-                    <TableCell className="font-medium">{part.name}</TableCell>
-                    <TableCell>${part.price}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-custom-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-custom-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Custom Parts Tab */}
+      {activeSubTab === "custom" && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+            <div>
+              <CardTitle>Custom Parts</CardTitle>
+              <CardDescription>Parts you add here are preserved when bulk uploading from Excel</CardDescription>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Search SKU or name..." 
+                  value={customSearchQuery}
+                  onChange={(e) => setCustomSearchQuery(e.target.value)}
+                  className="pl-9 w-[200px]"
+                  data-testid="input-search-custom-parts"
+                />
+              </div>
+              <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+                <DialogTrigger asChild>
+                  <Button data-testid="button-add-custom-part"><Plus className="h-4 w-4 mr-2" />Add Custom Part</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader><DialogTitle>Add Custom Part</DialogTitle></DialogHeader>
+                  <form onSubmit={handleCustomSubmit} className="space-y-4">
+                    <div>
+                      <Label htmlFor="customSku">SKU *</Label>
+                      <Input id="customSku" value={customSku} onChange={(e) => setCustomSku(e.target.value)} required data-testid="input-custom-part-sku" />
+                    </div>
+                    <div>
+                      <Label htmlFor="customName">Name *</Label>
+                      <Input id="customName" value={customName} onChange={(e) => setCustomName(e.target.value)} required data-testid="input-custom-part-name" />
+                    </div>
+                    <div>
+                      <Label htmlFor="customPrice">Price *</Label>
+                      <Input id="customPrice" type="number" step="0.01" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} required data-testid="input-custom-part-price" />
+                    </div>
+                    <div className="flex justify-end gap-2">
+                      <Button type="button" variant="outline" onClick={() => setCustomOpen(false)}>Cancel</Button>
+                      <Button type="submit" disabled={createCustomMutation.isPending} data-testid="button-create-custom-part">
+                        {createCustomMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                        Create
+                      </Button>
+                    </div>
+                  </form>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {customPartsLoading ? (
+              <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+            ) : customParts.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">{customSearchQuery ? "No custom parts match your search" : "No custom parts yet. Custom parts are not overwritten during Excel imports."}</p>
+            ) : (
+              <>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>SKU</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Price</TableHead>
+                      <TableHead className="w-[120px]">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {customParts.map((part) => (
+                      <TableRow key={part.id}>
+                        <TableCell><Badge variant="secondary">{part.sku}</Badge></TableCell>
+                        <TableCell className="font-medium">{part.name}</TableCell>
+                        <TableCell>${part.price}</TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-custom-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
+                            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-custom-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {totalCustomPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 px-2">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {(customPage - 1) * PARTS_PER_PAGE + 1}-{Math.min(customPage * PARTS_PER_PAGE, totalCustomParts)} of {totalCustomParts.toLocaleString()} parts
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setCustomPage(p => Math.max(1, p - 1))} 
+                        disabled={customPage === 1}
+                        data-testid="button-custom-parts-prev-page"
+                      >
+                        <ChevronLeft className="h-4 w-4" />
+                        Previous
+                      </Button>
+                      <span className="text-sm text-muted-foreground">Page {customPage} of {totalCustomPages}</span>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={() => setCustomPage(p => Math.min(totalCustomPages, p + 1))} 
+                        disabled={customPage === totalCustomPages}
+                        data-testid="button-custom-parts-next-page"
+                      >
+                        Next
+                        <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Shared Edit Dialog */}
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent>
+          <form onSubmit={handleEditSubmit}>
+            <DialogHeader>
+              <DialogTitle>Edit Part</DialogTitle>
+              <DialogDescription>Update part details</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>SKU</Label>
+                <Input value={editItem?.sku || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, sku: e.target.value} : null)} required data-testid="input-edit-part-sku" />
+              </div>
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={editItem?.name || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, name: e.target.value} : null)} required data-testid="input-edit-part-name" />
+              </div>
+              <div className="space-y-2">
+                <Label>Price ($)</Label>
+                <Input type="number" step="0.01" min="0" value={editItem?.price || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, price: e.target.value} : null)} required data-testid="input-edit-part-price" />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-part">
+                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
