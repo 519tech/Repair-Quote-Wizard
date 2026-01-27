@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, unique, boolean, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique, boolean, integer, real } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -175,6 +175,7 @@ export const deviceServices = pgTable("device_services", {
   partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
   partSku: varchar("part_sku"), // Stored separately so it persists when part is deleted
   alternativePartSkus: text("alternative_part_skus").array(), // Alternative primary parts (cheapest used)
+  additionalFee: real("additional_fee").default(0), // Extra fee for specific device-service combos (e.g., Samsung charge port)
 }, (table) => [
   unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
 ]);

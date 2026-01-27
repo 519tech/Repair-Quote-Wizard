@@ -919,6 +919,7 @@ export async function registerRoutes(
     partSku: z.string().optional(),
     partId: z.string().optional(),
     alternativePartSkus: z.array(z.string()).optional(),
+    additionalFee: z.number().optional(),
   });
 
   app.post("/api/device-services", requireAdmin, async (req, res) => {
@@ -1113,6 +1114,7 @@ export async function registerRoutes(
       if (partId !== undefined) data.partId = partId || null;
       if (partSku !== undefined) data.partSku = partSku || null;
       if (input.alternativePartSkus !== undefined) data.alternativePartSkus = input.alternativePartSkus || null;
+      if (input.additionalFee !== undefined) data.additionalFee = input.additionalFee;
       
       const deviceService = await storage.updateDeviceService(req.params.id, data);
       if (!deviceService) {
@@ -1279,7 +1281,8 @@ export async function registerRoutes(
       
       const totalPartCost = primaryPartCost + additionalPartsCost;
       const markedUpPartCost = totalPartCost * partsMarkup;
-      const rawTotal = laborPrice + markedUpPartCost;
+      const additionalFee = (deviceService as any).additionalFee || 0;
+      const rawTotal = laborPrice + markedUpPartCost + additionalFee;
       const totalPrice = await roundPrice(rawTotal, service.bypassRounding === true);
       
       // Check if service has parts or is labour-only
@@ -1362,7 +1365,8 @@ export async function registerRoutes(
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
       const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
       const markedUpPartCost = partCost * partsMarkup;
-      const rawTotal = laborPrice + markedUpPartCost;
+      const additionalFee = (deviceService as any).additionalFee || 0;
+      const rawTotal = laborPrice + markedUpPartCost + additionalFee;
       const quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
@@ -1441,7 +1445,8 @@ export async function registerRoutes(
         const partsMarkup = parseFloat(service.partsMarkup || "1.0");
         const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
         const markedUpPartCost = partCost * partsMarkup;
-        const rawTotal = laborPrice + markedUpPartCost;
+        const additionalFee = (deviceService as any).additionalFee || 0;
+        const rawTotal = laborPrice + markedUpPartCost + additionalFee;
         const quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
         
         servicesData.push({

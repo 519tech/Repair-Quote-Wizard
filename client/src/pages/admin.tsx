@@ -1048,6 +1048,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [linkAlternativePartSkus, setLinkAlternativePartSkus] = useState<string[]>([]);
   const [linkAlternativePartInfo, setLinkAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [linkAltPartSearch, setLinkAltPartSearch] = useState("");
+  const [linkAdditionalFee, setLinkAdditionalFee] = useState<string>("");
   const [debouncedLinkAltPartSearch, setDebouncedLinkAltPartSearch] = useState("");
 
   // Bulk add links state
@@ -1268,7 +1269,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateLinkMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[] } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -1387,6 +1388,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     const altSkus = (link as any).alternativePartSkus || [];
     setLinkAlternativePartSkus(altSkus);
     setLinkAltPartSearch("");
+    setLinkAdditionalFee((link as any).additionalFee ? String((link as any).additionalFee) : "");
     setEditLinkOpen(true);
     
     // Fetch part info for existing alternative SKUs
@@ -1418,6 +1420,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
         serviceId: editLinkItem.serviceId,
         partSku: linkPartSku || undefined,
         alternativePartSkus: linkAlternativePartSkus,
+        additionalFee: linkAdditionalFee ? parseFloat(linkAdditionalFee) : 0,
       },
     });
   };
@@ -1972,7 +1975,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       </Dialog>
 
       {/* Edit Service Link Dialog */}
-      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); } }}>
+      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); setLinkAdditionalFee(""); } }}>
         <DialogContent className="max-w-lg">
           <form onSubmit={handleEditLinkSubmit}>
             <DialogHeader>
@@ -2072,6 +2075,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 {additionalPartSku && !additionalSkuPart && additionalPartSku.length > 0 && (
                   <p className="text-sm text-destructive">SKU not found</p>
                 )}
+              </div>
+
+              {/* Additional Fee */}
+              <div className="space-y-2">
+                <Label htmlFor="link-additional-fee">Additional Fee ($)</Label>
+                <Input
+                  id="link-additional-fee"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={linkAdditionalFee}
+                  onChange={(e) => setLinkAdditionalFee(e.target.value)}
+                  data-testid="input-link-additional-fee"
+                />
+                <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination (e.g., Samsung charge port). Added to total before rounding.</p>
               </div>
               
               {/* Alternative Primary Parts Section */}
