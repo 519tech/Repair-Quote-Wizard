@@ -2684,6 +2684,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
         notes: editItem.notes || undefined,
         labourOnly: editItem.labourOnly,
         bypassMultiDiscount: editItem.bypassMultiDiscount,
+        bypassRounding: editItem.bypassRounding,
         imageUrl: editItem.imageUrl || undefined
       } 
     });
