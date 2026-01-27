@@ -13,6 +13,7 @@ import {
   insertBrandDeviceTypeSchema,
   insertBrandServiceCategorySchema,
   insertMessageTemplateSchema,
+  insertShopSchema,
 } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -42,6 +43,19 @@ function requireAdmin(req: Request, res: Response, next: NextFunction) {
     return res.status(401).json({ error: "Unauthorized" });
   }
   next();
+}
+
+// Super admin authentication middleware
+function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
+  if (!req.session?.isAdmin || !req.session?.isSuperAdmin) {
+    return res.status(403).json({ error: "Super admin access required" });
+  }
+  next();
+}
+
+// Helper to get shopId from session - uses DEFAULT_SHOP_ID if not set
+function getShopId(req: Request): string {
+  return req.session?.shopId || DEFAULT_SHOP_ID;
 }
 
 const upload = multer({ 
@@ -195,7 +209,8 @@ export async function registerRoutes(
   // Device Types
   app.get("/api/device-types", async (req, res) => {
     try {
-      const types = await storage.getDeviceTypes();
+      const shopId = getShopId(req);
+      const types = await storage.getDeviceTypes(shopId);
       res.json(types);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch device types" });
@@ -204,8 +219,9 @@ export async function registerRoutes(
 
   app.post("/api/device-types", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertDeviceTypeSchema.parse(req.body);
-      const type = await storage.createDeviceType(data);
+      const type = await storage.createDeviceType({ ...data, shopId });
       res.status(201).json(type);
     } catch (error: any) {
       if (error.message?.includes("unique constraint")) {
@@ -242,7 +258,8 @@ export async function registerRoutes(
   // Brands
   app.get("/api/brands", async (req, res) => {
     try {
-      const brands = await storage.getBrands();
+      const shopId = getShopId(req);
+      const brands = await storage.getBrands(shopId);
       res.json(brands);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch brands" });
@@ -260,8 +277,9 @@ export async function registerRoutes(
 
   app.post("/api/brands", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertBrandSchema.parse(req.body);
-      const brand = await storage.createBrand(data);
+      const brand = await storage.createBrand({ ...data, shopId });
       res.status(201).json(brand);
     } catch (error: any) {
       if (error.message?.includes("unique constraint")) {
@@ -364,13 +382,14 @@ export async function registerRoutes(
   // Devices
   app.get("/api/devices/search", async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const query = (req.query.q as string || "").toLowerCase().trim();
       if (!query || query.length < 2) {
         return res.json([]);
       }
-      const allDevices = await storage.getDevices();
-      const allBrands = await storage.getBrands();
-      const allTypes = await storage.getDeviceTypes();
+      const allDevices = await storage.getDevices(shopId);
+      const allBrands = await storage.getBrands(shopId);
+      const allTypes = await storage.getDeviceTypes(shopId);
       
       const brandsMap = new Map(allBrands.map(b => [b.id, b]));
       const typesMap = new Map(allTypes.map(t => [t.id, t]));
@@ -403,15 +422,16 @@ export async function registerRoutes(
 
   app.get("/api/devices", async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const typeId = req.query.typeId as string | undefined;
       const brandId = req.query.brandId as string | undefined;
       let devices;
       if (typeId && brandId) {
-        devices = await storage.getDevicesByTypeAndBrand(typeId, brandId);
+        devices = await storage.getDevicesByTypeAndBrand(typeId, brandId, shopId);
       } else if (typeId) {
-        devices = await storage.getDevicesByType(typeId);
+        devices = await storage.getDevicesByType(typeId, shopId);
       } else {
-        devices = await storage.getDevices();
+        devices = await storage.getDevices(shopId);
       }
       res.json(devices);
     } catch (error) {
@@ -421,7 +441,8 @@ export async function registerRoutes(
 
   app.get("/api/devices/:typeId", async (req, res) => {
     try {
-      const devices = await storage.getDevicesByType(req.params.typeId);
+      const shopId = getShopId(req);
+      const devices = await storage.getDevicesByType(req.params.typeId, shopId);
       res.json(devices);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch devices" });
@@ -430,8 +451,9 @@ export async function registerRoutes(
 
   app.post("/api/devices", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertDeviceSchema.parse(req.body);
-      const device = await storage.createDevice(data);
+      const device = await storage.createDevice({ ...data, shopId });
       res.status(201).json(device);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create device" });
@@ -550,6 +572,7 @@ export async function registerRoutes(
   // Parts
   app.get("/api/parts", async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 100;
       const search = req.query.search as string | undefined;
@@ -557,11 +580,11 @@ export async function registerRoutes(
       
       // If pagination params provided, use paginated query
       if (req.query.page || req.query.limit || req.query.search || req.query.isCustom !== undefined) {
-        const result = await storage.getPartsPaginated({ page, limit, search, isCustom });
+        const result = await storage.getPartsPaginated({ page, limit, search, isCustom, shopId });
         res.json(result);
       } else {
         // Legacy: return all parts (for backwards compatibility with other parts of the app)
-        const parts = await storage.getParts();
+        const parts = await storage.getParts(shopId);
         res.json(parts);
       }
     } catch (error) {
@@ -571,7 +594,8 @@ export async function registerRoutes(
 
   app.get("/api/parts/sku/:sku", async (req, res) => {
     try {
-      const part = await storage.getPartBySku(req.params.sku);
+      const shopId = getShopId(req);
+      const part = await storage.getPartBySku(req.params.sku, shopId);
       if (!part) {
         return res.status(404).json({ error: "Part not found" });
       }
@@ -583,8 +607,9 @@ export async function registerRoutes(
 
   app.post("/api/parts", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertPartSchema.parse(req.body);
-      const part = await storage.createPart(data);
+      const part = await storage.createPart({ ...data, shopId });
       res.status(201).json(part);
     } catch (error: any) {
       if (error.message?.includes("unique constraint")) {
@@ -806,7 +831,8 @@ export async function registerRoutes(
   // Service Categories
   app.get("/api/service-categories", async (req, res) => {
     try {
-      const categories = await storage.getServiceCategories();
+      const shopId = getShopId(req);
+      const categories = await storage.getServiceCategories(shopId);
       res.json(categories);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch service categories" });
@@ -815,8 +841,9 @@ export async function registerRoutes(
 
   app.post("/api/service-categories", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertServiceCategorySchema.parse(req.body);
-      const category = await storage.createServiceCategory(data);
+      const category = await storage.createServiceCategory({ ...data, shopId });
       res.status(201).json(category);
     } catch (error: any) {
       if (error.code === "23505") {
@@ -854,7 +881,8 @@ export async function registerRoutes(
   // Services
   app.get("/api/services", async (req, res) => {
     try {
-      const services = await storage.getServices();
+      const shopId = getShopId(req);
+      const services = await storage.getServices(shopId);
       res.json(services);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch services" });
@@ -863,8 +891,9 @@ export async function registerRoutes(
 
   app.post("/api/services", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const data = insertServiceSchema.parse(req.body);
-      const service = await storage.createService(data);
+      const service = await storage.createService({ ...data, shopId });
       res.status(201).json(service);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create service" });
@@ -896,10 +925,11 @@ export async function registerRoutes(
   // Device Services (links)
   app.get("/api/device-services", async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const deviceId = req.query.deviceId as string | undefined;
       const deviceServices = deviceId
-        ? await storage.getDeviceServicesByDevice(deviceId)
-        : await storage.getDeviceServices();
+        ? await storage.getDeviceServicesByDevice(deviceId, shopId)
+        : await storage.getDeviceServices(shopId);
       res.json(deviceServices);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch device services" });
@@ -908,7 +938,8 @@ export async function registerRoutes(
 
   app.get("/api/device-services/by-device/:deviceId", async (req, res) => {
     try {
-      const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId);
+      const shopId = getShopId(req);
+      const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId, shopId);
       res.json(deviceServices);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch device services" });
@@ -917,7 +948,8 @@ export async function registerRoutes(
 
   app.get("/api/device-services/:deviceId", async (req, res) => {
     try {
-      const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId);
+      const shopId = getShopId(req);
+      const deviceServices = await storage.getDeviceServicesByDevice(req.params.deviceId, shopId);
       res.json(deviceServices);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch device services" });
@@ -1033,6 +1065,7 @@ export async function registerRoutes(
   // Clone service links from one device to another (without parts)
   app.post("/api/device-services/clone", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const schema = z.object({
         sourceDeviceId: z.string(),
         targetDeviceId: z.string(),
@@ -1044,20 +1077,20 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Source and target device cannot be the same" });
       }
       
-      // Validate source device exists
+      // Validate source device exists and belongs to shop
       const sourceDevice = await storage.getDevice(input.sourceDeviceId);
-      if (!sourceDevice) {
+      if (!sourceDevice || sourceDevice.shopId !== shopId) {
         return res.status(400).json({ error: "Source device not found" });
       }
       
-      // Validate target device exists
+      // Validate target device exists and belongs to shop
       const targetDevice = await storage.getDevice(input.targetDeviceId);
-      if (!targetDevice) {
+      if (!targetDevice || targetDevice.shopId !== shopId) {
         return res.status(400).json({ error: "Target device not found" });
       }
       
       // Get all service links from source device
-      const sourceLinks = await storage.getDeviceServicesByDevice(input.sourceDeviceId);
+      const sourceLinks = await storage.getDeviceServicesByDevice(input.sourceDeviceId, shopId);
       
       if (sourceLinks.length === 0) {
         return res.json({ created: 0, skipped: 0, message: "Source device has no service links to clone" });
@@ -1342,7 +1375,8 @@ export async function registerRoutes(
   // Quote Requests
   app.get("/api/quote-requests", async (req, res) => {
     try {
-      const quotes = await storage.getQuoteRequests();
+      const shopId = getShopId(req);
+      const quotes = await storage.getQuoteRequests(shopId);
       res.json(quotes);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch quote requests" });
@@ -1979,6 +2013,140 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to check stock" });
+    }
+  });
+
+  // ============================================
+  // SUPER ADMIN ROUTES - Shop Management
+  // ============================================
+
+  // Get all shops
+  app.get("/api/super-admin/shops", requireSuperAdmin, async (req, res) => {
+    try {
+      const shops = await storage.getShops();
+      res.json(shops);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shops" });
+    }
+  });
+
+  // Get single shop
+  app.get("/api/super-admin/shops/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const shop = await storage.getShop(req.params.id);
+      if (!shop) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      res.json(shop);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shop" });
+    }
+  });
+
+  // Create shop
+  app.post("/api/super-admin/shops", requireSuperAdmin, async (req, res) => {
+    try {
+      const data = insertShopSchema.parse(req.body);
+      const shop = await storage.createShop(data);
+      res.status(201).json(shop);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        res.status(409).json({ error: "Shop with this slug or domain already exists" });
+      } else {
+        res.status(400).json({ error: error.message || "Failed to create shop" });
+      }
+    }
+  });
+
+  // Update shop
+  app.patch("/api/super-admin/shops/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const data = insertShopSchema.partial().parse(req.body);
+      const shop = await storage.updateShop(req.params.id, data);
+      if (!shop) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      res.json(shop);
+    } catch (error: any) {
+      if (error.code === '23505') {
+        res.status(409).json({ error: "Shop with this slug or domain already exists" });
+      } else {
+        res.status(400).json({ error: error.message || "Failed to update shop" });
+      }
+    }
+  });
+
+  // Delete shop
+  app.delete("/api/super-admin/shops/:id", requireSuperAdmin, async (req, res) => {
+    try {
+      const shop = await storage.getShop(req.params.id);
+      if (!shop) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      // Prevent deleting the default shop
+      if (shop.id === DEFAULT_SHOP_ID) {
+        return res.status(400).json({ error: "Cannot delete the default shop" });
+      }
+      await storage.deleteShop(req.params.id);
+      res.status(204).send();
+    } catch (error) {
+      res.status(500).json({ error: "Failed to delete shop" });
+    }
+  });
+
+  // Get shop statistics
+  app.get("/api/super-admin/shops/:id/stats", requireSuperAdmin, async (req, res) => {
+    try {
+      const shopId = req.params.id;
+      const shop = await storage.getShop(shopId);
+      if (!shop) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      
+      // Get counts for this shop (using shopId filtering)
+      const deviceTypes = await storage.getDeviceTypes(shopId);
+      const brands = await storage.getBrands(shopId);
+      const devices = await storage.getDevices(shopId);
+      const services = await storage.getServices(shopId);
+      const parts = await storage.getParts(shopId);
+      const quoteRequests = await storage.getQuoteRequests(shopId);
+      
+      res.json({
+        deviceTypes: deviceTypes.length,
+        brands: brands.length,
+        devices: devices.length,
+        services: services.length,
+        parts: parts.length,
+        quoteRequests: quoteRequests.length,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shop stats" });
+    }
+  });
+
+  // Impersonate shop - switch super admin's session to a specific shop
+  app.post("/api/super-admin/impersonate/:shopId", requireSuperAdmin, async (req, res) => {
+    try {
+      const shop = await storage.getShop(req.params.shopId);
+      if (!shop) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      
+      // Store original super admin state and set new shop context
+      req.session.shopId = shop.id;
+      res.json({ success: true, shop: { id: shop.id, name: shop.name } });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to impersonate shop" });
+    }
+  });
+
+  // Stop impersonation - return to super admin mode
+  app.post("/api/super-admin/stop-impersonate", requireSuperAdmin, async (req, res) => {
+    try {
+      req.session.shopId = null;
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to stop impersonation" });
     }
   });
 

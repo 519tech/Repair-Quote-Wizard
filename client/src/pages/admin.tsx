@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, Building2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -172,7 +172,7 @@ export default function Admin() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean; username: string | null }>({
+  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean; username: string | null; isSuperAdmin?: boolean }>({
     queryKey: ["/api/admin/me"],
   });
 
@@ -308,6 +308,19 @@ export default function Admin() {
               <span className="text-sm text-muted-foreground hidden sm:inline">
                 {authStatus.username}
               </span>
+            )}
+            {authStatus?.isSuperAdmin && (
+              <Button
+                variant="outline"
+                size="sm"
+                asChild
+                data-testid="button-super-admin"
+              >
+                <a href="/super-admin">
+                  <Building2 className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">Shops</span>
+                </a>
+              </Button>
             )}
             <Button 
               variant="ghost" 

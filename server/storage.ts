@@ -66,14 +66,14 @@ export interface IStorage {
   deleteShop(id: string): Promise<void>;
 
   // Device Types
-  getDeviceTypes(): Promise<DeviceType[]>;
+  getDeviceTypes(shopId?: string): Promise<DeviceType[]>;
   getDeviceType(id: string): Promise<DeviceType | undefined>;
   createDeviceType(data: InsertDeviceType): Promise<DeviceType>;
   updateDeviceType(id: string, data: Partial<InsertDeviceType>): Promise<DeviceType | undefined>;
   deleteDeviceType(id: string): Promise<void>;
 
   // Brands
-  getBrands(): Promise<Brand[]>;
+  getBrands(shopId?: string): Promise<Brand[]>;
   getBrand(id: string): Promise<Brand | undefined>;
   createBrand(data: InsertBrand): Promise<Brand>;
   updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined>;
@@ -92,42 +92,42 @@ export interface IStorage {
   deleteBrandServiceCategory(id: string): Promise<void>;
 
   // Devices
-  getDevices(): Promise<Device[]>;
-  getDevicesByType(typeId: string): Promise<Device[]>;
-  getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]>;
+  getDevices(shopId?: string): Promise<Device[]>;
+  getDevicesByType(typeId: string, shopId?: string): Promise<Device[]>;
+  getDevicesByTypeAndBrand(typeId: string, brandId: string, shopId?: string): Promise<Device[]>;
   getDevice(id: string): Promise<Device | undefined>;
   createDevice(data: InsertDevice): Promise<Device>;
   updateDevice(id: string, data: Partial<InsertDevice>): Promise<Device | undefined>;
   deleteDevice(id: string): Promise<void>;
 
   // Parts
-  getParts(): Promise<Part[]>;
-  getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }>;
+  getParts(shopId?: string): Promise<Part[]>;
+  getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean; shopId?: string }): Promise<{ parts: Part[]; total: number }>;
   getPart(id: string): Promise<Part | undefined>;
-  getPartBySku(sku: string): Promise<Part | undefined>;
-  deleteAllParts(): Promise<void>;
+  getPartBySku(sku: string, shopId?: string): Promise<Part | undefined>;
+  deleteAllParts(shopId?: string): Promise<void>;
   createPart(data: InsertPart): Promise<Part>;
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
   bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
 
   // Service Categories
-  getServiceCategories(): Promise<ServiceCategory[]>;
+  getServiceCategories(shopId?: string): Promise<ServiceCategory[]>;
   getServiceCategory(id: string): Promise<ServiceCategory | undefined>;
   createServiceCategory(data: InsertServiceCategory): Promise<ServiceCategory>;
   updateServiceCategory(id: string, data: Partial<InsertServiceCategory>): Promise<ServiceCategory | undefined>;
   deleteServiceCategory(id: string): Promise<void>;
 
   // Services
-  getServices(): Promise<Service[]>;
+  getServices(shopId?: string): Promise<Service[]>;
   getService(id: string): Promise<Service | undefined>;
   createService(data: InsertService): Promise<Service>;
   updateService(id: string, data: Partial<InsertService>): Promise<Service | undefined>;
   deleteService(id: string): Promise<void>;
 
   // Device Services (links)
-  getDeviceServices(): Promise<DeviceServiceWithRelations[]>;
-  getDeviceServicesByDevice(deviceId: string): Promise<DeviceServiceWithRelations[]>;
+  getDeviceServices(shopId?: string): Promise<DeviceServiceWithRelations[]>;
+  getDeviceServicesByDevice(deviceId: string, shopId?: string): Promise<DeviceServiceWithRelations[]>;
   getDeviceService(id: string): Promise<DeviceService | undefined>;
   getDeviceServiceWithRelations(id: string): Promise<DeviceServiceWithRelations | undefined>;
   createDeviceService(data: InsertDeviceService): Promise<DeviceService>;
@@ -141,11 +141,11 @@ export interface IStorage {
   clearDeviceServiceParts(deviceServiceId: string): Promise<void>;
 
   // Quote Requests
-  getQuoteRequests(): Promise<QuoteRequest[]>;
+  getQuoteRequests(shopId?: string): Promise<QuoteRequest[]>;
   createQuoteRequest(data: InsertQuoteRequest): Promise<QuoteRequest>;
 
   // Unknown Device Quotes
-  getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]>;
+  getUnknownDeviceQuotes(shopId?: string): Promise<UnknownDeviceQuote[]>;
   createUnknownDeviceQuote(data: InsertUnknownDeviceQuote): Promise<UnknownDeviceQuote>;
 
   // Message Templates
@@ -203,7 +203,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Device Types
-  async getDeviceTypes(): Promise<DeviceType[]> {
+  async getDeviceTypes(shopId?: string): Promise<DeviceType[]> {
+    if (shopId) {
+      return db.select().from(deviceTypes).where(eq(deviceTypes.shopId, shopId));
+    }
     return db.select().from(deviceTypes);
   }
 
@@ -227,7 +230,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Brands
-  async getBrands(): Promise<Brand[]> {
+  async getBrands(shopId?: string): Promise<Brand[]> {
+    if (shopId) {
+      return db.select().from(brands).where(eq(brands.shopId, shopId));
+    }
     return db.select().from(brands);
   }
 
@@ -311,18 +317,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Devices
-  async getDevices(): Promise<Device[]> {
+  async getDevices(shopId?: string): Promise<Device[]> {
+    if (shopId) {
+      return db.select().from(devices).where(eq(devices.shopId, shopId));
+    }
     return db.select().from(devices);
   }
 
-  async getDevicesByType(typeId: string): Promise<Device[]> {
-    return db.select().from(devices).where(eq(devices.deviceTypeId, typeId));
+  async getDevicesByType(typeId: string, shopId?: string): Promise<Device[]> {
+    const conditions = [eq(devices.deviceTypeId, typeId)];
+    if (shopId) conditions.push(eq(devices.shopId, shopId));
+    return db.select().from(devices).where(and(...conditions));
   }
 
-  async getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]> {
-    return db.select().from(devices).where(
-      and(eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId))
-    );
+  async getDevicesByTypeAndBrand(typeId: string, brandId: string, shopId?: string): Promise<Device[]> {
+    const conditions = [eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId)];
+    if (shopId) conditions.push(eq(devices.shopId, shopId));
+    return db.select().from(devices).where(and(...conditions));
   }
 
   async getDevice(id: string): Promise<Device | undefined> {
@@ -345,15 +356,23 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Parts
-  async getParts(): Promise<Part[]> {
+  async getParts(shopId?: string): Promise<Part[]> {
+    if (shopId) {
+      return db.select().from(parts).where(eq(parts.shopId, shopId));
+    }
     return db.select().from(parts);
   }
 
-  async getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean }): Promise<{ parts: Part[]; total: number }> {
-    const { page, limit, search, isCustom } = options;
+  async getPartsPaginated(options: { page: number; limit: number; search?: string; isCustom?: boolean; shopId?: string }): Promise<{ parts: Part[]; total: number }> {
+    const { page, limit, search, isCustom, shopId } = options;
     const offset = (page - 1) * limit;
     
     const conditions: any[] = [];
+    
+    // Filter by shopId if specified
+    if (shopId) {
+      conditions.push(eq(parts.shopId, shopId));
+    }
     
     // Filter by isCustom if specified
     if (isCustom !== undefined) {
@@ -386,9 +405,11 @@ export class DatabaseStorage implements IStorage {
     return { parts: result, total };
   }
 
-  async deleteAllParts(): Promise<void> {
+  async deleteAllParts(shopId?: string): Promise<void> {
     // Only delete non-custom parts (preserve custom parts during bulk upload)
-    await db.delete(parts).where(eq(parts.isCustom, false));
+    const conditions = [eq(parts.isCustom, false)];
+    if (shopId) conditions.push(eq(parts.shopId, shopId));
+    await db.delete(parts).where(and(...conditions));
   }
 
   async getPart(id: string): Promise<Part | undefined> {
@@ -396,8 +417,10 @@ export class DatabaseStorage implements IStorage {
     return part || undefined;
   }
 
-  async getPartBySku(sku: string): Promise<Part | undefined> {
-    const [part] = await db.select().from(parts).where(eq(parts.sku, sku));
+  async getPartBySku(sku: string, shopId?: string): Promise<Part | undefined> {
+    const conditions = [eq(parts.sku, sku)];
+    if (shopId) conditions.push(eq(parts.shopId, shopId));
+    const [part] = await db.select().from(parts).where(and(...conditions));
     return part || undefined;
   }
 
@@ -447,7 +470,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Service Categories
-  async getServiceCategories(): Promise<ServiceCategory[]> {
+  async getServiceCategories(shopId?: string): Promise<ServiceCategory[]> {
+    if (shopId) {
+      return db.select().from(serviceCategories).where(eq(serviceCategories.shopId, shopId));
+    }
     return db.select().from(serviceCategories);
   }
 
@@ -471,7 +497,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Services
-  async getServices(): Promise<Service[]> {
+  async getServices(shopId?: string): Promise<Service[]> {
+    if (shopId) {
+      return db.select().from(services).where(eq(services.shopId, shopId));
+    }
     return db.select().from(services);
   }
 
@@ -495,8 +524,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Device Services (links)
-  async getDeviceServices(): Promise<DeviceServiceWithRelations[]> {
+  async getDeviceServices(shopId?: string): Promise<DeviceServiceWithRelations[]> {
     const results = await db.query.deviceServices.findMany({
+      where: shopId ? eq(deviceServices.shopId, shopId) : undefined,
       with: {
         device: {
           with: {
@@ -515,9 +545,13 @@ export class DatabaseStorage implements IStorage {
     return results;
   }
 
-  async getDeviceServicesByDevice(deviceId: string): Promise<DeviceServiceWithRelations[]> {
+  async getDeviceServicesByDevice(deviceId: string, shopId?: string): Promise<DeviceServiceWithRelations[]> {
+    const conditions = [eq(deviceServices.deviceId, deviceId)];
+    if (shopId) {
+      conditions.push(eq(deviceServices.shopId, shopId));
+    }
     const results = await db.query.deviceServices.findMany({
-      where: eq(deviceServices.deviceId, deviceId),
+      where: and(...conditions),
       with: {
         device: {
           with: {
@@ -597,7 +631,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Quote Requests
-  async getQuoteRequests(): Promise<QuoteRequest[]> {
+  async getQuoteRequests(shopId?: string): Promise<QuoteRequest[]> {
+    if (shopId) {
+      return db.select().from(quoteRequests).where(eq(quoteRequests.shopId, shopId));
+    }
     return db.select().from(quoteRequests);
   }
 
@@ -607,7 +644,10 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Unknown Device Quotes
-  async getUnknownDeviceQuotes(): Promise<UnknownDeviceQuote[]> {
+  async getUnknownDeviceQuotes(shopId?: string): Promise<UnknownDeviceQuote[]> {
+    if (shopId) {
+      return db.select().from(unknownDeviceQuotes).where(eq(unknownDeviceQuotes.shopId, shopId));
+    }
     return db.select().from(unknownDeviceQuotes);
   }
 
