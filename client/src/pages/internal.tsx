@@ -281,7 +281,7 @@ export default function Internal() {
 
         {selectedDevice && (
           <div className="space-y-6">
-            <Card className="bg-[#187908]/[0.015]">
+            <Card className="bg-[#187908]/[0.03]">
               <CardHeader className="py-4">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
@@ -303,7 +303,7 @@ export default function Internal() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : allQuotes.length === 0 ? (
-              <Card className="bg-[#187908]/[0.015]">
+              <Card className="bg-[#187908]/[0.03]">
                 <CardContent className="py-8">
                   <p className="text-center text-muted-foreground">No services available for this device.</p>
                 </CardContent>
@@ -311,7 +311,7 @@ export default function Internal() {
             ) : (
               <div className="space-y-6">
                 {groupedQuotes().map(({ categoryName, quotes }) => (
-                  <Card key={categoryName} className="bg-[#187908]/[0.015]">
+                  <Card key={categoryName} className="bg-[#187908]/[0.03]">
                     <CardHeader className="py-3 border-b">
                       <CardTitle className="text-lg">{categoryName}</CardTitle>
                     </CardHeader>
