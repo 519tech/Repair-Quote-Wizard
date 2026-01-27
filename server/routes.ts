@@ -21,7 +21,8 @@ import * as XLSX from "xlsx";
 import bcrypt from "bcrypt";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
-import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, sendTestEmail } from "./gmail";
+import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, sendTestEmail, sendPasswordResetEmail, sendNewShopWelcomeEmail } from "./gmail";
+import crypto from "crypto";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
@@ -126,12 +127,14 @@ export async function registerRoutes(
       req.session.isAdmin = true;
       req.session.shopId = user.shopId;
       req.session.isSuperAdmin = user.isSuperAdmin;
+      req.session.mustChangePassword = user.mustChangePassword;
       
       res.json({ 
         success: true, 
         username: user.username,
         isSuperAdmin: user.isSuperAdmin,
         shopId: user.shopId,
+        mustChangePassword: user.mustChangePassword,
       });
     } catch (error) {
       console.error('Login error:', error);
@@ -149,11 +152,105 @@ export async function registerRoutes(
     });
   });
 
+  // Password reset request - sends email with temporary password
+  app.post("/api/admin/forgot-password", async (req, res) => {
+    try {
+      const { email } = req.body;
+      
+      if (!email) {
+        return res.status(400).json({ error: "Email is required" });
+      }
+      
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        // Don't reveal if email exists or not for security
+        return res.json({ success: true, message: "If this email exists, a reset link has been sent" });
+      }
+      
+      // Generate temporary password
+      const tempPassword = crypto.randomBytes(4).toString('hex'); // 8 character temp password
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+      
+      // Update user with new password and set mustChangePassword
+      await storage.updateUserPassword(user.id, hashedPassword, true);
+      
+      // Get shop name for email
+      let shopName = "RepairQuote";
+      if (user.shopId) {
+        const shop = await storage.getShop(user.shopId);
+        if (shop) shopName = shop.name;
+      }
+      
+      // Send email with temporary password
+      const emailSent = await sendPasswordResetEmail({
+        recipientEmail: email,
+        recipientName: user.firstName || user.username,
+        shopName,
+        temporaryPassword: tempPassword,
+      });
+      
+      if (!emailSent) {
+        console.error('Failed to send password reset email');
+      }
+      
+      res.json({ success: true, message: "If this email exists, a reset link has been sent" });
+    } catch (error) {
+      console.error('Password reset error:', error);
+      res.status(500).json({ error: "Password reset failed" });
+    }
+  });
+
+  // Change password endpoint (for forced password change after reset)
+  app.post("/api/admin/change-password", async (req, res) => {
+    try {
+      if (!req.session?.userId) {
+        return res.status(401).json({ error: "Not authenticated" });
+      }
+      
+      const { currentPassword, newPassword } = req.body;
+      
+      if (!newPassword || newPassword.length < 8) {
+        return res.status(400).json({ error: "New password must be at least 8 characters" });
+      }
+      
+      const user = await storage.getUserByUsername(req.session.username!);
+      if (!user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+      
+      // If mustChangePassword is true, we don't require current password verification
+      // (user is logging in with temp password)
+      if (!req.session.mustChangePassword) {
+        if (!currentPassword) {
+          return res.status(400).json({ error: "Current password is required" });
+        }
+        
+        const validPassword = await bcrypt.compare(currentPassword, user.passwordHash);
+        if (!validPassword) {
+          return res.status(401).json({ error: "Current password is incorrect" });
+        }
+      }
+      
+      // Hash and save new password
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await storage.updateUserPassword(user.id, hashedPassword, false);
+      
+      // Update session
+      req.session.mustChangePassword = false;
+      
+      res.json({ success: true, message: "Password changed successfully" });
+    } catch (error) {
+      console.error('Change password error:', error);
+      res.status(500).json({ error: "Password change failed" });
+    }
+  });
+
   app.get("/api/admin/me", (req, res) => {
     res.json({ 
       isAdmin: req.session?.isAdmin === true,
       username: req.session?.username || null,
       isSuperAdmin: req.session?.isSuperAdmin === true,
+      mustChangePassword: req.session?.mustChangePassword === true,
       shopId: req.session?.shopId || null,
     });
   });

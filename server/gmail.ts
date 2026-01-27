@@ -476,6 +476,123 @@ This is an automated notification from RepairQuote.`;
   }
 }
 
+// Password reset email
+interface PasswordResetEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  shopName: string;
+  temporaryPassword: string;
+}
+
+export async function sendPasswordResetEmail(data: PasswordResetEmailData): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+    
+    const subject = `Password Reset - ${data.shopName} Admin`;
+    const emailBody = `Hello ${data.recipientName},
+
+A password reset was requested for your ${data.shopName} admin account.
+
+Your temporary password is: ${data.temporaryPassword}
+
+Please log in with this temporary password and you will be prompted to create a new password.
+
+For security, this temporary password will expire in 24 hours.
+
+If you did not request this reset, please contact your administrator immediately.
+
+Best regards,
+RepairQuote System`;
+
+    const message = [
+      `To: ${data.recipientEmail}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`Password reset email sent to ${data.recipientEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send password reset email:', error);
+    return false;
+  }
+}
+
+// New shop welcome email with temp password
+interface NewShopWelcomeEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  shopName: string;
+  username: string;
+  temporaryPassword: string;
+  loginUrl: string;
+}
+
+export async function sendNewShopWelcomeEmail(data: NewShopWelcomeEmailData): Promise<boolean> {
+  try {
+    const gmail = await getGmailClient();
+    
+    const subject = `Welcome to RepairQuote - Your ${data.shopName} Admin Account`;
+    const emailBody = `Hello ${data.recipientName},
+
+Welcome to RepairQuote! Your admin account for ${data.shopName} has been created.
+
+Login Details:
+- Username: ${data.username}
+- Temporary Password: ${data.temporaryPassword}
+- Login URL: ${data.loginUrl}
+
+When you first log in, you'll be prompted to set a new password.
+
+If you have any questions, please contact your RepairQuote administrator.
+
+Best regards,
+The RepairQuote Team`;
+
+    const message = [
+      `To: ${data.recipientEmail}`,
+      `Subject: ${subject}`,
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      emailBody
+    ].join('\n');
+
+    const encodedMessage = Buffer.from(message)
+      .toString('base64')
+      .replace(/\+/g, '-')
+      .replace(/\//g, '_')
+      .replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: {
+        raw: encodedMessage
+      }
+    });
+
+    console.log(`New shop welcome email sent to ${data.recipientEmail}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send new shop welcome email:', error);
+    return false;
+  }
+}
+
 // Test email function - sends a test email with sample data
 export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
   const testData = {

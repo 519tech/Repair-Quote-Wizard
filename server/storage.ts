@@ -49,7 +49,7 @@ import {
   type InsertShop,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, ilike, sql } from "drizzle-orm";
+import { eq, and, or, ilike, sql, gt } from "drizzle-orm";
 import { users } from "@shared/models/auth";
 
 // Default shop ID for backward compatibility during migration
@@ -161,10 +161,18 @@ export interface IStorage {
   undismissAlert(deviceServiceId: string): Promise<void>;
 
   // Users
-  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean } | undefined>;
-  createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean): Promise<{ id: string; username: string }>;
+  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean; mustChangePassword: boolean; email: string | null } | undefined>;
+  getUserByEmail(email: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null; firstName: string | null; lastName: string | null } | undefined>;
+  createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean, email?: string, mustChangePassword?: boolean): Promise<{ id: string; username: string }>;
   getUsers(): Promise<{ id: string; username: string; email: string | null; shopId: string | null; isSuperAdmin: boolean }[]>;
   updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void>;
+  
+  // Password reset
+  setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void>;
+  getUserByResetToken(token: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null } | undefined>;
+  clearPasswordResetToken(userId: string): Promise<void>;
+  updateUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<void>;
+  setMustChangePassword(userId: string, mustChange: boolean): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -720,23 +728,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Users
-  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean } | undefined> {
+  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean; mustChangePassword: boolean; email: string | null } | undefined> {
     const [user] = await db.select({
       id: users.id,
       username: users.username,
       passwordHash: users.passwordHash,
       shopId: users.shopId,
       isSuperAdmin: users.isSuperAdmin,
+      mustChangePassword: users.mustChangePassword,
+      email: users.email,
     }).from(users).where(eq(users.username, username));
     return user || undefined;
   }
 
-  async createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean): Promise<{ id: string; username: string }> {
+  async getUserByEmail(email: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null; firstName: string | null; lastName: string | null } | undefined> {
+    const [user] = await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      shopId: users.shopId,
+      firstName: users.firstName,
+      lastName: users.lastName,
+    }).from(users).where(eq(users.email, email));
+    return user || undefined;
+  }
+
+  async createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean, email?: string, mustChangePassword?: boolean): Promise<{ id: string; username: string }> {
     const [user] = await db.insert(users).values({ 
       username, 
       passwordHash,
       shopId: shopId || null,
       isSuperAdmin: isSuperAdmin || false,
+      email: email || null,
+      mustChangePassword: mustChangePassword || false,
     }).returning({ id: users.id, username: users.username });
     return user;
   }
@@ -753,6 +777,51 @@ export class DatabaseStorage implements IStorage {
 
   async updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void> {
     await db.update(users).set(data).where(eq(users.id, id));
+  }
+
+  // Password reset methods
+  async setPasswordResetToken(userId: string, token: string, expires: Date): Promise<void> {
+    await db.update(users).set({
+      passwordResetToken: token,
+      passwordResetExpires: expires,
+    }).where(eq(users.id, userId));
+  }
+
+  async getUserByResetToken(token: string): Promise<{ id: string; username: string; email: string | null; shopId: string | null } | undefined> {
+    const [user] = await db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      shopId: users.shopId,
+    }).from(users).where(
+      and(
+        eq(users.passwordResetToken, token),
+        gt(users.passwordResetExpires, new Date())
+      )
+    );
+    return user || undefined;
+  }
+
+  async clearPasswordResetToken(userId: string): Promise<void> {
+    await db.update(users).set({
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    }).where(eq(users.id, userId));
+  }
+
+  async updateUserPassword(userId: string, passwordHash: string, mustChangePassword?: boolean): Promise<void> {
+    await db.update(users).set({
+      passwordHash,
+      mustChangePassword: mustChangePassword ?? false,
+      passwordResetToken: null,
+      passwordResetExpires: null,
+    }).where(eq(users.id, userId));
+  }
+
+  async setMustChangePassword(userId: string, mustChange: boolean): Promise<void> {
+    await db.update(users).set({
+      mustChangePassword: mustChange,
+    }).where(eq(users.id, userId));
   }
 }
 
