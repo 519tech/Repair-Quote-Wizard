@@ -3,6 +3,10 @@ import { repairDeskTokens } from "@shared/schema";
 
 const REPAIRDESK_API_BASE = "https://api.repairdesk.co/api/web/v1";
 
+// Cache for stock data - stores { quantity, timestamp }
+const stockCache = new Map<string, { qty: number; ts: number }>();
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes cache
+
 interface InventoryItem {
   sku: string;
   name: string;
@@ -15,55 +19,90 @@ function getApiKey(): string | null {
   return process.env.REPAIRDESK_API_KEY || null;
 }
 
-// Search for specific SKUs by paginating through inventory until found
+// Fetch a single page of inventory
+async function fetchInventoryPage(apiKey: string, page: number): Promise<{ items: InventoryItem[]; totalPages: number }> {
+  try {
+    const response = await fetch(
+      `${REPAIRDESK_API_BASE}/inventory?api_key=${encodeURIComponent(apiKey)}&page=${page}`,
+      { headers: { "Content-Type": "application/json" } }
+    );
+
+    if (!response.ok) {
+      console.error(`Failed to fetch inventory page ${page}:`, response.status);
+      return { items: [], totalPages: 0 };
+    }
+
+    const data = await response.json();
+    const items = data?.data?.inventoryListData || [];
+    const totalPages = data?.data?.pagination?.total_pages || 1;
+    return { items, totalPages };
+  } catch (error) {
+    console.error(`Error fetching page ${page}:`, error);
+    return { items: [], totalPages: 0 };
+  }
+}
+
+// Search for specific SKUs with parallel page fetching
 async function searchSkuInPages(apiKey: string, targetSkus: Set<string>): Promise<Map<string, number>> {
   const stockMap = new Map<string, number>();
   const foundSkus = new Set<string>();
-  let page = 1;
-  let totalPages = 1;
+  const startTime = Date.now();
   
   try {
-    // Paginate until all SKUs found or no more pages
-    while (foundSkus.size < targetSkus.size && page <= totalPages) {
-      const response = await fetch(
-        `${REPAIRDESK_API_BASE}/inventory?api_key=${encodeURIComponent(apiKey)}&page=${page}`,
-        { headers: { "Content-Type": "application/json" } }
-      );
-
-      if (!response.ok) {
-        console.error(`Failed to fetch inventory page ${page}:`, response.status);
-        break;
+    // First, get page 1 to know total pages
+    const firstResult = await fetchInventoryPage(apiKey, 1);
+    const totalPages = firstResult.totalPages;
+    
+    // Process page 1 results
+    for (const item of firstResult.items) {
+      if (item.sku && targetSkus.has(item.sku) && !foundSkus.has(item.sku)) {
+        const qty = parseInt(item.in_stock || "0", 10) || 0;
+        stockMap.set(item.sku, qty);
+        foundSkus.add(item.sku);
+        // Cache the result
+        stockCache.set(item.sku, { qty, ts: Date.now() });
       }
-
-      const data = await response.json();
+    }
+    
+    if (foundSkus.size >= targetSkus.size) {
+      console.log(`RepairDesk: All ${foundSkus.size} SKUs found on page 1 in ${Date.now() - startTime}ms`);
+      return stockMap;
+    }
+    
+    // Fetch remaining pages in parallel (batches of 5)
+    const BATCH_SIZE = 5;
+    for (let batchStart = 2; batchStart <= totalPages && foundSkus.size < targetSkus.size; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE - 1, totalPages);
+      const pagePromises: Promise<{ items: InventoryItem[]; totalPages: number }>[] = [];
       
-      if (data?.data?.inventoryListData && Array.isArray(data.data.inventoryListData)) {
-        for (const item of data.data.inventoryListData) {
+      for (let page = batchStart; page <= batchEnd; page++) {
+        pagePromises.push(fetchInventoryPage(apiKey, page));
+      }
+      
+      const results = await Promise.all(pagePromises);
+      
+      for (const result of results) {
+        for (const item of result.items) {
           if (item.sku && targetSkus.has(item.sku) && !foundSkus.has(item.sku)) {
             const qty = parseInt(item.in_stock || "0", 10) || 0;
             stockMap.set(item.sku, qty);
             foundSkus.add(item.sku);
-            console.log(`RepairDesk: SKU ${item.sku} found on page ${page} with ${qty} in stock`);
+            // Cache the result
+            stockCache.set(item.sku, { qty, ts: Date.now() });
           }
         }
       }
       
-      if (data?.data?.pagination && page === 1) {
-        totalPages = data.data.pagination.total_pages || 1;
-      }
-      
       // Stop early if all SKUs found
       if (foundSkus.size >= targetSkus.size) {
-        console.log(`RepairDesk: All ${foundSkus.size} SKUs found by page ${page}`);
+        console.log(`RepairDesk: All ${foundSkus.size} SKUs found in ${Date.now() - startTime}ms`);
         break;
       }
-      
-      page++;
     }
     
     if (foundSkus.size < targetSkus.size) {
-      const notFound = [...targetSkus].filter(s => !foundSkus.has(s));
-      console.log(`RepairDesk: ${notFound.length} SKUs not found after ${page - 1} pages`);
+      const notFound = Array.from(targetSkus).filter(s => !foundSkus.has(s));
+      console.log(`RepairDesk: ${notFound.length} SKUs not found after searching all pages in ${Date.now() - startTime}ms`);
     }
   } catch (error) {
     console.error("Error searching RepairDesk inventory:", error);
@@ -85,11 +124,36 @@ export async function checkInventoryBySku(skus: string[]): Promise<Map<string, n
     return stockMap;
   }
 
-  // Search for specific SKUs page by page
-  const targetSkus = new Set(skus);
+  const now = Date.now();
+  const uncachedSkus: string[] = [];
+  
+  // Check cache first
+  for (const sku of skus) {
+    const cached = stockCache.get(sku);
+    if (cached && (now - cached.ts) < CACHE_TTL_MS) {
+      stockMap.set(sku, cached.qty);
+    } else {
+      uncachedSkus.push(sku);
+    }
+  }
+  
+  if (uncachedSkus.length === 0) {
+    console.log(`RepairDesk: All ${skus.length} SKUs served from cache`);
+    return stockMap;
+  }
+  
+  console.log(`RepairDesk: ${stockMap.size} from cache, ${uncachedSkus.length} to fetch`);
+  
+  // Search for uncached SKUs
+  const targetSkus = new Set(uncachedSkus);
   const results = await searchSkuInPages(apiKey, targetSkus);
   
-  return results;
+  // Merge results
+  results.forEach((qty, sku) => {
+    stockMap.set(sku, qty);
+  });
+  
+  return stockMap;
 }
 
 export async function isRepairDeskConnected(): Promise<boolean> {
