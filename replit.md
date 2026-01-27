@@ -77,6 +77,8 @@ The application supports multiple shops (tenants) with complete data isolation:
 ### Authentication
 - **Username/Password Auth**: The admin panel uses simple username/password authentication. Sessions are stored in PostgreSQL and persist for 1 week. Login endpoint: `/api/admin/login`, logout: `/api/admin/logout`.
 - **Super Admin Access**: Super admins access `/super-admin` for cross-shop management and can impersonate shop admins.
+- **Password Reset**: Shops can reset forgotten passwords via email. The `/api/admin/forgot-password` endpoint sends a temporary password to the shop's email address. Users must change the temporary password on their next login (forced password change screen).
+- **New Shop Welcome Email**: When creating a new shop via super admin, a welcome email with temporary credentials is automatically sent to the shop's email address. The shop admin must change their password on first login.
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
