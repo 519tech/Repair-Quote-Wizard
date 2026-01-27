@@ -1,8 +1,9 @@
 // SMS integration via OpenPhone/Quo API
-// Configure OPENPHONE_API_KEY environment variable
+// Now uses shop-specific API keys from shops table
 import { storage } from './storage';
 
 const OPENPHONE_API_BASE = 'https://api.openphone.com/v1';
+const DEFAULT_SHOP_ID = 'default-shop';
 
 interface QuoteSmsData {
   customerName: string;
@@ -77,21 +78,30 @@ function formatPhoneE164(phone: string): string {
   return `+${digits}`;
 }
 
-const OPENPHONE_FROM_NUMBER = '+12264449927';
+const DEFAULT_OPENPHONE_FROM_NUMBER = '+12264449927';
 
-function getFromPhoneNumber(): string {
-  return OPENPHONE_FROM_NUMBER;
+async function getShopSmsSettings(shopId: string): Promise<{ apiKey: string | null; fromNumber: string }> {
+  const shop = await storage.getShop(shopId);
+  if (shop?.openphoneApiKey) {
+    return {
+      apiKey: shop.openphoneApiKey,
+      fromNumber: shop.openphonePhoneNumber || DEFAULT_OPENPHONE_FROM_NUMBER
+    };
+  }
+  // Fallback to global environment variable
+  return {
+    apiKey: process.env.OPENPHONE_API_KEY || null,
+    fromNumber: DEFAULT_OPENPHONE_FROM_NUMBER
+  };
 }
 
-async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean> {
-  const apiKey = process.env.OPENPHONE_API_KEY;
+async function sendSmsViaOpenPhone(to: string, message: string, shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
+  const { apiKey, fromNumber } = await getShopSmsSettings(shopId);
   
   if (!apiKey) {
-    console.log('OPENPHONE_API_KEY not configured - SMS not sent');
+    console.log(`OpenPhone API key not configured for shop ${shopId} - SMS not sent`);
     return false;
   }
-  
-  const fromNumber = getFromPhoneNumber();
   
   const formattedTo = formatPhoneE164(to);
   
@@ -110,7 +120,7 @@ async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean
     });
     
     if (response.ok || response.status === 202) {
-      console.log(`SMS sent via OpenPhone to ${formattedTo}`);
+      console.log(`SMS sent via OpenPhone to ${formattedTo} for shop ${shopId}`);
       return true;
     } else {
       const errorText = await response.text();
@@ -125,16 +135,26 @@ async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean
 
 const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} for {deviceName} - ${price} plus taxes. {repairTime}. {warranty}. Reply for questions!";
 
-export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
+async function getShopSmsTemplate(shopId: string): Promise<string> {
+  const shop = await storage.getShop(shopId);
+  if (shop?.smsTemplate) {
+    return shop.smsTemplate;
+  }
+  // Fallback to message_templates table
+  const template = await storage.getMessageTemplate('sms');
+  return template?.content || defaultSmsTemplate;
+}
+
+export async function sendQuoteSms(data: QuoteSmsData, shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
   }
 
   try {
-    const smsTemplate = await storage.getMessageTemplate('sms');
-    const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data);
-    return await sendSmsViaOpenPhone(data.customerPhone, message);
+    const template = await getShopSmsTemplate(shopId);
+    const message = replaceMacros(template, data);
+    return await sendSmsViaOpenPhone(data.customerPhone, message, shopId);
   } catch (error) {
     console.error('Failed to send quote SMS:', error);
     return false;
@@ -188,39 +208,49 @@ async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsDat
   return cleanupEmptyPlaceholders(result);
 }
 
-export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
+export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData, shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
   }
 
   try {
-    const smsTemplate = await storage.getMessageTemplate('sms');
-    const message = await replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data);
-    return await sendSmsViaOpenPhone(data.customerPhone, message);
+    const template = await getShopSmsTemplate(shopId);
+    const message = await replaceCombinedMacros(template || defaultCombinedSmsTemplate, data);
+    return await sendSmsViaOpenPhone(data.customerPhone, message, shopId);
   } catch (error) {
     console.error('Failed to send combined quote SMS:', error);
     return false;
   }
 }
 
-export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Promise<boolean> {
+async function getShopUnknownDeviceSmsTemplate(shopId: string): Promise<string | null> {
+  const shop = await storage.getShop(shopId);
+  if (shop?.unknownDeviceSmsTemplate) {
+    return shop.unknownDeviceSmsTemplate;
+  }
+  // Fallback to message_templates table
+  const template = await storage.getMessageTemplate('unknown_device_sms');
+  return template?.content || null;
+}
+
+export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData, shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
   if (!data.customerPhone) {
     console.log('No phone number provided - SMS not sent');
     return false;
   }
 
   try {
-    const smsTemplate = await storage.getMessageTemplate('unknown_device_sms');
+    const smsTemplate = await getShopUnknownDeviceSmsTemplate(shopId);
     const defaultMessage = `Hi ${data.customerName}! Thanks for contacting RepairQuote. We received your inquiry about "${data.deviceDescription}". Our team will review and contact you with a personalized quote soon!`;
     
-    const message = smsTemplate?.content
+    const message = smsTemplate
       ?.replace(/\{customerName\}/g, data.customerName)
       ?.replace(/\{deviceDescription\}/g, data.deviceDescription)
       ?.replace(/\{issueDescription\}/g, data.issueDescription)
       || defaultMessage;
 
-    return await sendSmsViaOpenPhone(data.customerPhone, message);
+    return await sendSmsViaOpenPhone(data.customerPhone, message, shopId);
   } catch (error) {
     console.error('Failed to send unknown device SMS:', error);
     return false;
@@ -228,7 +258,7 @@ export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Pro
 }
 
 // Test SMS function - sends a test SMS with sample data
-export async function sendTestSms(recipientPhone: string): Promise<boolean> {
+export async function sendTestSms(recipientPhone: string, shopId: string = DEFAULT_SHOP_ID): Promise<boolean> {
   const testData = {
     customerName: 'Test Customer',
     customerPhone: recipientPhone,
@@ -252,6 +282,6 @@ export async function sendTestSms(recipientPhone: string): Promise<boolean> {
     grandTotal: '$389.98'
   };
 
-  console.log(`Sending test SMS to ${recipientPhone}...`);
-  return await sendCombinedQuoteSms(testData);
+  console.log(`Sending test SMS to ${recipientPhone} for shop ${shopId}...`);
+  return await sendCombinedQuoteSms(testData, shopId);
 }

@@ -72,11 +72,17 @@ The application supports multiple shops (tenants) with complete data isolation:
 
 ### Quote Delivery Integrations
 - **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
-- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.
+- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications. Each shop can have its own OpenPhone API key and phone number stored in the shops table. Falls back to global `OPENPHONE_API_KEY` environment variable.
+- **Shop-Specific Templates**: SMS and email templates can be customized per shop via the shops table fields (smsTemplate, emailSubjectTemplate, emailBodyTemplate, etc.).
 
 ### RepairDesk Integration
-- **API Key Authentication**: The application integrates with RepairDesk POS software using API key authentication.
+- **API Key Authentication**: The application integrates with RepairDesk POS software using API key authentication. Each shop can have its own RepairDesk API key.
 - **Inventory Checking**: When connected, the application queries RepairDesk's inventory API to check parts stock levels by SKU.
 - **Stock Status Display**: Services with parts in stock (quantity > 0) display a green "In Stock" badge in the quote flow.
-- **Admin Management**: Connection status is shown in the Settings tab. The API key is managed via the `REPAIRDESK_API_KEY` secret.
+- **Admin Management**: Connection status is shown in the Settings tab. The API key can be per-shop or global via `REPAIRDESK_API_KEY` secret.
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
+
+### Public Shop Detection API
+- **GET /api/shops/detect**: Detects shop from request domain or slug query parameter, returns public shop settings.
+- **GET /api/shops/by-slug/:slug**: Gets shop public settings by URL slug.
+- **Security**: Public endpoints do not accept client-provided shopId to prevent spoofing. Shop context is derived from authenticated session or device data.

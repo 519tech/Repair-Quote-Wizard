@@ -47,7 +47,13 @@ export default function SuperAdmin() {
   });
 
   const { data: auth, isLoading: authLoading } = useQuery<AuthResponse>({
-    queryKey: ["/api/admin/auth"],
+    queryKey: ["/api/admin/me"],
+    select: (data: any) => ({
+      authenticated: data.isAdmin === true,
+      username: data.username,
+      shopId: data.shopId,
+      isSuperAdmin: data.isSuperAdmin === true,
+    }),
   });
 
   const { data: shops = [], isLoading: shopsLoading } = useQuery<Shop[]>({

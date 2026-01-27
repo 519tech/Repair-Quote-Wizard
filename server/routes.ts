@@ -535,13 +535,14 @@ export async function registerRoutes(
   // Device bulk import
   app.post("/api/devices/bulk-import", requireAdmin, async (req, res) => {
     try {
+      const shopId = getShopId(req);
       const { devices: deviceRows } = req.body;
       if (!Array.isArray(deviceRows) || deviceRows.length === 0) {
         return res.status(400).json({ error: "No devices to import" });
       }
 
-      const brands = await storage.getBrands();
-      const deviceTypes = await storage.getDeviceTypes();
+      const brands = await storage.getBrands(shopId);
+      const deviceTypes = await storage.getDeviceTypes(shopId);
       
       const results = { created: 0, errors: [] as string[] };
       
@@ -575,6 +576,7 @@ export async function registerRoutes(
           
           await storage.createDevice({
             name: modelName,
+            shopId,
             deviceTypeId: deviceType.id,
             brandId,
             imageUrl: imageUrl || null,
@@ -1520,6 +1522,10 @@ export async function registerRoutes(
     try {
       const input = combinedQuoteRequestSchema.parse(req.body);
       
+      // Derive shopId from the device being quoted (secure - no client spoofing)
+      const device = await storage.getDevice(input.deviceId);
+      const shopId = device?.shopId || DEFAULT_SHOP_ID;
+      
       // Fetch all device services and calculate prices
       const servicesData: Array<{
         serviceName: string;
@@ -1583,7 +1589,7 @@ export async function registerRoutes(
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
       }).catch(err => console.error('Combined email send error:', err));
 
-      // Send combined SMS if phone provided
+      // Send combined SMS if phone provided (shop-specific)
       if (input.customerPhone) {
         sendCombinedQuoteSms({
           customerName: input.customerName,
@@ -1592,7 +1598,7 @@ export async function registerRoutes(
           services: servicesData,
           grandTotal: finalTotal.toFixed(2),
           multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
-        }).catch(err => console.error('Combined SMS send error:', err));
+        }, shopId).catch(err => console.error('Combined SMS send error:', err));
       }
 
       // Send admin notification email
@@ -1607,7 +1613,7 @@ export async function registerRoutes(
         notes: input.notes,
       }).catch(err => console.error('Admin notification error:', err));
 
-      // Create RepairDesk lead if enabled
+      // Create RepairDesk lead if enabled (shop-specific)
       const templates = await storage.getMessageTemplates();
       const rdLeadSetting = templates.find(t => t.type === 'repairdesk_leads_enabled');
       if (rdLeadSetting && rdLeadSetting.content === 'true') {
@@ -1632,7 +1638,7 @@ export async function registerRoutes(
             additionalProblem: servicesData.map(s => s.serviceName).join(', '),
             customerNotes: input.notes,
           }],
-        }).catch(err => console.error('RepairDesk lead creation error:', err));
+        }, shopId).catch(err => console.error('RepairDesk lead creation error:', err));
       }
 
       res.status(201).json({ 
@@ -1657,10 +1663,13 @@ export async function registerRoutes(
   app.post("/api/unknown-device-quotes", async (req, res) => {
     try {
       const input = unknownDeviceQuoteSchema.parse(req.body);
+      // For unknown device quotes, detect shop from referer or use default
+      // In production, this would detect from custom domain or slug in URL
+      const shopId = DEFAULT_SHOP_ID;
       
       // Create the unknown device quote record
       await storage.createUnknownDeviceQuote({
-        shopId: DEFAULT_SHOP_ID,
+        shopId,
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
@@ -1676,14 +1685,14 @@ export async function registerRoutes(
         issueDescription: input.issueDescription,
       }).catch(err => console.error('Unknown device email error:', err));
 
-      // Send SMS confirmation if phone provided
+      // Send SMS confirmation if phone provided (shop-specific)
       if (input.customerPhone) {
         sendUnknownDeviceQuoteSms({
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           deviceDescription: input.deviceDescription,
           issueDescription: input.issueDescription,
-        }).catch(err => console.error('Unknown device SMS error:', err));
+        }, shopId).catch(err => console.error('Unknown device SMS error:', err));
       }
 
       // Send admin notification
@@ -1858,7 +1867,8 @@ export async function registerRoutes(
   // RepairDesk API Routes (using API key authentication)
   app.get("/api/repairdesk/status", requireAdmin, async (req, res) => {
     try {
-      const connected = await isRepairDeskConnected();
+      const shopId = getShopId(req);
+      const connected = await isRepairDeskConnected(shopId);
       // Get stock check enabled setting
       const templates = await storage.getMessageTemplates();
       const stockSetting = templates.find(t => t.type === 'stock_check_enabled');
@@ -1872,10 +1882,12 @@ export async function registerRoutes(
   // Public endpoint to check if stock checking is enabled
   app.get("/api/repairdesk/stock-enabled", async (req, res) => {
     try {
+      // Use default shop - secure, no client spoofing
+      const shopId = DEFAULT_SHOP_ID;
       const templates = await storage.getMessageTemplates();
       const stockSetting = templates.find(t => t.type === 'stock_check_enabled');
       const enabled = stockSetting ? stockSetting.content === 'true' : true; // Default enabled
-      const connected = await isRepairDeskConnected();
+      const connected = await isRepairDeskConnected(shopId);
       res.json({ enabled: enabled && connected });
     } catch (error) {
       res.json({ enabled: false });
@@ -2052,6 +2064,9 @@ export async function registerRoutes(
       }
 
       const { skus } = req.body;
+      // Use default shop - in production, derive from request domain/session
+      const shopId = DEFAULT_SHOP_ID;
+      
       if (!Array.isArray(skus)) {
         return res.status(400).json({ error: "skus must be an array" });
       }
@@ -2061,7 +2076,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Maximum 50 SKUs per request" });
       }
 
-      const stockMap = await checkInventoryBySku(skus);
+      const stockMap = await checkInventoryBySku(skus, shopId);
       const result: Record<string, number> = {};
       stockMap.forEach((qty, sku) => {
         result[sku] = qty;
@@ -2069,6 +2084,74 @@ export async function registerRoutes(
       res.json(result);
     } catch (error) {
       res.status(500).json({ error: "Failed to check stock" });
+    }
+  });
+
+  // ============================================
+  // PUBLIC SHOP DETECTION ROUTES
+  // ============================================
+
+  // Get shop by slug (public, for customer-facing pages)
+  app.get("/api/shops/by-slug/:slug", async (req, res) => {
+    try {
+      const shop = await storage.getShopBySlug(req.params.slug);
+      if (!shop || !shop.isActive) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      // Return only public-facing settings (exclude API keys)
+      res.json({
+        id: shop.id,
+        name: shop.name,
+        slug: shop.slug,
+        domain: shop.domain,
+        logoUrl: shop.logoUrl,
+        brandColor: shop.brandColor,
+        quoteSettings: shop.quoteSettings ? JSON.parse(shop.quoteSettings) : null,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch shop" });
+    }
+  });
+
+  // Detect shop from request (by domain or slug query param)
+  app.get("/api/shops/detect", async (req, res) => {
+    try {
+      const host = req.headers.host || '';
+      const slugParam = typeof req.query.slug === 'string' ? req.query.slug : null;
+      
+      let shop = null;
+      
+      // First try to match by custom domain
+      if (host && !host.includes('replit')) {
+        shop = await storage.getShopByDomain(host);
+      }
+      
+      // Then try slug parameter
+      if (!shop && slugParam) {
+        shop = await storage.getShopBySlug(slugParam);
+      }
+      
+      // Fall back to default shop
+      if (!shop) {
+        shop = await storage.getShop(DEFAULT_SHOP_ID);
+      }
+      
+      if (!shop || !shop.isActive) {
+        return res.status(404).json({ error: "Shop not found" });
+      }
+      
+      // Return only public-facing settings (exclude API keys)
+      res.json({
+        id: shop.id,
+        name: shop.name,
+        slug: shop.slug,
+        domain: shop.domain,
+        logoUrl: shop.logoUrl,
+        brandColor: shop.brandColor,
+        quoteSettings: shop.quoteSettings ? JSON.parse(shop.quoteSettings) : null,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to detect shop" });
     }
   });
 
