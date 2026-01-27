@@ -840,6 +840,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/service-categories/reorder", requireAdmin, async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "orderedIds must be an array" });
+      }
+      await storage.reorderServiceCategories(orderedIds);
+      res.status(200).json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder service categories" });
+    }
+  });
+
   // Services
   app.get("/api/services", async (req, res) => {
     try {
