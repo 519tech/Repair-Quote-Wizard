@@ -40,6 +40,7 @@ export default function SuperAdmin() {
     name: "",
     slug: "",
     domain: "",
+    email: "",
     logoUrl: "",
     brandColor: "#3b82f6",
     openphoneApiKey: "",
@@ -144,6 +145,7 @@ export default function SuperAdmin() {
       name: "",
       slug: "",
       domain: "",
+      email: "",
       logoUrl: "",
       brandColor: "#3b82f6",
       openphoneApiKey: "",
@@ -157,6 +159,7 @@ export default function SuperAdmin() {
       name: shop.name,
       slug: shop.slug,
       domain: shop.domain || "",
+      email: shop.email || "",
       logoUrl: shop.logoUrl || "",
       brandColor: shop.brandColor || "#3b82f6",
       openphoneApiKey: shop.openphoneApiKey || "",
@@ -282,6 +285,18 @@ export default function SuperAdmin() {
                       />
                     </div>
                     <div className="grid gap-2">
+                      <Label htmlFor="email">Shop Email (required)</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder="admin@myshop.com"
+                        data-testid="input-shop-email"
+                      />
+                      <p className="text-xs text-muted-foreground">A temporary password will be sent to this email.</p>
+                    </div>
+                    <div className="grid gap-2">
                       <Label htmlFor="domain">Custom Domain (optional)</Label>
                       <Input
                         id="domain"
@@ -315,7 +330,7 @@ export default function SuperAdmin() {
                     <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
                     <Button
                       onClick={() => createShopMutation.mutate(formData)}
-                      disabled={!formData.name || !formData.slug || createShopMutation.isPending}
+                      disabled={!formData.name || !formData.slug || !formData.email || createShopMutation.isPending}
                       data-testid="button-confirm-create"
                     >
                       {createShopMutation.isPending ? "Creating..." : "Create Shop"}

@@ -2303,7 +2303,32 @@ export async function registerRoutes(
   app.post("/api/super-admin/shops", requireSuperAdmin, async (req, res) => {
     try {
       const data = insertShopSchema.parse(req.body);
+      
+      // Email is required for new shops
+      if (!data.email) {
+        return res.status(400).json({ error: "Email is required for new shops" });
+      }
+      
+      // Generate a temporary password
+      const tempPassword = crypto.randomBytes(6).toString('hex'); // 12 character hex string
+      const passwordHash = await bcrypt.hash(tempPassword, 10);
+      
+      // Create the shop
       const shop = await storage.createShop(data);
+      
+      // Create a shop admin user with the temp password
+      const username = data.slug; // Use slug as username
+      await storage.createUser(username, passwordHash, shop.id, false, data.email, true);
+      
+      // Send welcome email with temp password
+      try {
+        await sendNewShopWelcomeEmail(data.email, data.name, username, tempPassword);
+        console.log(`Welcome email sent to ${data.email} for shop ${data.name}`);
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+        // Don't fail the shop creation if email fails
+      }
+      
       res.status(201).json(shop);
     } catch (error: any) {
       if (error.code === '23505') {
