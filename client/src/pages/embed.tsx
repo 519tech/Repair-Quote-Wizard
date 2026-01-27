@@ -629,7 +629,7 @@ export default function Embed() {
 
         {/* Services View */}
         {view === 'services' && (
-          <Card>
+          <Card className="bg-[#187908]/[0.03]">
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
                 {selectedDevice && (
@@ -1118,7 +1118,7 @@ export default function Embed() {
 
         {/* Contact Form View */}
         {view === 'contact' && (
-          <Card>
+          <Card className="bg-[#187908]/[0.03]">
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
                 {selectedDevice && (
@@ -1230,7 +1230,7 @@ export default function Embed() {
 
         {/* Unknown Device View */}
         {view === 'unknown' && (
-          <Card>
+          <Card className="bg-[#187908]/[0.03]">
             <CardHeader>
               <CardTitle className="text-lg">Request a Quote</CardTitle>
               <CardDescription className="text-xs">
@@ -1339,7 +1339,7 @@ export default function Embed() {
 
         {/* Success View */}
         {view === 'success' && (
-          <Card>
+          <Card className="bg-[#187908]/[0.03]">
             <CardContent className="p-6">
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 mx-auto rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
