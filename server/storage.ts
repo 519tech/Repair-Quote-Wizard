@@ -13,6 +13,7 @@ import {
   brandServiceCategories,
   messageTemplates,
   dismissedServiceLinkAlerts,
+  shops,
   type DeviceType,
   type InsertDeviceType,
   type Device,
@@ -44,12 +45,26 @@ import {
   type MessageTemplate,
   type InsertMessageTemplate,
   type DismissedServiceLinkAlert,
+  type Shop,
+  type InsertShop,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, or, ilike, sql } from "drizzle-orm";
 import { users } from "@shared/models/auth";
 
+// Default shop ID for backward compatibility during migration
+export const DEFAULT_SHOP_ID = "default-shop";
+
 export interface IStorage {
+  // Shops
+  getShops(): Promise<Shop[]>;
+  getShop(id: string): Promise<Shop | undefined>;
+  getShopBySlug(slug: string): Promise<Shop | undefined>;
+  getShopByDomain(domain: string): Promise<Shop | undefined>;
+  createShop(data: InsertShop): Promise<Shop>;
+  updateShop(id: string, data: Partial<InsertShop>): Promise<Shop | undefined>;
+  deleteShop(id: string): Promise<void>;
+
   // Device Types
   getDeviceTypes(): Promise<DeviceType[]>;
   getDeviceType(id: string): Promise<DeviceType | undefined>;
@@ -142,15 +157,51 @@ export interface IStorage {
   getDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
   getActiveDismissedAlertIds(): Promise<string[]>;
   getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
-  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert>;
+  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite", shopId?: string): Promise<DismissedServiceLinkAlert>;
   undismissAlert(deviceServiceId: string): Promise<void>;
 
   // Users
-  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined>;
-  createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }>;
+  getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean } | undefined>;
+  createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean): Promise<{ id: string; username: string }>;
+  getUsers(): Promise<{ id: string; username: string; email: string | null; shopId: string | null; isSuperAdmin: boolean }[]>;
+  updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Shops
+  async getShops(): Promise<Shop[]> {
+    return db.select().from(shops);
+  }
+
+  async getShop(id: string): Promise<Shop | undefined> {
+    const [shop] = await db.select().from(shops).where(eq(shops.id, id));
+    return shop || undefined;
+  }
+
+  async getShopBySlug(slug: string): Promise<Shop | undefined> {
+    const [shop] = await db.select().from(shops).where(eq(shops.slug, slug));
+    return shop || undefined;
+  }
+
+  async getShopByDomain(domain: string): Promise<Shop | undefined> {
+    const [shop] = await db.select().from(shops).where(eq(shops.domain, domain));
+    return shop || undefined;
+  }
+
+  async createShop(data: InsertShop): Promise<Shop> {
+    const [shop] = await db.insert(shops).values(data).returning();
+    return shop;
+  }
+
+  async updateShop(id: string, data: Partial<InsertShop>): Promise<Shop | undefined> {
+    const [shop] = await db.update(shops).set({ ...data, updatedAt: new Date() }).where(eq(shops.id, id)).returning();
+    return shop || undefined;
+  }
+
+  async deleteShop(id: string): Promise<void> {
+    await db.delete(shops).where(eq(shops.id, id));
+  }
+
   // Device Types
   async getDeviceTypes(): Promise<DeviceType[]> {
     return db.select().from(deviceTypes);
@@ -607,12 +658,13 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert> {
+  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite", shopId: string = DEFAULT_SHOP_ID): Promise<DismissedServiceLinkAlert> {
     await db.delete(dismissedServiceLinkAlerts).where(eq(dismissedServiceLinkAlerts.deviceServiceId, deviceServiceId));
     const expiresAt = dismissType === "1month" 
       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
       : null;
     const [alert] = await db.insert(dismissedServiceLinkAlerts).values({
+      shopId,
       deviceServiceId,
       dismissType,
       expiresAt,
@@ -625,18 +677,39 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Users
-  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string } | undefined> {
+  async getUserByUsername(username: string): Promise<{ id: string; username: string; passwordHash: string; shopId: string | null; isSuperAdmin: boolean } | undefined> {
     const [user] = await db.select({
       id: users.id,
       username: users.username,
       passwordHash: users.passwordHash,
+      shopId: users.shopId,
+      isSuperAdmin: users.isSuperAdmin,
     }).from(users).where(eq(users.username, username));
     return user || undefined;
   }
 
-  async createUser(username: string, passwordHash: string): Promise<{ id: string; username: string }> {
-    const [user] = await db.insert(users).values({ username, passwordHash }).returning({ id: users.id, username: users.username });
+  async createUser(username: string, passwordHash: string, shopId?: string, isSuperAdmin?: boolean): Promise<{ id: string; username: string }> {
+    const [user] = await db.insert(users).values({ 
+      username, 
+      passwordHash,
+      shopId: shopId || null,
+      isSuperAdmin: isSuperAdmin || false,
+    }).returning({ id: users.id, username: users.username });
     return user;
+  }
+
+  async getUsers(): Promise<{ id: string; username: string; email: string | null; shopId: string | null; isSuperAdmin: boolean }[]> {
+    return db.select({
+      id: users.id,
+      username: users.username,
+      email: users.email,
+      shopId: users.shopId,
+      isSuperAdmin: users.isSuperAdmin,
+    }).from(users);
+  }
+
+  async updateUser(id: string, data: Partial<{ shopId: string | null; isSuperAdmin: boolean }>): Promise<void> {
+    await db.update(users).set(data).where(eq(users.id, id));
   }
 }
 

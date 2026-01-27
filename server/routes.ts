@@ -1,6 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
-import { storage } from "./storage";
+import { storage, DEFAULT_SHOP_ID } from "./storage";
 import {
   insertDeviceTypeSchema,
   insertDeviceSchema,
@@ -31,6 +31,8 @@ declare module "express-session" {
     userId?: string;
     username?: string;
     isAdmin?: boolean;
+    shopId?: string | null;
+    isSuperAdmin?: boolean;
   }
 }
 
@@ -108,8 +110,15 @@ export async function registerRoutes(
       req.session.userId = user.id;
       req.session.username = user.username;
       req.session.isAdmin = true;
+      req.session.shopId = user.shopId;
+      req.session.isSuperAdmin = user.isSuperAdmin;
       
-      res.json({ success: true, username: user.username });
+      res.json({ 
+        success: true, 
+        username: user.username,
+        isSuperAdmin: user.isSuperAdmin,
+        shopId: user.shopId,
+      });
     } catch (error) {
       console.error('Login error:', error);
       res.status(500).json({ error: "Login failed" });
@@ -130,6 +139,8 @@ export async function registerRoutes(
     res.json({ 
       isAdmin: req.session?.isAdmin === true,
       username: req.session?.username || null,
+      isSuperAdmin: req.session?.isSuperAdmin === true,
+      shopId: req.session?.shopId || null,
     });
   });
 
@@ -644,7 +655,7 @@ export async function registerRoutes(
         res.json({ success: true, action: "updated", sku: data.sku, price: priceStr });
       } else if (data.name) {
         // Create new part if name is provided
-        await storage.createPart({ sku: data.sku, name: data.name, price: priceStr, isCustom: false });
+        await storage.createPart({ shopId: DEFAULT_SHOP_ID, sku: data.sku, name: data.name, price: priceStr, isCustom: false });
         res.json({ success: true, action: "created", sku: data.sku, price: priceStr });
       } else {
         res.status(404).json({ error: "Part not found and no name provided to create" });
@@ -723,7 +734,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Missing required column: 'Original Price' or 'Price'" });
       }
 
-      const partsToUpsert: { sku: string; name: string; price: string }[] = [];
+      const partsToUpsert: { shopId: string; sku: string; name: string; price: string }[] = [];
       const errors: string[] = [];
 
       for (let i = 1; i < rows.length; i++) {
@@ -758,7 +769,7 @@ export async function registerRoutes(
           continue;
         }
 
-        partsToUpsert.push({ sku, name, price });
+        partsToUpsert.push({ shopId: DEFAULT_SHOP_ID, sku, name, price });
       }
 
       if (partsToUpsert.length === 0) {
@@ -1366,6 +1377,7 @@ export async function registerRoutes(
       const quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
+        shopId: DEFAULT_SHOP_ID,
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
@@ -1456,6 +1468,7 @@ export async function registerRoutes(
         
         // Create individual quote request record
         await storage.createQuoteRequest({
+          shopId: DEFAULT_SHOP_ID,
           customerName: input.customerName,
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
@@ -1557,6 +1570,7 @@ export async function registerRoutes(
       
       // Create the unknown device quote record
       await storage.createUnknownDeviceQuote({
+        shopId: DEFAULT_SHOP_ID,
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
