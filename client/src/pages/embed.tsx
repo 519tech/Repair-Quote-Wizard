@@ -33,6 +33,7 @@ export default function Embed() {
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
   const [selectedDevice, setSelectedDevice] = useState<DeviceSearchResult | null>(null);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
+  const [categoryLoading, setCategoryLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
   
   // Quote data
@@ -467,7 +468,12 @@ export default function Embed() {
       return;
     }
     
-    setSelectedCategoryId(catId);
+    // Show loading animation for 1 second before displaying services
+    setCategoryLoading(true);
+    setTimeout(() => {
+      setCategoryLoading(false);
+      setSelectedCategoryId(catId);
+    }, 1000);
   };
 
   return (
@@ -642,9 +648,15 @@ export default function Embed() {
                 </Button>
               </div>
 
-              {servicesLoading || quotesLoading ? (
-                <div className="flex justify-center py-8">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              {servicesLoading || quotesLoading || categoryLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                  <div className="relative">
+                    <div className="w-16 h-16 rounded-full border-4 border-muted animate-pulse" />
+                    <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground animate-pulse">
+                    {categoryLoading ? "Loading quote options..." : "Loading services..."}
+                  </p>
                 </div>
               ) : allQuotes.length === 0 ? (
                 <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
