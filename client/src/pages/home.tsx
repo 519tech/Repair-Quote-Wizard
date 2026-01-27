@@ -1071,21 +1071,33 @@ export default function Home() {
 
                 {/* Send Me Quote Button - Hidden when auto-sent */}
                 {autoSentQuote ? (
-                  <div className="text-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
-                    {submitCombinedQuoteMutation.isPending ? (
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>Sending your quote...</span>
-                      </div>
-                    ) : (
-                      <>
-                        <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400 mx-auto mb-2" />
-                        <p className="font-medium text-green-700 dark:text-green-300">Quote Sent!</p>
-                        <p className="text-sm text-muted-foreground mt-1">
-                          Check your email{contactInfo.phone ? ' and phone' : ''} for your quote details.
-                        </p>
-                      </>
-                    )}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+                      {submitCombinedQuoteMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-5 w-5 animate-spin text-green-600" />
+                          <span className="text-sm text-green-700 dark:text-green-300">Sending your quote...</span>
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+                          <div>
+                            <p className="font-medium text-green-700 dark:text-green-300 text-sm">Quote Sent!</p>
+                            <p className="text-xs text-muted-foreground">
+                              Check your email{contactInfo.phone ? ' and phone' : ''} for details.
+                            </p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                    <Button 
+                      variant="outline" 
+                      className="w-full" 
+                      onClick={resetForm}
+                      data-testid="button-start-new-quote"
+                    >
+                      Start New Quote
+                    </Button>
                   </div>
                 ) : hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
                   <Button
