@@ -683,7 +683,7 @@ export default function Home() {
                     <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-primary" />
                   </div>
                   <p className="text-sm text-muted-foreground animate-pulse">
-                    {categoryLoading ? "Loading quote options..." : "Loading services..."}
+                    {categoryLoading ? "Loading repair options..." : "Loading services..."}
                   </p>
                 </div>
               ) : allQuotes.length === 0 ? (
