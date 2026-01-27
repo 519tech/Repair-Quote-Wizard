@@ -171,7 +171,10 @@ export default function Embed() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/quote-requests"] });
       setCombinedQuoteSent(true);
-      setView('success');
+      // Only redirect to success page if not auto-sent (stay on quote summary when auto-sent)
+      if (!autoSentQuote) {
+        setView('success');
+      }
     },
     onError: (error: Error) => {
       toast({
