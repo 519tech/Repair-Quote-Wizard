@@ -88,7 +88,7 @@ export default function Embed() {
     queryKey: ["/api/brand-service-categories"],
   });
 
-  const { data: serviceCategoriesData = [] } = useQuery<{ id: string; displayOrder: number }[]>({
+  const { data: serviceCategoriesData = [] } = useQuery<{ id: string; name: string; description?: string; imageUrl?: string; displayOrder: number }[]>({
     queryKey: ["/api/service-categories"],
   });
 
@@ -436,17 +436,9 @@ export default function Embed() {
     setUnknownQuoteSent(false);
   };
 
-  // Get categories for filtering, sorted by displayOrder
-  const categories = Array.from(
-    new Map(
-      allQuotes
-        .filter(q => q.categoryId)
-        .map(q => [q.categoryId, q.categoryId])
-    ).values()
-  ).sort((a, b) => {
-    const aOrder = serviceCategoriesData.find(c => c.id === a)?.displayOrder ?? 999;
-    const bOrder = serviceCategoriesData.find(c => c.id === b)?.displayOrder ?? 999;
-    return aOrder - bOrder;
+  // Get ALL categories sorted by displayOrder (not just those with services)
+  const categories = [...serviceCategoriesData].sort((a, b) => {
+    return (a.displayOrder ?? 999) - (b.displayOrder ?? 999);
   });
 
   const currentCategoryQuotes = selectedCategoryId 
@@ -464,6 +456,21 @@ export default function Embed() {
     const catQuotes = catId === "other" 
       ? allQuotes.filter(q => !q.categoryId)
       : allQuotes.filter(q => q.categoryId === catId);
+    
+    // If category has no services at all for this device, go directly to contact form
+    if (catQuotes.length === 0) {
+      const deviceName = selectedDevice?.name || "";
+      const brandName = selectedDevice?.brand?.name || "";
+      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+      const categoryName = serviceCategoriesData.find(c => c.id === catId)?.name || "Repair";
+      setUnknownDeviceInfo(prev => ({
+        ...prev,
+        deviceDescription: fullDeviceName,
+        issueDescription: `Interested in: ${categoryName}`
+      }));
+      setView('unknown');
+      return;
+    }
     
     const anyAvailable = catQuotes.some(q => q.isAvailable);
     
@@ -702,29 +709,24 @@ export default function Embed() {
                     {categoryLoading ? "Loading repair options..." : "Loading services..."}
                   </p>
                 </div>
-              ) : allQuotes.length === 0 ? (
-                <p className="text-center py-8 text-muted-foreground">No services available for this device.</p>
               ) : !selectedCategoryId && categories.length > 0 ? (
-                // Category selection with images and descriptions
+                // Category selection with images and descriptions - show ALL categories
                 <div className="space-y-3">
-                  {categories.map(catId => {
-                    const catQuotes = allQuotes.filter(q => q.categoryId === catId);
-                    const firstQuote = catQuotes[0];
-                    const catName = firstQuote?.categoryName || "Other";
-                    const catDescription = firstQuote?.categoryDescription;
-                    const catImageUrl = firstQuote?.categoryImageUrl;
+                  {categories.map(cat => {
+                    const catQuotes = allQuotes.filter(q => q.categoryId === cat.id);
+                    const hasServices = catQuotes.length > 0;
                     return (
                       <div
-                        key={catId}
+                        key={cat.id}
                         className="p-3 rounded-lg border transition-all cursor-pointer hover:border-primary/50 hover-elevate"
-                        onClick={() => handleCategorySelect(catId!)}
-                        data-testid={`category-${catId}`}
+                        onClick={() => handleCategorySelect(cat.id)}
+                        data-testid={`category-${cat.id}`}
                       >
                         <div className="flex items-center gap-3">
-                          {catImageUrl ? (
+                          {cat.imageUrl ? (
                             <img 
-                              src={catImageUrl} 
-                              alt={catName}
+                              src={cat.imageUrl} 
+                              alt={cat.name}
                               className="w-12 h-12 object-contain rounded-lg bg-muted p-1 shrink-0"
                             />
                           ) : (
@@ -734,13 +736,13 @@ export default function Embed() {
                           )}
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between items-start gap-2">
-                              <p className="font-medium">{catName}</p>
+                              <p className="font-medium">{cat.name}</p>
                               <span className="text-xs text-muted-foreground shrink-0">
-                                {catQuotes.length} option{catQuotes.length > 1 ? 's' : ''}
+                                {hasServices ? `${catQuotes.length} option${catQuotes.length > 1 ? 's' : ''}` : 'Request Quote'}
                               </span>
                             </div>
-                            {catDescription && (
-                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{catDescription}</p>
+                            {cat.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{cat.description}</p>
                             )}
                           </div>
                           <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
