@@ -123,11 +123,11 @@ export default function Internal() {
       validQuotes.forEach(q => {
         // Collect all primary part SKUs
         if (q.primaryPartSkus?.length) {
-          q.primaryPartSkus.forEach(sku => allSkus.add(sku));
+          q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
         }
         // Collect all secondary part SKUs
         if (q.additionalPartSkus?.length) {
-          q.additionalPartSkus.forEach(sku => allSkus.add(sku));
+          q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
         }
       });
       const skus = Array.from(allSkus);
@@ -212,9 +212,9 @@ export default function Internal() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto px-4 py-3 flex items-center justify-between gap-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <header className="sticky top-0 z-50 mx-4 mt-4">
+        <div className="glass-nav px-4 py-3 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <Wrench className="h-5 w-5 text-primary" />
             <span className="font-semibold">Counter Lookup</span>
@@ -281,7 +281,7 @@ export default function Internal() {
 
         {selectedDevice && (
           <div className="space-y-6">
-            <Card className="bg-[#187908]/[0.03]">
+            <Card>
               <CardHeader className="py-4">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
@@ -303,7 +303,7 @@ export default function Internal() {
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
               </div>
             ) : allQuotes.length === 0 ? (
-              <Card className="bg-[#187908]/[0.03]">
+              <Card>
                 <CardContent className="py-8">
                   <p className="text-center text-muted-foreground">No services available for this device.</p>
                 </CardContent>

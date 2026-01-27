@@ -528,12 +528,12 @@ export default function Embed() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <div className="max-w-3xl mx-auto space-y-4">
 
         {/* Search View */}
         {view === 'search' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardHeader className="text-center">
               <img 
                 src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
@@ -629,7 +629,7 @@ export default function Embed() {
 
         {/* Services View */}
         {view === 'services' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
                 {selectedDevice && (
@@ -928,7 +928,7 @@ export default function Embed() {
 
         {/* Quote Summary View */}
         {view === 'quote' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
                 {selectedDevice && (
@@ -1118,7 +1118,7 @@ export default function Embed() {
 
         {/* Contact Form View */}
         {view === 'contact' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardHeader className="pb-3">
               <div className="flex items-start gap-3">
                 {selectedDevice && (
@@ -1230,7 +1230,7 @@ export default function Embed() {
 
         {/* Unknown Device View */}
         {view === 'unknown' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardHeader>
               <CardTitle className="text-lg">Request a Quote</CardTitle>
               <CardDescription className="text-xs">
@@ -1339,7 +1339,7 @@ export default function Embed() {
 
         {/* Success View */}
         {view === 'success' && (
-          <Card className="bg-[#187908]/[0.03]">
+          <Card>
             <CardContent className="p-6">
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 mx-auto rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
