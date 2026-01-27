@@ -104,6 +104,7 @@ export const serviceCategories = pgTable("service_categories", {
   name: text("name").notNull().unique(),
   description: text("description"),
   imageUrl: text("image_url"),
+  displayOrder: integer("display_order").notNull().default(0),
 });
 
 export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({

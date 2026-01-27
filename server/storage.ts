@@ -102,6 +102,7 @@ export interface IStorage {
   createServiceCategory(data: InsertServiceCategory): Promise<ServiceCategory>;
   updateServiceCategory(id: string, data: Partial<InsertServiceCategory>): Promise<ServiceCategory | undefined>;
   deleteServiceCategory(id: string): Promise<void>;
+  reorderServiceCategories(orderedIds: string[]): Promise<void>;
 
   // Services
   getServices(): Promise<Service[]>;
@@ -397,7 +398,7 @@ export class DatabaseStorage implements IStorage {
 
   // Service Categories
   async getServiceCategories(): Promise<ServiceCategory[]> {
-    return db.select().from(serviceCategories);
+    return db.select().from(serviceCategories).orderBy(serviceCategories.displayOrder);
   }
 
   async getServiceCategory(id: string): Promise<ServiceCategory | undefined> {
@@ -417,6 +418,15 @@ export class DatabaseStorage implements IStorage {
 
   async deleteServiceCategory(id: string): Promise<void> {
     await db.delete(serviceCategories).where(eq(serviceCategories.id, id));
+  }
+
+  async reorderServiceCategories(orderedIds: string[]): Promise<void> {
+    // Update each category with its new display order
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(serviceCategories)
+        .set({ displayOrder: i })
+        .where(eq(serviceCategories.id, orderedIds[i]));
+    }
   }
 
   // Services
