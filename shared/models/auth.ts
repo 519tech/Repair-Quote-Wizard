@@ -22,6 +22,9 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   shopId: varchar("shop_id"), // null for super admins, shop ID for shop admins
   isSuperAdmin: boolean("is_super_admin").notNull().default(false),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
+  passwordResetToken: varchar("password_reset_token"),
+  passwordResetExpires: timestamp("password_reset_expires"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

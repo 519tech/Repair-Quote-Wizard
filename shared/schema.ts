@@ -9,6 +9,7 @@ export const shops = pgTable("shops", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(), // URL-friendly identifier (e.g., "519-tech")
   domain: text("domain"), // Custom domain (e.g., "quotes.myshop.com")
+  email: text("email"), // Primary contact email for the shop (for password reset, notifications)
   
   // Branding
   logoUrl: text("logo_url"),
