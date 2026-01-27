@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -2397,6 +2397,33 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      await apiRequest("POST", "/api/service-categories/reorder", { orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/service-categories"] });
+      toast({ title: "Categories reordered" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newOrder = [...categories];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    reorderMutation.mutate(newOrder.map(c => c.id));
+  };
+
+  const handleMoveDown = (index: number) => {
+    if (index === categories.length - 1) return;
+    const newOrder = [...categories];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    reorderMutation.mutate(newOrder.map(c => c.id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({ name, description: description || undefined, imageUrl: imageUrl || undefined });
@@ -2465,6 +2492,7 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-20">Order</TableHead>
                 <TableHead className="w-16">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
@@ -2472,8 +2500,30 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
               </TableRow>
             </TableHeader>
             <TableBody>
-              {categories.map((category) => (
+              {categories.map((category, index) => (
                   <TableRow key={category.id}>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleMoveUp(index)} 
+                          disabled={index === 0 || reorderMutation.isPending}
+                          data-testid={`button-move-up-category-${category.id}`}
+                        >
+                          <ArrowUp className="h-4 w-4" />
+                        </Button>
+                        <Button 
+                          variant="ghost" 
+                          size="icon" 
+                          onClick={() => handleMoveDown(index)} 
+                          disabled={index === categories.length - 1 || reorderMutation.isPending}
+                          data-testid={`button-move-down-category-${category.id}`}
+                        >
+                          <ArrowDown className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {category.imageUrl ? (
                         <img src={category.imageUrl} alt={category.name} className="h-10 w-10 object-contain rounded" />
