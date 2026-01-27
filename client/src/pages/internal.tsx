@@ -49,6 +49,10 @@ export default function Internal() {
     enabled: !!selectedDevice,
   });
 
+  const { data: serviceCategoriesData = [] } = useQuery<{ id: string; name: string; displayOrder: number }[]>({
+    queryKey: ["/api/service-categories"],
+  });
+
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -173,36 +177,20 @@ export default function Internal() {
     setTimeout(() => inputRef.current?.focus(), 100);
   };
 
-  const sortCategories = (categories: string[]) => {
-    const priority = ["screen replacement", "battery replacement"];
-    return categories.sort((a, b) => {
-      const aLower = a.toLowerCase();
-      const bLower = b.toLowerCase();
-      const aIndex = priority.findIndex(p => aLower.includes(p));
-      const bIndex = priority.findIndex(p => bLower.includes(p));
-      
-      if (aIndex !== -1 && bIndex !== -1) {
-        return aIndex - bIndex;
-      }
-      if (aIndex !== -1) return -1;
-      if (bIndex !== -1) return 1;
-      return a.localeCompare(b);
-    });
-  };
-
   const groupedQuotes = () => {
-    const groups: Record<string, QuoteData[]> = {};
+    const groups: Record<string, { categoryName: string; quotes: QuoteData[] }> = {};
     
     allQuotes.forEach(quote => {
+      const categoryId = quote.categoryId || "other";
       const categoryName = quote.categoryName || "Other Services";
-      if (!groups[categoryName]) {
-        groups[categoryName] = [];
+      if (!groups[categoryId]) {
+        groups[categoryId] = { categoryName, quotes: [] };
       }
-      groups[categoryName].push(quote);
+      groups[categoryId].quotes.push(quote);
     });
 
     Object.keys(groups).forEach(key => {
-      groups[key].sort((a, b) => {
+      groups[key].quotes.sort((a, b) => {
         if (a.isAvailable !== b.isAvailable) {
           return a.isAvailable ? -1 : 1;
         }
@@ -210,11 +198,16 @@ export default function Internal() {
       });
     });
 
-    const sortedCategories = sortCategories(Object.keys(groups));
+    // Sort category IDs by displayOrder
+    const sortedCategoryIds = Object.keys(groups).sort((a, b) => {
+      const aOrder = serviceCategoriesData.find(c => c.id === a)?.displayOrder ?? 999;
+      const bOrder = serviceCategoriesData.find(c => c.id === b)?.displayOrder ?? 999;
+      return aOrder - bOrder;
+    });
     
-    return sortedCategories.map(categoryName => ({
-      categoryName,
-      quotes: groups[categoryName],
+    return sortedCategoryIds.map(categoryId => ({
+      categoryName: groups[categoryId].categoryName,
+      quotes: groups[categoryId].quotes,
     }));
   };
 

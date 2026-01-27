@@ -88,6 +88,10 @@ export default function Embed() {
     queryKey: ["/api/brand-service-categories"],
   });
 
+  const { data: serviceCategoriesData = [] } = useQuery<{ id: string; displayOrder: number }[]>({
+    queryKey: ["/api/service-categories"],
+  });
+
   const { data: partsLastUpdated } = useQuery<MessageTemplate>({
     queryKey: ["/api/message-templates", "parts_last_updated"],
   });
@@ -432,14 +436,18 @@ export default function Embed() {
     setUnknownQuoteSent(false);
   };
 
-  // Get categories for filtering
+  // Get categories for filtering, sorted by displayOrder
   const categories = Array.from(
     new Map(
       allQuotes
         .filter(q => q.categoryId)
         .map(q => [q.categoryId, q.categoryId])
     ).values()
-  );
+  ).sort((a, b) => {
+    const aOrder = serviceCategoriesData.find(c => c.id === a)?.displayOrder ?? 999;
+    const bOrder = serviceCategoriesData.find(c => c.id === b)?.displayOrder ?? 999;
+    return aOrder - bOrder;
+  });
 
   const currentCategoryQuotes = selectedCategoryId 
     ? allQuotes.filter(q => q.categoryId === selectedCategoryId)
