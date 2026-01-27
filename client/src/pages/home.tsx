@@ -485,11 +485,11 @@ export default function Home() {
         .finally(() => setStockLoading(false));
     }
     
-    // Show loading animation for 2 seconds before displaying services
+    // Show loading animation for 5 seconds before displaying services
     setTimeout(() => {
       setCategoryLoading(false);
       setSelectedCategoryId(catId);
-    }, 2000);
+    }, 5000);
   };
 
   return (
