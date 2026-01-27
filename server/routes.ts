@@ -1859,6 +1859,31 @@ export async function registerRoutes(
     }
   });
 
+  // Hide prices completely (only show in email/SMS)
+  app.get("/api/settings/hide-prices-completely", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'hide_prices_completely');
+      res.json({ enabled: setting ? setting.content === 'true' : false });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get setting" });
+    }
+  });
+
+  app.post("/api/settings/hide-prices-completely", requireAdmin, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      await storage.upsertMessageTemplate({
+        type: 'hide_prices_completely',
+        content: enabled ? 'true' : 'false'
+      });
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error('Hide prices completely setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
   // RepairDesk lead creation setting
   app.get("/api/settings/repairdesk-leads", async (req, res) => {
     try {

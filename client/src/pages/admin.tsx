@@ -4901,6 +4901,21 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // Hide prices completely setting (only show in email/SMS)
+  const { data: hidePricesCompletelySettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/hide-prices-completely"],
+  });
+
+  const updateHidePricesCompletely = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("POST", "/api/settings/hide-prices-completely", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-completely"] });
+      toast({ title: "Setting updated" });
+    },
+  });
+
   // Price rounding settings
   const { data: roundingSettings } = useQuery<{ mode: string; subtractAmount: number }>({
     queryKey: ["/api/settings/price-rounding"],
@@ -5236,13 +5251,25 @@ $\{servicePrice} plus taxes
           <CardContent className="space-y-4">
             <div className="flex items-center justify-between p-3 rounded-lg border">
               <div>
+                <p className="font-medium text-sm">Hide Prices Completely</p>
+                <p className="text-xs text-muted-foreground">Prices are hidden on the website but shown in the SMS/email sent to customers</p>
+              </div>
+              <Switch
+                checked={hidePricesCompletelySettings?.enabled ?? false}
+                onCheckedChange={(checked) => updateHidePricesCompletely.mutate(checked)}
+                disabled={updateHidePricesCompletely.isPending}
+                data-testid="switch-hide-prices-completely"
+              />
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
                 <p className="font-medium text-sm">Require Contact Info Before Showing Prices</p>
                 <p className="text-xs text-muted-foreground">When enabled, customers must enter their contact details before seeing prices</p>
               </div>
               <Switch
                 checked={hidePricesSettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
-                disabled={updateHidePrices.isPending}
+                disabled={updateHidePrices.isPending || (hidePricesCompletelySettings?.enabled ?? false)}
                 data-testid="switch-hide-prices"
               />
             </div>

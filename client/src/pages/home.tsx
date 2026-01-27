@@ -106,6 +106,12 @@ export default function Home() {
   });
   const hidePricesUntilContact = hidePricesSettings?.enabled ?? false;
 
+  // Hide prices completely setting (only show in email/SMS)
+  const { data: hidePricesCompletelySettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/hide-prices-completely"],
+  });
+  const hidePricesCompletely = hidePricesCompletelySettings?.enabled ?? false;
+
   const formatLastUpdated = (isoDate: string | undefined) => {
     if (!isoDate) return null;
     try {
@@ -804,7 +810,7 @@ export default function Home() {
                           <div className="flex justify-between items-start gap-2">
                             <p className="font-medium text-sm">{quote.serviceName}</p>
                             {quote.isAvailable ? (
-                              !hidePricesUntilContact && <span className="font-bold text-primary shrink-0">${quote.price}</span>
+                              !hidePricesUntilContact && !hidePricesCompletely && <span className="font-bold text-primary shrink-0">${quote.price}</span>
                             ) : (
                               <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                             )}
@@ -863,7 +869,7 @@ export default function Home() {
                               <p className="text-sm text-muted-foreground">
                                 {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
                               </p>
-                              {!hidePricesUntilContact && (
+                              {!hidePricesUntilContact && !hidePricesCompletely && (
                                 <>
                                   {getMultiServiceDiscount() > 0 && (
                                     <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
@@ -1071,7 +1077,7 @@ export default function Home() {
                 )}
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-1">
-                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
+                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
                   </p>
                   <CardTitle className="text-lg">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
                   <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
