@@ -4136,7 +4136,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                     <p className="text-sm text-green-600">Found: {skuPart.name} (${skuPart.price})</p>
                   )}
                   {partSku && !skuPart && partSku.length > 0 && (
-                    <p className="text-sm text-destructive">SKU not found</p>
+                    <p className="text-sm text-orange-600">SKU not in custom parts - will use supplier pricing</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -4274,7 +4274,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                     <p className="text-sm text-green-600">Found: {editSkuPart.name} (${editSkuPart.price})</p>
                   )}
                   {editPartSku && !editSkuPart && editPartSku.length > 0 && (
-                    <p className="text-sm text-destructive">SKU not found</p>
+                    <p className="text-sm text-orange-600">SKU not in custom parts - will use supplier pricing</p>
                   )}
                 </div>
                 <div className="space-y-2">

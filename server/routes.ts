@@ -974,12 +974,16 @@ export async function registerRoutes(
       let partSku = input.partSku || null;
       
       if (input.partSku && !partId) {
+        // Try to find part in local database, but allow SKU even if not found
+        // (SKU may exist in supplier parts table for pricing)
         const part = await storage.getPartBySku(input.partSku);
-        if (!part) {
-          return res.status(400).json({ error: `Part with SKU '${input.partSku}' not found` });
+        if (part) {
+          partId = part.id;
+          partSku = part.sku;
+        } else {
+          // Allow storing SKU even without a matching part in database
+          partSku = input.partSku;
         }
-        partId = part.id;
-        partSku = part.sku; // Store the SKU
       } else if (partId && !partSku) {
         // If partId provided but no SKU, look up the SKU
         const part = await storage.getPart(partId);
@@ -1138,12 +1142,16 @@ export async function registerRoutes(
       let partSku = input.partSku;
       
       if (input.partSku && !partId) {
+        // Try to find part in local database, but allow SKU even if not found
+        // (SKU may exist in supplier parts table for pricing)
         const part = await storage.getPartBySku(input.partSku);
-        if (!part) {
-          return res.status(400).json({ error: `Part with SKU '${input.partSku}' not found` });
+        if (part) {
+          partId = part.id;
+          partSku = part.sku;
+        } else {
+          // Allow storing SKU even without a matching part in database
+          partSku = input.partSku;
         }
-        partId = part.id;
-        partSku = part.sku;
       } else if (partId && !partSku) {
         // If partId provided but no SKU, look up the SKU
         const part = await storage.getPart(partId);
