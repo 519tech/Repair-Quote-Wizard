@@ -72,7 +72,11 @@ The application's data model includes:
 
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
-- **Real-time Pricing**: Quote calculations fetch SKU prices directly from the Mobilesentrix API. No database fallback - all supplier pricing is live.
+- **Pricing Source Toggle**: Admin can choose between two pricing sources in Settings → Mobilesentrix tab:
+  1. **Excel Upload** (default): Prices fetched from the `supplierParts` database table, populated via Excel file upload
+  2. **Mobilesentrix API**: Prices fetched in real-time from the Mobilesentrix API
+- **Supplier Parts Table**: Stores parts uploaded from Excel with SKU, name, and original price. Custom parts remain separate.
+- **Excel File Format**: Product SKU (col 0), Product Name (col 1), Original Price (col 2) - supports ~47,500 parts
 - **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
 - **OAuth Authorization Flow**: 
   1. Admin navigates to Settings → Mobilesentrix tab

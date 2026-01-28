@@ -98,6 +98,18 @@ export const insertPartSchema = createInsertSchema(parts).omit({ id: true });
 export type InsertPart = z.infer<typeof insertPartSchema>;
 export type Part = typeof parts.$inferSelect;
 
+// Supplier parts (imported from Excel - Mobilesentrix price list)
+export const supplierParts = pgTable("supplier_parts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sku: text("sku").notNull().unique(),
+  name: text("name").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+});
+
+export const insertSupplierPartSchema = createInsertSchema(supplierParts).omit({ id: true });
+export type InsertSupplierPart = z.infer<typeof insertSupplierPartSchema>;
+export type SupplierPart = typeof supplierParts.$inferSelect;
+
 // Service categories (Battery Replacement, Screen Replacement, etc.)
 export const serviceCategories = pgTable("service_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

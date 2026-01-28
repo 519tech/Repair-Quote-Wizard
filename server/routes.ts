@@ -607,6 +607,69 @@ export async function registerRoutes(
     }
   });
 
+  // Supplier Parts (Excel upload) - for pricing when not using Mobilesentrix API
+  app.get("/api/supplier-parts", requireAdmin, async (req, res) => {
+    try {
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const search = req.query.search as string | undefined;
+      
+      const result = await storage.getSupplierPartsPaginated({ page, limit, search });
+      res.json(result);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch supplier parts" });
+    }
+  });
+
+  app.get("/api/supplier-parts/count", requireAdmin, async (req, res) => {
+    try {
+      const count = await storage.getSupplierPartCount();
+      res.json({ count });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to count supplier parts" });
+    }
+  });
+
+  app.get("/api/supplier-parts/sku/:sku", async (req, res) => {
+    try {
+      const part = await storage.getSupplierPartBySku(req.params.sku);
+      if (!part) {
+        return res.status(404).json({ error: "Part not found" });
+      }
+      res.json(part);
+    } catch (error) {
+      res.status(500).json({ error: "Failed to fetch supplier part" });
+    }
+  });
+
+  app.post("/api/supplier-parts/upload", requireAdmin, async (req, res) => {
+    try {
+      const { parts: partsData } = req.body;
+      if (!Array.isArray(partsData) || partsData.length === 0) {
+        return res.status(400).json({ error: "Parts data is required" });
+      }
+
+      // Validate and transform the data
+      const validParts = partsData
+        .filter((p: any) => p.sku && p.name && p.price !== undefined)
+        .map((p: any) => ({
+          sku: String(p.sku).trim(),
+          name: String(p.name).trim(),
+          price: String(parseFloat(p.price).toFixed(2)),
+        }));
+
+      if (validParts.length === 0) {
+        return res.status(400).json({ error: "No valid parts found in data" });
+      }
+
+      const result = await storage.bulkReplaceSupplierParts(validParts);
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      console.error("Supplier parts upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to upload supplier parts" });
+    }
+  });
+
   // Mobilesentrix API Integration (all supplier pricing comes from this API)
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
     const status = getMobilesentrixStatus();
@@ -1203,9 +1266,29 @@ export async function registerRoutes(
     return Math.max(0, rounded - subtractAmount);
   }
 
-  // Helper function to get SKU price from Mobilesentrix API (no database fallback)
-  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api'; apiError?: string }> {
-    // All pricing comes from Mobilesentrix API only - no database fallback
+  // Helper function to get SKU price based on pricing source setting (API or Excel upload)
+  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string }> {
+    // Check pricing source setting
+    const templates = await storage.getMessageTemplates();
+    const pricingSourceSetting = templates.find(t => t.type === 'pricing_source');
+    const pricingSource = pricingSourceSetting?.content || 'excel_upload';
+    
+    if (pricingSource === 'excel_upload') {
+      // Get price from uploaded supplier parts (Excel)
+      try {
+        const part = await storage.getSupplierPartBySku(sku);
+        if (part) {
+          return { price: parseFloat(part.price), name: part.name, found: true, source: 'excel' };
+        }
+        console.log(`SKU ${sku} not found in uploaded supplier parts`);
+        return { price: 0, name: '', found: false, source: 'excel' };
+      } catch (error: any) {
+        console.error(`Error fetching SKU ${sku} from database:`, error.message);
+        return { price: 0, name: '', found: false, source: 'excel', apiError: error.message };
+      }
+    }
+    
+    // Get price from Mobilesentrix API
     if (!isMobilesentrixConfigured()) {
       console.error('Mobilesentrix API not configured - cannot fetch prices');
       return { price: 0, name: '', found: false, source: 'api', apiError: 'API not configured' };
@@ -1994,6 +2077,40 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (error) {
       console.error('Price rounding setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  // Pricing Source Setting (mobilesentrix_api or excel_upload)
+  app.get("/api/settings/pricing-source", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'pricing_source');
+      res.json({
+        source: setting?.content || "excel_upload" // Default to Excel upload
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get pricing source setting" });
+    }
+  });
+
+  app.post("/api/settings/pricing-source", requireAdmin, async (req, res) => {
+    try {
+      const { source } = req.body;
+      
+      const validSources = ["mobilesentrix_api", "excel_upload"];
+      if (!validSources.includes(source)) {
+        return res.status(400).json({ error: "Invalid source. Must be: mobilesentrix_api or excel_upload" });
+      }
+      
+      await storage.upsertMessageTemplate({
+        type: 'pricing_source',
+        content: source,
+      });
+      
+      res.json({ success: true, source });
+    } catch (error) {
+      console.error('Pricing source setting error:', error);
       res.status(500).json({ error: "Failed to update setting" });
     }
   });

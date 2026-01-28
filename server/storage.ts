@@ -2,6 +2,7 @@ import {
   deviceTypes,
   devices,
   parts,
+  supplierParts,
   services,
   serviceCategories,
   deviceServices,
@@ -19,6 +20,8 @@ import {
   type InsertDevice,
   type Part,
   type InsertPart,
+  type SupplierPart,
+  type InsertSupplierPart,
   type Service,
   type InsertService,
   type ServiceCategory,
@@ -95,6 +98,13 @@ export interface IStorage {
   updatePart(id: string, data: Partial<InsertPart>): Promise<Part | undefined>;
   deletePart(id: string): Promise<void>;
   bulkUpsertParts(partsData: InsertPart[]): Promise<{ inserted: number; updated: number }>;
+
+  // Supplier Parts (from Excel upload)
+  getSupplierParts(): Promise<SupplierPart[]>;
+  getSupplierPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: SupplierPart[]; total: number }>;
+  getSupplierPartBySku(sku: string): Promise<SupplierPart | undefined>;
+  getSupplierPartCount(): Promise<number>;
+  bulkReplaceSupplierParts(partsData: InsertSupplierPart[]): Promise<{ imported: number }>;
 
   // Service Categories
   getServiceCategories(): Promise<ServiceCategory[]>;
@@ -394,6 +404,77 @@ export class DatabaseStorage implements IStorage {
     }
     
     return { inserted: totalInserted, updated: 0 };
+  }
+
+  // Supplier Parts (from Excel upload)
+  async getSupplierParts(): Promise<SupplierPart[]> {
+    return db.select().from(supplierParts);
+  }
+
+  async getSupplierPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: SupplierPart[]; total: number }> {
+    const { page, limit, search } = options;
+    const offset = (page - 1) * limit;
+
+    let whereClause;
+    if (search) {
+      whereClause = or(
+        ilike(supplierParts.sku, `%${search}%`),
+        ilike(supplierParts.name, `%${search}%`)
+      );
+    }
+
+    const [countResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(supplierParts)
+      .where(whereClause);
+
+    const results = await db
+      .select()
+      .from(supplierParts)
+      .where(whereClause)
+      .limit(limit)
+      .offset(offset);
+
+    return { parts: results, total: countResult?.count || 0 };
+  }
+
+  async getSupplierPartBySku(sku: string): Promise<SupplierPart | undefined> {
+    const [part] = await db.select().from(supplierParts).where(eq(supplierParts.sku, sku));
+    return part || undefined;
+  }
+
+  async getSupplierPartCount(): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)::int` }).from(supplierParts);
+    return result?.count || 0;
+  }
+
+  async bulkReplaceSupplierParts(partsData: InsertSupplierPart[]): Promise<{ imported: number }> {
+    if (partsData.length === 0) {
+      return { imported: 0 };
+    }
+
+    // Clear existing supplier parts and replace with new data
+    await db.delete(supplierParts);
+
+    const BATCH_SIZE = 500;
+    let totalImported = 0;
+
+    for (let i = 0; i < partsData.length; i += BATCH_SIZE) {
+      const batch = partsData.slice(i, i + BATCH_SIZE);
+      
+      const values = batch.map(p => 
+        `('${String(p.sku).replace(/'/g, "''")}', '${p.name.replace(/'/g, "''")}', '${p.price}')`
+      ).join(',');
+      
+      await db.execute(sql`
+        INSERT INTO supplier_parts (sku, name, price)
+        VALUES ${sql.raw(values)}
+      `);
+      
+      totalImported += batch.length;
+    }
+    
+    return { imported: totalImported };
   }
 
   // Service Categories

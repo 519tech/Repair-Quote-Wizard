@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -3151,11 +3151,11 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     return () => clearTimeout(timer);
   }, [customSearchQuery]);
 
-  // Mobilesentrix API search - requires at least 2 characters
-  const mobilesentrixQueryUrl = useMemo(() => {
-    if (!debouncedSearch || debouncedSearch.length < 2) return null;
-    const params = new URLSearchParams({ q: debouncedSearch, page: page.toString(), limit: PARTS_PER_PAGE.toString() });
-    return `/api/mobilesentrix/search?${params}`;
+  // Supplier parts query (from Excel upload)
+  const supplierPartsQueryUrl = useMemo(() => {
+    const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString() });
+    if (debouncedSearch) params.append('search', debouncedSearch);
+    return `/api/supplier-parts?${params}`;
   }, [page, debouncedSearch]);
 
   const customPartsQueryUrl = useMemo(() => {
@@ -3164,11 +3164,9 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     return `/api/parts?${params}`;
   }, [customPage, customDebouncedSearch]);
   
-  // Query Mobilesentrix API for supplier parts
-  const { data: mobilesentrixData, isLoading, isFetching, isError, error: mobilesentrixError } = useQuery<{ products: Array<{ sku: string; name: string; price: string; inStock: boolean }>; total: number; page: number; limit: number }>({ 
-    queryKey: [mobilesentrixQueryUrl],
-    enabled: !!mobilesentrixQueryUrl,
-    retry: 1,
+  // Query supplier parts from database (Excel uploads)
+  const { data: supplierPartsData, isLoading, isFetching } = useQuery<{ parts: Array<{ id: string; sku: string; name: string; price: string }>; total: number }>({ 
+    queryKey: [supplierPartsQueryUrl],
   });
 
   // Query for custom parts with search and pagination
@@ -3176,9 +3174,9 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     queryKey: [customPartsQueryUrl]
   });
 
-  const mobilesentrixProducts = mobilesentrixData?.products || [];
-  const totalMobilesentrix = mobilesentrixData?.total || 0;
-  const totalMobilesentrixPages = Math.ceil(totalMobilesentrix / PARTS_PER_PAGE);
+  const supplierParts = supplierPartsData?.parts || [];
+  const totalSupplierParts = supplierPartsData?.total || 0;
+  const totalSupplierPages = Math.ceil(totalSupplierParts / PARTS_PER_PAGE);
   const customParts = customPartsData?.parts || [];
   const totalCustomParts = customPartsData?.total || 0;
   const totalCustomPages = Math.ceil(totalCustomParts / PARTS_PER_PAGE);
@@ -3193,21 +3191,41 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     }
 
     setUploading(true);
-    const formData = new FormData();
-    formData.append('file', file);
 
     try {
-      const res = await fetch('/api/parts/upload', {
-        method: 'POST',
-        body: formData,
-      });
+      // Parse Excel file on client side
+      const XLSX = await import('xlsx');
+      const arrayBuffer = await file.arrayBuffer();
+      const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+      const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rawData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 }) as any[][];
+
+      // Expected columns: Product SKU, Product Name, Original Price, Discounted Price, Discount Percentage
+      // We use: SKU (column 0), Name (column 1), Original Price (column 2)
+      const headers = rawData[0];
+      const dataRows = rawData.slice(1);
+
+      const parts = dataRows
+        .filter((row: any[]) => row[0] && row[1] && row[2] !== undefined)
+        .map((row: any[]) => ({
+          sku: String(row[0]).trim(),
+          name: String(row[1]).trim(),
+          price: parseFloat(row[2]) || 0,
+        }));
+
+      if (parts.length === 0) {
+        toast({ title: "Error", description: "No valid parts found in Excel file", variant: "destructive" });
+        return;
+      }
+
+      const res = await apiRequest('POST', '/api/supplier-parts/upload', { parts });
       const data = await res.json();
       
       if (res.ok) {
-        queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
+        queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/supplier-parts') });
         toast({ 
           title: "Upload successful", 
-          description: `${data.inserted} parts imported (previous parts replaced)` 
+          description: `${data.imported?.toLocaleString() || parts.length.toLocaleString()} parts imported` 
         });
       } else {
         toast({ title: "Upload failed", description: data.error, variant: "destructive" });
@@ -3325,7 +3343,8 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
           onClick={() => setActiveSubTab("supplier")}
           data-testid="button-supplier-parts-tab"
         >
-          Mobilesentrix
+          Supplier Parts
+          {totalSupplierParts > 0 && <Badge variant="secondary" className="ml-2">{totalSupplierParts.toLocaleString()}</Badge>}
         </Button>
         <Button
           variant={activeSubTab === "custom" ? "default" : "ghost"}
@@ -3337,19 +3356,19 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
         </Button>
       </div>
 
-      {/* Supplier Parts Tab - Mobilesentrix API Search */}
+      {/* Supplier Parts Tab - Excel Upload */}
       {activeSubTab === "supplier" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
             <div>
-              <CardTitle>Mobilesentrix Product Search</CardTitle>
-              <CardDescription>Search the Mobilesentrix catalog for parts. Prices are fetched live from the API.</CardDescription>
+              <CardTitle>Supplier Parts (Excel Upload)</CardTitle>
+              <CardDescription>Upload parts pricing from Mobilesentrix Excel export. Use the Settings tab to toggle between API and Excel pricing.</CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Search products (min 2 chars)..." 
+                  placeholder="Search SKU or name..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-9 w-[250px]"
@@ -3357,20 +3376,38 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                 />
                 {isFetching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading}
+                  data-testid="input-upload-supplier-parts"
+                />
+                <Button asChild variant="outline" disabled={uploading}>
+                  <span>
+                    {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                    {uploading ? "Uploading..." : "Upload Excel"}
+                  </span>
+                </Button>
+              </label>
             </div>
           </CardHeader>
           <CardContent>
-            {!debouncedSearch || debouncedSearch.length < 2 ? (
-              <p className="text-center py-8 text-muted-foreground">Enter at least 2 characters to search Mobilesentrix products</p>
-            ) : isLoading ? (
+            {isLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-            ) : isError ? (
+            ) : supplierParts.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-destructive mb-2">Failed to search Mobilesentrix API</p>
-                <p className="text-sm text-muted-foreground">{(mobilesentrixError as any)?.message || "Please check your API credentials and try again"}</p>
+                <p className="text-muted-foreground mb-4">
+                  {debouncedSearch ? `No parts found for "${debouncedSearch}"` : "No supplier parts uploaded yet"}
+                </p>
+                {!debouncedSearch && (
+                  <p className="text-sm text-muted-foreground">
+                    Upload an Excel file with columns: Product SKU, Product Name, Original Price
+                  </p>
+                )}
               </div>
-            ) : mobilesentrixProducts.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground">No products found for "{debouncedSearch}"</p>
             ) : (
               <>
                 <Table>
@@ -3379,28 +3416,22 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                       <TableHead>SKU</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead>Stock</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {mobilesentrixProducts.map((product) => (
-                      <TableRow key={product.sku}>
-                        <TableCell><Badge variant="outline">{product.sku}</Badge></TableCell>
-                        <TableCell className="font-medium">{product.name}</TableCell>
-                        <TableCell>${product.price}</TableCell>
-                        <TableCell>
-                          <Badge variant={product.inStock ? "default" : "secondary"}>
-                            {product.inStock ? "In Stock" : "Out of Stock"}
-                          </Badge>
-                        </TableCell>
+                    {supplierParts.map((part) => (
+                      <TableRow key={part.id}>
+                        <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
+                        <TableCell className="font-medium">{part.name}</TableCell>
+                        <TableCell>${parseFloat(part.price).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                {totalMobilesentrixPages > 1 && (
+                {totalSupplierPages > 1 && (
                   <div className="flex items-center justify-between mt-4 px-2">
                     <p className="text-sm text-muted-foreground">
-                      Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalMobilesentrix)} of {totalMobilesentrix.toLocaleString()} products
+                      Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalSupplierParts)} of {totalSupplierParts.toLocaleString()} parts
                     </p>
                     <div className="flex items-center gap-2">
                       <Button 
@@ -3413,12 +3444,12 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                         <ChevronLeft className="h-4 w-4" />
                         Previous
                       </Button>
-                      <span className="text-sm text-muted-foreground">Page {page} of {totalMobilesentrixPages}</span>
+                      <span className="text-sm text-muted-foreground">Page {page} of {totalSupplierPages}</span>
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => setPage(p => Math.min(totalMobilesentrixPages, p + 1))} 
-                        disabled={page === totalMobilesentrixPages}
+                        onClick={() => setPage(p => Math.min(totalSupplierPages, p + 1))} 
+                        disabled={page === totalSupplierPages}
                         data-testid="button-parts-next-page"
                       >
                         Next
@@ -4980,6 +5011,24 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     queryKey: ["/api/mobilesentrix/status"],
   });
 
+  // Pricing Source Setting
+  const { data: pricingSourceSettings } = useQuery<{ source: string }>({
+    queryKey: ["/api/settings/pricing-source"],
+  });
+
+  const updatePricingSource = useMutation({
+    mutationFn: async (source: string) => {
+      await apiRequest("POST", "/api/settings/pricing-source", { source });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/pricing-source"] });
+      toast({ title: "Pricing source updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const { data: mobilesentrixAuthUrl } = useQuery<{ authUrl: string; callbackUrl: string }>({
     queryKey: ["/api/mobilesentrix/auth-url"],
     enabled: !mobilesentrixStatus?.configured && !!mobilesentrixStatus,
@@ -5365,6 +5414,55 @@ $\{servicePrice} plus taxes
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Supplier Parts Pricing Source */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Supplier Parts Pricing Source
+            </CardTitle>
+            <CardDescription>Choose where to get pricing for supplier parts during quote calculations</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3">
+              <div 
+                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${pricingSourceSettings?.source === "excel_upload" ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                onClick={() => updatePricingSource.mutate("excel_upload")}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${pricingSourceSettings?.source === "excel_upload" ? "border-primary" : "border-muted-foreground"}`}>
+                    {pricingSourceSettings?.source === "excel_upload" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Excel Upload</p>
+                    <p className="text-xs text-muted-foreground">Use pricing from uploaded Mobilesentrix Excel file (Parts tab)</p>
+                  </div>
+                </div>
+              </div>
+              <div 
+                className={`flex items-center justify-between p-3 rounded-lg border cursor-pointer transition-colors ${pricingSourceSettings?.source === "mobilesentrix_api" ? "border-primary bg-primary/5" : "hover:bg-muted/50"} ${!mobilesentrixStatus?.configured ? "opacity-50" : ""}`}
+                onClick={() => mobilesentrixStatus?.configured && updatePricingSource.mutate("mobilesentrix_api")}
+              >
+                <div className="flex items-center gap-3">
+                  <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${pricingSourceSettings?.source === "mobilesentrix_api" ? "border-primary" : "border-muted-foreground"}`}>
+                    {pricingSourceSettings?.source === "mobilesentrix_api" && <div className="w-2 h-2 rounded-full bg-primary" />}
+                  </div>
+                  <div>
+                    <p className="font-medium text-sm">Mobilesentrix API</p>
+                    <p className="text-xs text-muted-foreground">Fetch live pricing from Mobilesentrix API (requires OAuth setup)</p>
+                    {!mobilesentrixStatus?.configured && (
+                      <p className="text-xs text-destructive mt-1">Not configured - complete OAuth setup in Mobilesentrix tab</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Current source: <Badge variant="outline">{pricingSourceSettings?.source === "mobilesentrix_api" ? "Mobilesentrix API" : "Excel Upload"}</Badge>
+            </p>
           </CardContent>
         </Card>
 
