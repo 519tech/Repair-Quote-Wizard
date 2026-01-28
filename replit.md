@@ -83,5 +83,5 @@ The application's data model includes:
   - `MOBILESENTRIX_CONSUMER_SECRET`: Consumer secret from Mobilesentrix  
   - `MOBILESENTRIX_ACCESS_TOKEN`: Access token (obtained via OAuth flow)
   - `MOBILESENTRIX_ACCESS_TOKEN_SECRET`: Access token secret (obtained via OAuth flow)
-- **API Base URL**: Uses `https://www.mobilesentrix.com` for production (configurable via `MOBILESENTRIX_API_URL` env var).
+- **API Base URL**: Uses `https://www.mobilesentrix.ca` for production (configurable via `MOBILESENTRIX_API_URL` env var).
 - **Endpoints Used**: `/api/rest/products` with filter parameters for SKU lookup.

@@ -1,7 +1,7 @@
 import OAuth from 'oauth-1.0a';
 import crypto from 'crypto';
 
-const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.com';
+const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
 
 interface MobilesentrixProduct {
   entity_id: string;
