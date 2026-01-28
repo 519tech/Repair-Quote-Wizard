@@ -4133,10 +4133,10 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                   <Label>Part SKU (optional)</Label>
                   <Input value={partSku} onChange={(e) => { setPartSku(e.target.value); setPartId(undefined); }} placeholder="Enter SKU to auto-lookup" data-testid="input-part-sku-link" />
                   {partSku && skuPart && (
-                    <p className="text-sm text-green-600">Found: {skuPart.name} (${skuPart.price})</p>
+                    <p className="text-sm text-green-600">Found in custom parts: {skuPart.name} (${skuPart.price})</p>
                   )}
                   {partSku && !skuPart && partSku.length > 0 && (
-                    <p className="text-sm text-orange-600">SKU not in custom parts - will use supplier pricing</p>
+                    <p className="text-sm text-muted-foreground">SKU will be saved - pricing lookup uses selected source</p>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -4271,10 +4271,10 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                     data-testid="input-edit-part-sku" 
                   />
                   {editPartSku && editSkuPart && (
-                    <p className="text-sm text-green-600">Found: {editSkuPart.name} (${editSkuPart.price})</p>
+                    <p className="text-sm text-green-600">Found in custom parts: {editSkuPart.name} (${editSkuPart.price})</p>
                   )}
                   {editPartSku && !editSkuPart && editPartSku.length > 0 && (
-                    <p className="text-sm text-orange-600">SKU not in custom parts - will use supplier pricing</p>
+                    <p className="text-sm text-muted-foreground">SKU will be saved - pricing lookup uses selected source</p>
                   )}
                 </div>
                 <div className="space-y-2">
