@@ -607,84 +607,7 @@ export async function registerRoutes(
     }
   });
 
-  // Delete all supplier parts (preserves custom parts)
-  app.delete("/api/parts/supplier/all", requireAdmin, async (req, res) => {
-    try {
-      await storage.deleteAllParts();
-      res.json({ success: true, message: "All supplier parts deleted" });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to delete supplier parts" });
-    }
-  });
-
-  // Supplier callback endpoint for real-time parts pricing updates
-  app.post("/api/supplier/parts-callback", async (req, res) => {
-    try {
-      const apiKey = req.headers["x-api-key"] || req.query.api_key;
-      const expectedKey = process.env.SUPPLIER_API_KEY;
-      
-      if (!expectedKey || apiKey !== expectedKey) {
-        return res.status(401).json({ error: "Invalid API key" });
-      }
-
-      const schema = z.object({
-        sku: z.string(),
-        name: z.string().optional(),
-        price: z.union([z.string(), z.number()]),
-      });
-
-      const data = schema.parse(req.body);
-      const priceStr = typeof data.price === 'number' ? data.price.toFixed(2) : data.price;
-      
-      // Try to find existing part by SKU
-      const existingPart = await storage.getPartBySku(data.sku);
-      
-      if (existingPart) {
-        // Update existing part price
-        await storage.updatePart(existingPart.id, { price: priceStr });
-        res.json({ success: true, action: "updated", sku: data.sku, price: priceStr });
-      } else if (data.name) {
-        // Create new part if name is provided
-        await storage.createPart({ sku: data.sku, name: data.name, price: priceStr, isCustom: false });
-        res.json({ success: true, action: "created", sku: data.sku, price: priceStr });
-      } else {
-        res.status(404).json({ error: "Part not found and no name provided to create" });
-      }
-    } catch (error) {
-      if (error instanceof z.ZodError) {
-        return res.status(400).json({ error: "Invalid data format", details: error.errors });
-      }
-      res.status(500).json({ error: "Failed to process supplier callback" });
-    }
-  });
-
-  // Endpoint to query supplier for part pricing (for admin use)
-  app.get("/api/supplier/query/:sku", requireAdmin, async (req, res) => {
-    try {
-      const supplierUrl = process.env.SUPPLIER_API_URL;
-      const supplierKey = process.env.SUPPLIER_API_KEY;
-      
-      if (!supplierUrl) {
-        return res.status(400).json({ error: "Supplier API URL not configured" });
-      }
-
-      const sku = req.params.sku;
-      const response = await fetch(`${supplierUrl}?sku=${encodeURIComponent(sku)}`, {
-        headers: supplierKey ? { "Authorization": `Bearer ${supplierKey}` } : {},
-      });
-
-      if (!response.ok) {
-        return res.status(response.status).json({ error: "Failed to query supplier" });
-      }
-
-      const data = await response.json();
-      res.json(data);
-    } catch (error) {
-      res.status(500).json({ error: "Failed to query supplier API" });
-    }
-  });
-
-  // Mobilesentrix API Integration
+  // Mobilesentrix API Integration (all supplier pricing comes from this API)
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
     res.json({ configured: isMobilesentrixConfigured() });
   });
@@ -738,115 +661,6 @@ export async function registerRoutes(
     } catch (error: any) {
       console.error('Mobilesentrix SKU lookup error:', error);
       res.status(500).json({ error: error.message || "Failed to lookup product" });
-    }
-  });
-
-  app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ error: "No file uploaded" });
-      }
-
-      const workbook = XLSX.read(req.file.buffer, { type: 'buffer' });
-      const sheetName = workbook.SheetNames[0];
-      if (!sheetName) {
-        return res.status(400).json({ error: "Excel file has no sheets" });
-      }
-
-      const sheet = workbook.Sheets[sheetName];
-      const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-
-      if (rows.length < 2) {
-        return res.status(400).json({ error: "Excel file must have a header row and at least one data row" });
-      }
-
-      const headerRow = rows[0];
-      if (!headerRow) {
-        return res.status(400).json({ error: "Missing header row" });
-      }
-
-      const headers = headerRow.map((h: any) => String(h || '').trim().toLowerCase());
-      
-      const skuIndex = headers.findIndex((h: string) => h === 'product sku' || h === 'sku');
-      const nameIndex = headers.findIndex((h: string) => h === 'product name' || h === 'name');
-      const priceIndex = headers.findIndex((h: string) => h === 'original price' || h === 'price');
-
-      if (skuIndex === -1) {
-        return res.status(400).json({ error: "Missing required column: 'Product SKU' or 'SKU'" });
-      }
-      if (nameIndex === -1) {
-        return res.status(400).json({ error: "Missing required column: 'Product Name' or 'Name'" });
-      }
-      if (priceIndex === -1) {
-        return res.status(400).json({ error: "Missing required column: 'Original Price' or 'Price'" });
-      }
-
-      const partsToUpsert: { sku: string; name: string; price: string }[] = [];
-      const errors: string[] = [];
-
-      for (let i = 1; i < rows.length; i++) {
-        const row = rows[i];
-        if (!row || row.length === 0) continue;
-
-        const sku = String(row[skuIndex] || '').trim();
-        const name = String(row[nameIndex] || '').trim();
-        const priceRaw = row[priceIndex];
-
-        if (!sku) {
-          errors.push(`Row ${i + 1}: Missing SKU`);
-          continue;
-        }
-        if (!name) {
-          errors.push(`Row ${i + 1}: Missing name`);
-          continue;
-        }
-
-        let price: string;
-        if (typeof priceRaw === 'number') {
-          price = priceRaw.toFixed(2);
-        } else if (typeof priceRaw === 'string') {
-          const parsed = parseFloat(priceRaw.replace(/[^0-9.-]/g, ''));
-          if (isNaN(parsed)) {
-            errors.push(`Row ${i + 1}: Invalid price "${priceRaw}"`);
-            continue;
-          }
-          price = parsed.toFixed(2);
-        } else {
-          errors.push(`Row ${i + 1}: Missing or invalid price`);
-          continue;
-        }
-
-        partsToUpsert.push({ sku, name, price });
-      }
-
-      if (partsToUpsert.length === 0) {
-        return res.status(400).json({ 
-          error: "No valid parts found in file", 
-          details: errors.length > 0 ? errors : undefined 
-        });
-      }
-
-      // Delete all existing parts before inserting new ones
-      await storage.deleteAllParts();
-      
-      const result = await storage.bulkUpsertParts(partsToUpsert);
-
-      // Update the parts_last_updated timestamp
-      await storage.upsertMessageTemplate({ 
-        type: "parts_last_updated", 
-        content: new Date().toISOString() 
-      });
-
-      res.json({
-        success: true,
-        inserted: result.inserted,
-        deleted: true,
-        total: partsToUpsert.length,
-        errors: errors.length > 0 ? errors : undefined
-      });
-    } catch (error: any) {
-      console.error("Parts upload error:", error);
-      res.status(500).json({ error: error.message || "Failed to process file" });
     }
   });
 
@@ -1293,40 +1107,29 @@ export async function registerRoutes(
     return Math.max(0, rounded - subtractAmount);
   }
 
-  // Helper function to get SKU price - tries Mobilesentrix API first, falls back to database
-  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'database'; apiError?: string }> {
-    // Try Mobilesentrix API first
-    if (isMobilesentrixConfigured()) {
-      try {
-        const apiResult = await getProductBySku(sku);
-        if (apiResult.found) {
-          return { price: apiResult.price, name: apiResult.name, found: true, source: 'api' };
-        }
-        // SKU not found in API, fall through to database
-        console.log(`SKU ${sku} not found in Mobilesentrix API, checking database`);
-      } catch (error: any) {
-        // API error - log it but continue to database fallback
-        const errorMsg = error instanceof MobilesentrixApiError 
-          ? `API error ${error.statusCode}: ${error.message}` 
-          : error.message || 'Unknown API error';
-        console.error(`Mobilesentrix API error for SKU ${sku}:`, errorMsg);
-        
-        // Fall through to database with error info
-        const part = await storage.getPartBySku(sku);
-        if (part) {
-          return { price: parseFloat(part.price), name: part.name, found: true, source: 'database', apiError: errorMsg };
-        }
-        return { price: 0, name: '', found: false, source: 'database', apiError: errorMsg };
+  // Helper function to get SKU price from Mobilesentrix API (no database fallback)
+  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api'; apiError?: string }> {
+    // All pricing comes from Mobilesentrix API only - no database fallback
+    if (!isMobilesentrixConfigured()) {
+      console.error('Mobilesentrix API not configured - cannot fetch prices');
+      return { price: 0, name: '', found: false, source: 'api', apiError: 'API not configured' };
+    }
+    
+    try {
+      const apiResult = await getProductBySku(sku);
+      if (apiResult.found) {
+        return { price: apiResult.price, name: apiResult.name, found: true, source: 'api' };
       }
+      // SKU not found in API
+      console.log(`SKU ${sku} not found in Mobilesentrix API`);
+      return { price: 0, name: '', found: false, source: 'api' };
+    } catch (error: any) {
+      const errorMsg = error instanceof MobilesentrixApiError 
+        ? `API error ${error.statusCode}: ${error.message}` 
+        : error.message || 'Unknown API error';
+      console.error(`Mobilesentrix API error for SKU ${sku}:`, errorMsg);
+      return { price: 0, name: '', found: false, source: 'api', apiError: errorMsg };
     }
-    
-    // Fall back to database (either API not configured or SKU not found in API)
-    const part = await storage.getPartBySku(sku);
-    if (part) {
-      return { price: parseFloat(part.price), name: part.name, found: true, source: 'database' };
-    }
-    
-    return { price: 0, name: '', found: false, source: 'database' };
   }
 
   // Quote calculation endpoint - calculates price on server side
