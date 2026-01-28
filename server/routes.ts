@@ -623,7 +623,7 @@ export async function registerRoutes(
         return res.status(400).json({ error: "Consumer Key and Secret not configured" });
       }
       
-      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
+      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.com';
       const callbackUrl = `${req.protocol}://${req.get('host')}/api/mobilesentrix/callback`;
       
       const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=RepairQuote&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
@@ -652,7 +652,7 @@ export async function registerRoutes(
       
       const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
       const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
-      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
+      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.com';
       
       // Exchange for access token
       const response = await fetch(`${baseUrl}/oauth/authorize/identifiercallback`, {

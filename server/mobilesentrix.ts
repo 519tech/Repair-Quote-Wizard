@@ -1,7 +1,7 @@
 import OAuth from 'oauth-1.0a';
 import crypto from 'crypto';
 
-const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
+const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.com';
 
 interface MobilesentrixProduct {
   entity_id: string;
@@ -42,6 +42,7 @@ export class MobilesentrixApiError extends Error {
   }
 }
 
+// OAuth 1.0a client using PLAINTEXT signature method
 function getOAuthClient(): OAuth {
   const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
   const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
@@ -55,12 +56,10 @@ function getOAuthClient(): OAuth {
       key: consumerKey,
       secret: consumerSecret,
     },
-    signature_method: 'HMAC-SHA256',
+    signature_method: 'PLAINTEXT',
     hash_function(base_string, key) {
-      return crypto
-        .createHmac('sha256', key)
-        .update(base_string)
-        .digest('base64');
+      // For PLAINTEXT, the signature is just the key
+      return key;
     },
   });
 }
@@ -79,6 +78,11 @@ function getAccessToken(): { key: string; secret: string } | null {
 async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise<any> {
   const oauth = getOAuthClient();
   const token = getAccessToken();
+  
+  if (!token) {
+    throw new MobilesentrixApiError('Access token not configured. Please complete OAuth authorization.', 401);
+  }
+  
   const url = `${MOBILESENTRIX_BASE_URL}${endpoint}`;
   
   const requestData = {
@@ -86,8 +90,10 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
     method,
   };
 
-  const authHeader = oauth.toHeader(oauth.authorize(requestData, token || undefined));
+  const authHeader = oauth.toHeader(oauth.authorize(requestData, token));
 
+  console.log(`Mobilesentrix API request: ${method} ${url}`);
+  
   const response = await fetch(url, {
     method,
     headers: {
@@ -138,6 +144,7 @@ export async function searchProducts(query: string, page: number = 1, limit: num
 }
 
 export async function getProductBySku(sku: string): Promise<MobilesentrixPriceResult> {
+  // Use the filter endpoint as per documentation
   const endpoint = `/api/rest/products?filter[1][attribute]=sku&filter[1][in][0]=${encodeURIComponent(sku)}`;
   
   try {
@@ -210,5 +217,70 @@ export function getMobilesentrixStatus(): { configured: boolean; missingCredenti
   return {
     configured: missing.length === 0,
     missingCredentials: missing,
+  };
+}
+
+// Generate the OAuth authorization URL for browser-based flow
+export function getAuthorizationUrl(callbackUrl: string): string {
+  const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
+  const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
+  
+  if (!consumerKey || !consumerSecret) {
+    throw new Error('Consumer key and secret are required');
+  }
+  
+  // Build the authorization URL as per Mobilesentrix docs
+  const params = new URLSearchParams({
+    consumer: 'RepairQuote',
+    authtype: '1',
+    flowentry: 'SignIn',
+    consumer_key: consumerKey,
+    consumer_secret: consumerSecret,
+    authorize_for: 'admin',
+    callback: callbackUrl,
+  });
+  
+  return `${MOBILESENTRIX_BASE_URL}/oauth/authorize/identifier?${params.toString()}`;
+}
+
+// Exchange oauth_token and oauth_verifier for access token
+export async function exchangeTokens(oauthToken: string, oauthVerifier: string): Promise<{ accessToken: string; accessTokenSecret: string }> {
+  const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
+  const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
+  
+  if (!consumerKey || !consumerSecret) {
+    throw new Error('Consumer key and secret are required');
+  }
+  
+  const url = `${MOBILESENTRIX_BASE_URL}/oauth/authorize/identifiercallback`;
+  
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      consumer_key: consumerKey,
+      consumer_secret: consumerSecret,
+      oauth_token: oauthToken,
+      oauth_verifier: oauthVerifier,
+    }),
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('Token exchange error:', errorText);
+    throw new MobilesentrixApiError(`Failed to exchange tokens: ${errorText}`, response.status);
+  }
+  
+  const data = await response.json();
+  
+  if (data.status !== 1 || !data.data?.access_token || !data.data?.access_token_secret) {
+    throw new MobilesentrixApiError('Invalid response from token exchange', 400);
+  }
+  
+  return {
+    accessToken: data.data.access_token,
+    accessTokenSecret: data.data.access_token_secret,
   };
 }

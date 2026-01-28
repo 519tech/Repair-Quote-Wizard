@@ -71,9 +71,17 @@ The application's data model includes:
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
 
 ### Mobilesentrix Integration
-- **OAuth1 Authentication**: The application integrates with Mobilesentrix Canada's POS API using OAuth1 (HMAC-SHA256 signature).
-- **Real-time Pricing**: Quote calculations fetch SKU prices directly from the Mobilesentrix API, with database fallback if API is unavailable or SKU not found.
+- **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
+- **Real-time Pricing**: Quote calculations fetch SKU prices directly from the Mobilesentrix API. No database fallback - all supplier pricing is live.
 - **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
-- **Credentials**: Managed via `MOBILESENTRIX_CONSUMER_KEY` and `MOBILESENTRIX_CONSUMER_SECRET` secrets.
-- **API Base URL**: Uses `https://www.mobilesentrix.ca` for production (configurable via `MOBILESENTRIX_API_URL` env var).
-- **Endpoints Used**: `/rest/V1/pos/products` for search and `/rest/V1/pos/products/{sku}` for SKU lookup.
+- **OAuth Authorization Flow**: 
+  1. Admin navigates to Settings → Mobilesentrix tab
+  2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow
+  3. After authorization, add returned Access Token and Access Token Secret to Replit Secrets
+- **Required Secrets**:
+  - `MOBILESENTRIX_CONSUMER_KEY`: Consumer key from Mobilesentrix
+  - `MOBILESENTRIX_CONSUMER_SECRET`: Consumer secret from Mobilesentrix  
+  - `MOBILESENTRIX_ACCESS_TOKEN`: Access token (obtained via OAuth flow)
+  - `MOBILESENTRIX_ACCESS_TOKEN_SECRET`: Access token secret (obtained via OAuth flow)
+- **API Base URL**: Uses `https://www.mobilesentrix.com` for production (configurable via `MOBILESENTRIX_API_URL` env var).
+- **Endpoints Used**: `/api/rest/products` with filter parameters for SKU lookup.
