@@ -628,7 +628,7 @@ export async function registerRoutes(
       const appBaseUrl = process.env.APP_BASE_URL || 'https://quote.519techservices.ca';
       const callbackUrl = `${appBaseUrl}/api/mobilesentrix/callback`;
       
-      const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=RepairQuote&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
+      const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=${encodeURIComponent('519 Tech Services')}&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
       
       res.json({ authUrl, callbackUrl });
     } catch (error: any) {
