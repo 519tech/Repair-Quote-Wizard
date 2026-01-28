@@ -624,7 +624,9 @@ export async function registerRoutes(
       }
       
       const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
-      const callbackUrl = `${req.protocol}://${req.get('host')}/api/mobilesentrix/callback`;
+      // Use custom domain for callback URL - must match what's registered with Mobilesentrix
+      const appBaseUrl = process.env.APP_BASE_URL || 'https://quote.519techservices.ca';
+      const callbackUrl = `${appBaseUrl}/api/mobilesentrix/callback`;
       
       const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=RepairQuote&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
       
