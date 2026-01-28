@@ -613,6 +613,99 @@ export async function registerRoutes(
     res.json(status);
   });
 
+  // Generate OAuth authorization URL for Mobilesentrix
+  app.get("/api/mobilesentrix/auth-url", requireAdmin, async (req, res) => {
+    try {
+      const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
+      const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
+      
+      if (!consumerKey || !consumerSecret) {
+        return res.status(400).json({ error: "Consumer Key and Secret not configured" });
+      }
+      
+      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
+      const callbackUrl = `${req.protocol}://${req.get('host')}/api/mobilesentrix/callback`;
+      
+      const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=RepairQuote&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
+      
+      res.json({ authUrl, callbackUrl });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to generate auth URL" });
+    }
+  });
+
+  // OAuth callback - receives oauth_token and oauth_verifier
+  app.get("/api/mobilesentrix/callback", async (req, res) => {
+    try {
+      const oauthToken = req.query.oauth_token as string;
+      const oauthVerifier = req.query.oauth_verifier as string;
+      
+      if (!oauthToken || !oauthVerifier) {
+        return res.status(400).send(`
+          <html><body>
+            <h1>OAuth Error</h1>
+            <p>Missing oauth_token or oauth_verifier in callback.</p>
+            <p>Please try the authorization again.</p>
+          </body></html>
+        `);
+      }
+      
+      const consumerKey = process.env.MOBILESENTRIX_CONSUMER_KEY;
+      const consumerSecret = process.env.MOBILESENTRIX_CONSUMER_SECRET;
+      const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
+      
+      // Exchange for access token
+      const response = await fetch(`${baseUrl}/oauth/authorize/identifiercallback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consumer_key: consumerKey,
+          consumer_secret: consumerSecret,
+          oauth_token: oauthToken,
+          oauth_verifier: oauthVerifier,
+        }),
+      });
+      
+      const data = await response.json() as any;
+      
+      if (data.status === 1 && data.data?.access_token && data.data?.access_token_secret) {
+        // Success - display tokens for manual saving
+        res.send(`
+          <html>
+          <head><title>Mobilesentrix Authorization Complete</title></head>
+          <body style="font-family: system-ui, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
+            <h1 style="color: #22c55e;">✓ Authorization Successful!</h1>
+            <p>Please add these values to your Replit Secrets:</p>
+            <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
+              <p><strong>MOBILESENTRIX_ACCESS_TOKEN:</strong></p>
+              <code style="word-break: break-all; background: white; padding: 8px; display: block; border-radius: 4px;">${data.data.access_token}</code>
+              <p style="margin-top: 16px;"><strong>MOBILESENTRIX_ACCESS_TOKEN_SECRET:</strong></p>
+              <code style="word-break: break-all; background: white; padding: 8px; display: block; border-radius: 4px;">${data.data.access_token_secret}</code>
+            </div>
+            <p>After adding these secrets, restart the application for the changes to take effect.</p>
+            <a href="/admin" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">Return to Admin Panel</a>
+          </body>
+          </html>
+        `);
+      } else {
+        res.status(400).send(`
+          <html><body>
+            <h1>OAuth Error</h1>
+            <p>Failed to obtain access token.</p>
+            <pre>${JSON.stringify(data, null, 2)}</pre>
+          </body></html>
+        `);
+      }
+    } catch (error: any) {
+      res.status(500).send(`
+        <html><body>
+          <h1>OAuth Error</h1>
+          <p>${error.message}</p>
+        </body></html>
+      `);
+    }
+  });
+
   app.get("/api/mobilesentrix/search", requireAdmin, async (req, res) => {
     try {
       if (!isMobilesentrixConfigured()) {

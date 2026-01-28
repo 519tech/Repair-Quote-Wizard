@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -4975,6 +4975,16 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     queryKey: ["/api/repairdesk/status"],
   });
 
+  // Mobilesentrix Integration
+  const { data: mobilesentrixStatus, refetch: refetchMobilesentrixStatus } = useQuery<{ configured: boolean; missingCredentials: string[] }>({
+    queryKey: ["/api/mobilesentrix/status"],
+  });
+
+  const { data: mobilesentrixAuthUrl } = useQuery<{ authUrl: string; callbackUrl: string }>({
+    queryKey: ["/api/mobilesentrix/auth-url"],
+    enabled: !mobilesentrixStatus?.configured && !!mobilesentrixStatus,
+  });
+
   const toggleStockCheck = useMutation({
     mutationFn: async (enabled: boolean) => {
       await apiRequest("POST", "/api/repairdesk/stock-enabled", { enabled });
@@ -5234,6 +5244,7 @@ $\{servicePrice} plus taxes
         <TabsTrigger value="quote-settings" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-settings">Settings</TabsTrigger>
         <TabsTrigger value="quote-templates" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-templates">Templates</TabsTrigger>
         <TabsTrigger value="repairdesk" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-repairdesk">RepairDesk</TabsTrigger>
+        <TabsTrigger value="mobilesentrix" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-mobilesentrix">Mobilesentrix</TabsTrigger>
       </TabsList>
 
       {/* Quote Settings Sub-Tab */}
@@ -5756,6 +5767,81 @@ $\{servicePrice} plus taxes
               />
             </div>
             <p className="text-xs text-muted-foreground">Note: Requires RepairDesk API key to be configured</p>
+          </CardContent>
+        </Card>
+      </TabsContent>
+
+      {/* Mobilesentrix Integration Sub-Tab */}
+      <TabsContent value="mobilesentrix" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Mobilesentrix API Connection
+            </CardTitle>
+            <CardDescription>OAuth connection for real-time parts pricing from Mobilesentrix Canada</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-3">
+              {mobilesentrixStatus?.configured ? (
+                <>
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <Check className="h-3 w-3 mr-1" />
+                    Connected
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    All OAuth credentials configured
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                    Setup Required
+                  </Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {mobilesentrixStatus?.missingCredentials?.length === 4 
+                      ? "No credentials configured" 
+                      : `Missing: ${mobilesentrixStatus?.missingCredentials?.join(", ")}`}
+                  </span>
+                </>
+              )}
+            </div>
+
+            {!mobilesentrixStatus?.configured && (
+              <div className="space-y-3 p-4 rounded-lg border bg-muted/50">
+                <p className="text-sm font-medium">To connect Mobilesentrix:</p>
+                {mobilesentrixStatus?.missingCredentials?.includes("MOBILESENTRIX_CONSUMER_KEY") ? (
+                  <div className="text-sm text-muted-foreground">
+                    <p>1. Add <code className="bg-muted px-1 py-0.5 rounded">MOBILESENTRIX_CONSUMER_KEY</code> and <code className="bg-muted px-1 py-0.5 rounded">MOBILESENTRIX_CONSUMER_SECRET</code> to Secrets</p>
+                    <p className="mt-1">2. Refresh this page and complete OAuth authorization</p>
+                  </div>
+                ) : mobilesentrixAuthUrl?.authUrl ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-muted-foreground">Click below to authorize with your Mobilesentrix account:</p>
+                    <Button 
+                      onClick={() => window.open(mobilesentrixAuthUrl.authUrl, '_blank')}
+                      data-testid="button-mobilesentrix-authorize"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Authorize with Mobilesentrix
+                    </Button>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      After authorization, add the returned Access Token and Secret to your Replit Secrets.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Loading authorization URL...</p>
+                )}
+              </div>
+            )}
+
+            {mobilesentrixStatus?.configured && (
+              <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
+                <p className="text-sm text-green-700 dark:text-green-400">
+                  Parts pricing will be fetched from Mobilesentrix API during quote calculations.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </TabsContent>
