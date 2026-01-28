@@ -626,7 +626,7 @@ export async function registerRoutes(
       const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
       // Use custom domain for callback URL - must match what's registered with Mobilesentrix
       const appBaseUrl = process.env.APP_BASE_URL || 'https://quote.519techservices.ca';
-      const callbackUrl = `${appBaseUrl}/api/supplier/parts-callback`;
+      const callbackUrl = `${appBaseUrl}/api/mobilesentrix/callback`;
       
       const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=${encodeURIComponent('519 Tech Services')}&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=admin&callback=${encodeURIComponent(callbackUrl)}`;
       
@@ -637,7 +637,7 @@ export async function registerRoutes(
   });
 
   // OAuth callback - receives oauth_token and oauth_verifier
-  app.get("/api/supplier/parts-callback", async (req, res) => {
+  app.get("/api/mobilesentrix/callback", async (req, res) => {
     try {
       const oauthToken = req.query.oauth_token as string;
       const oauthVerifier = req.query.oauth_verifier as string;
