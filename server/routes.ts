@@ -24,7 +24,7 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
-import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, MobilesentrixApiError } from "./mobilesentrix";
+import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError } from "./mobilesentrix";
 
 // Extend express-session types
 declare module "express-session" {
@@ -609,7 +609,8 @@ export async function registerRoutes(
 
   // Mobilesentrix API Integration (all supplier pricing comes from this API)
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
-    res.json({ configured: isMobilesentrixConfigured() });
+    const status = getMobilesentrixStatus();
+    res.json(status);
   });
 
   app.get("/api/mobilesentrix/search", requireAdmin, async (req, res) => {

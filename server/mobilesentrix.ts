@@ -6,13 +6,16 @@ const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www
 interface MobilesentrixProduct {
   entity_id: string;
   sku: string;
+  new_sku?: string | null;
   name: string;
   price: string;
-  special_price?: string;
-  qty?: string;
-  is_in_stock?: boolean;
-  image?: string;
+  customer_price?: number;
+  is_in_stock?: number | boolean;
+  in_stock_qty?: number;
+  image_url?: string;
+  default_image?: string;
   description?: string;
+  status?: string;
 }
 
 interface MobilesentrixSearchResponse {
@@ -62,8 +65,20 @@ function getOAuthClient(): OAuth {
   });
 }
 
+function getAccessToken(): { key: string; secret: string } | null {
+  const accessToken = process.env.MOBILESENTRIX_ACCESS_TOKEN;
+  const accessTokenSecret = process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET;
+  
+  if (!accessToken || !accessTokenSecret) {
+    return null;
+  }
+  
+  return { key: accessToken, secret: accessTokenSecret };
+}
+
 async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise<any> {
   const oauth = getOAuthClient();
+  const token = getAccessToken();
   const url = `${MOBILESENTRIX_BASE_URL}${endpoint}`;
   
   const requestData = {
@@ -71,7 +86,7 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
     method,
   };
 
-  const authHeader = oauth.toHeader(oauth.authorize(requestData));
+  const authHeader = oauth.toHeader(oauth.authorize(requestData, token || undefined));
 
   const response = await fetch(url, {
     method,
@@ -95,31 +110,69 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
 }
 
 export async function searchProducts(query: string, page: number = 1, limit: number = 20): Promise<MobilesentrixSearchResponse> {
-  const endpoint = `/rest/V1/pos/products?searchCriteria[filter_groups][0][filters][0][field]=name&searchCriteria[filter_groups][0][filters][0][value]=%25${encodeURIComponent(query)}%25&searchCriteria[filter_groups][0][filters][0][condition_type]=like&searchCriteria[pageSize]=${limit}&searchCriteria[currentPage]=${page}`;
+  const endpoint = `/api/rest/products?limit=${limit}&page=${page}`;
   
   const data = await makeApiRequest(endpoint);
+  
+  const products: MobilesentrixProduct[] = [];
+  
+  if (data && typeof data === 'object') {
+    for (const key of Object.keys(data)) {
+      const product = data[key];
+      if (product && product.sku && product.name) {
+        const lowerQuery = query.toLowerCase();
+        const nameMatch = product.name.toLowerCase().includes(lowerQuery);
+        const skuMatch = product.sku.toLowerCase().includes(lowerQuery);
+        
+        if (nameMatch || skuMatch) {
+          products.push(product);
+        }
+      }
+    }
+  }
+  
   return {
-    products: data.items || [],
-    total_count: data.total_count || 0,
+    products: products.slice(0, limit),
+    total_count: products.length,
   };
 }
 
 export async function getProductBySku(sku: string): Promise<MobilesentrixPriceResult> {
-  const endpoint = `/rest/V1/pos/products/${encodeURIComponent(sku)}`;
+  const endpoint = `/api/rest/products?filter[1][attribute]=sku&filter[1][in][0]=${encodeURIComponent(sku)}`;
   
   try {
-    const product = await makeApiRequest(endpoint);
+    const data = await makeApiRequest(endpoint);
     
-    const price = product.special_price 
-      ? parseFloat(product.special_price) 
-      : parseFloat(product.price);
+    if (data && typeof data === 'object') {
+      for (const key of Object.keys(data)) {
+        const product = data[key];
+        if (product && (product.sku === sku || product.new_sku === sku)) {
+          const price = product.customer_price 
+            ? product.customer_price 
+            : parseFloat(product.price);
+          
+          const inStock = product.is_in_stock === 1 || 
+                         product.is_in_stock === true || 
+                         (product.in_stock_qty !== undefined && product.in_stock_qty > 0);
+          
+          return {
+            sku: product.sku,
+            name: product.name,
+            price: isNaN(price) ? 0 : price,
+            inStock,
+            found: true,
+          };
+        }
+      }
+    }
     
+    console.log(`SKU ${sku} not found in Mobilesentrix API`);
     return {
-      sku: product.sku,
-      name: product.name,
-      price: isNaN(price) ? 0 : price,
-      inStock: product.is_in_stock !== false && (product.qty === undefined || parseInt(product.qty) > 0),
-      found: true,
+      sku,
+      name: '',
+      price: 0,
+      inStock: false,
+      found: false,
     };
   } catch (error) {
     if (error instanceof MobilesentrixApiError && error.statusCode === 404) {
@@ -141,5 +194,21 @@ export async function getProductPrice(sku: string): Promise<number | null> {
 }
 
 export function isMobilesentrixConfigured(): boolean {
-  return !!(process.env.MOBILESENTRIX_CONSUMER_KEY && process.env.MOBILESENTRIX_CONSUMER_SECRET);
+  const hasConsumerCreds = !!(process.env.MOBILESENTRIX_CONSUMER_KEY && process.env.MOBILESENTRIX_CONSUMER_SECRET);
+  const hasAccessToken = !!(process.env.MOBILESENTRIX_ACCESS_TOKEN && process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET);
+  return hasConsumerCreds && hasAccessToken;
+}
+
+export function getMobilesentrixStatus(): { configured: boolean; missingCredentials: string[] } {
+  const missing: string[] = [];
+  
+  if (!process.env.MOBILESENTRIX_CONSUMER_KEY) missing.push('MOBILESENTRIX_CONSUMER_KEY');
+  if (!process.env.MOBILESENTRIX_CONSUMER_SECRET) missing.push('MOBILESENTRIX_CONSUMER_SECRET');
+  if (!process.env.MOBILESENTRIX_ACCESS_TOKEN) missing.push('MOBILESENTRIX_ACCESS_TOKEN');
+  if (!process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET) missing.push('MOBILESENTRIX_ACCESS_TOKEN_SECRET');
+  
+  return {
+    configured: missing.length === 0,
+    missingCredentials: missing,
+  };
 }
