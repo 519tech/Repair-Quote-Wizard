@@ -69,3 +69,11 @@ The application's data model includes:
 - **Stock Status Display**: Services with parts in stock (quantity > 0) display a green "In Stock" badge in the quote flow.
 - **Admin Management**: Connection status is shown in the Settings tab. The API key is managed via the `REPAIRDESK_API_KEY` secret.
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
+
+### Mobilesentrix Integration
+- **OAuth1 Authentication**: The application integrates with Mobilesentrix Canada's POS API using OAuth1 (HMAC-SHA256 signature).
+- **Real-time Pricing**: Quote calculations fetch SKU prices directly from the Mobilesentrix API, with database fallback if API is unavailable or SKU not found.
+- **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
+- **Credentials**: Managed via `MOBILESENTRIX_CONSUMER_KEY` and `MOBILESENTRIX_CONSUMER_SECRET` secrets.
+- **API Base URL**: Uses `https://www.mobilesentrix.ca` for production (configurable via `MOBILESENTRIX_API_URL` env var).
+- **Endpoints Used**: `/rest/V1/pos/products` for search and `/rest/V1/pos/products/{sku}` for SKU lookup.

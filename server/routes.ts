@@ -24,6 +24,7 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
+import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, MobilesentrixApiError } from "./mobilesentrix";
 
 // Extend express-session types
 declare module "express-session" {
@@ -683,6 +684,63 @@ export async function registerRoutes(
     }
   });
 
+  // Mobilesentrix API Integration
+  app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
+    res.json({ configured: isMobilesentrixConfigured() });
+  });
+
+  app.get("/api/mobilesentrix/search", requireAdmin, async (req, res) => {
+    try {
+      if (!isMobilesentrixConfigured()) {
+        return res.status(400).json({ error: "Mobilesentrix API not configured" });
+      }
+
+      const query = req.query.q as string;
+      const page = parseInt(req.query.page as string) || 1;
+      const limit = parseInt(req.query.limit as string) || 20;
+
+      if (!query || query.length < 2) {
+        return res.status(400).json({ error: "Search query must be at least 2 characters" });
+      }
+
+      const result = await searchProducts(query, page, limit);
+      res.json({
+        products: result.products.map(p => ({
+          sku: p.sku,
+          name: p.name,
+          price: p.special_price || p.price,
+          inStock: p.is_in_stock !== false,
+        })),
+        total: result.total_count,
+        page,
+        limit,
+      });
+    } catch (error: any) {
+      console.error('Mobilesentrix search error:', error);
+      if (error instanceof MobilesentrixApiError) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      res.status(500).json({ error: error.message || "Failed to search Mobilesentrix products" });
+    }
+  });
+
+  app.get("/api/mobilesentrix/sku/:sku", requireAdmin, async (req, res) => {
+    try {
+      if (!isMobilesentrixConfigured()) {
+        return res.status(400).json({ error: "Mobilesentrix API not configured" });
+      }
+
+      const result = await getProductBySku(req.params.sku);
+      if (!result.found) {
+        return res.status(404).json({ error: "Product not found", sku: req.params.sku });
+      }
+      res.json(result);
+    } catch (error: any) {
+      console.error('Mobilesentrix SKU lookup error:', error);
+      res.status(500).json({ error: error.message || "Failed to lookup product" });
+    }
+  });
+
   app.post("/api/parts/upload", requireAdmin, upload.single('file'), async (req, res) => {
     try {
       if (!req.file) {
@@ -1235,6 +1293,42 @@ export async function registerRoutes(
     return Math.max(0, rounded - subtractAmount);
   }
 
+  // Helper function to get SKU price - tries Mobilesentrix API first, falls back to database
+  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'database'; apiError?: string }> {
+    // Try Mobilesentrix API first
+    if (isMobilesentrixConfigured()) {
+      try {
+        const apiResult = await getProductBySku(sku);
+        if (apiResult.found) {
+          return { price: apiResult.price, name: apiResult.name, found: true, source: 'api' };
+        }
+        // SKU not found in API, fall through to database
+        console.log(`SKU ${sku} not found in Mobilesentrix API, checking database`);
+      } catch (error: any) {
+        // API error - log it but continue to database fallback
+        const errorMsg = error instanceof MobilesentrixApiError 
+          ? `API error ${error.statusCode}: ${error.message}` 
+          : error.message || 'Unknown API error';
+        console.error(`Mobilesentrix API error for SKU ${sku}:`, errorMsg);
+        
+        // Fall through to database with error info
+        const part = await storage.getPartBySku(sku);
+        if (part) {
+          return { price: parseFloat(part.price), name: part.name, found: true, source: 'database', apiError: errorMsg };
+        }
+        return { price: 0, name: '', found: false, source: 'database', apiError: errorMsg };
+      }
+    }
+    
+    // Fall back to database (either API not configured or SKU not found in API)
+    const part = await storage.getPartBySku(sku);
+    if (part) {
+      return { price: parseFloat(part.price), name: part.name, found: true, source: 'database' };
+    }
+    
+    return { price: 0, name: '', found: false, source: 'database' };
+  }
+
   // Quote calculation endpoint - calculates price on server side
   // Formula: Labor price + (parts cost × parts markup), rounded to nearest 5 minus 1
   app.get("/api/calculate-quote/:deviceServiceId", async (req, res) => {
@@ -1249,29 +1343,31 @@ export async function registerRoutes(
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
       const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
       
-      // Collect all primary part options (main part + alternatives)
-      const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
-      if (deviceService.part) {
-        primaryPartOptions.push({
-          sku: deviceService.part.sku,
-          price: parseFloat(deviceService.part.price),
-          name: deviceService.part.name,
-        });
+      // Collect all primary part SKUs (main part + alternatives)
+      const primaryPartSkusToFetch: string[] = [];
+      
+      // Add primary part SKU from device service
+      const primaryPartSku = (deviceService as any).partSku;
+      if (primaryPartSku) {
+        primaryPartSkusToFetch.push(primaryPartSku);
       }
       
       // Add alternative primary parts
       const alternativeSkus = (deviceService as any).alternativePartSkus || [];
       if (alternativeSkus.length > 0) {
-        const allParts = await storage.getParts();
-        for (const altSku of alternativeSkus) {
-          const altPart = allParts.find(p => p.sku === altSku);
-          if (altPart) {
-            primaryPartOptions.push({
-              sku: altPart.sku,
-              price: parseFloat(altPart.price),
-              name: altPart.name,
-            });
-          }
+        primaryPartSkusToFetch.push(...alternativeSkus);
+      }
+      
+      // Fetch prices for all primary parts from Mobilesentrix API (or database fallback)
+      const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
+      for (const sku of primaryPartSkusToFetch) {
+        const priceResult = await getSkuPrice(sku);
+        if (priceResult.found) {
+          primaryPartOptions.push({
+            sku,
+            price: priceResult.price,
+            name: priceResult.name,
+          });
         }
       }
       
@@ -1287,8 +1383,12 @@ export async function registerRoutes(
       const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
       let additionalPartsCost = 0;
       for (const ap of additionalParts) {
-        if (ap.part && !ap.isPrimary) {
-          additionalPartsCost += parseFloat(ap.part.price) * secondaryPartPercentage;
+        if (ap.part?.sku && !ap.isPrimary) {
+          // Fetch price from Mobilesentrix API for secondary parts too
+          const priceResult = await getSkuPrice(ap.part.sku);
+          if (priceResult.found) {
+            additionalPartsCost += priceResult.price * secondaryPartPercentage;
+          }
         }
       }
       
@@ -1376,7 +1476,17 @@ export async function registerRoutes(
       const service = deviceService.service;
       const laborPrice = parseFloat(service.laborPrice || "0");
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-      const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+      
+      // Get part price from Mobilesentrix API (or database fallback)
+      let partCost = 0;
+      const primaryPartSku = (deviceService as any).partSku;
+      if (primaryPartSku) {
+        const priceResult = await getSkuPrice(primaryPartSku);
+        if (priceResult.found) {
+          partCost = priceResult.price;
+        }
+      }
+      
       const markedUpPartCost = partCost * partsMarkup;
       const additionalFee = (deviceService as any).additionalFee || 0;
       const rawTotal = laborPrice + markedUpPartCost + additionalFee;
@@ -1456,7 +1566,17 @@ export async function registerRoutes(
         const service = deviceService.service;
         const laborPrice = parseFloat(service.laborPrice || "0");
         const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-        const partCost = deviceService.part ? parseFloat(deviceService.part.price) : 0;
+        
+        // Get part price from Mobilesentrix API (or database fallback)
+        let partCost = 0;
+        const primaryPartSku = (deviceService as any).partSku;
+        if (primaryPartSku) {
+          const priceResult = await getSkuPrice(primaryPartSku);
+          if (priceResult.found) {
+            partCost = priceResult.price;
+          }
+        }
+        
         const markedUpPartCost = partCost * partsMarkup;
         const additionalFee = (deviceService as any).additionalFee || 0;
         const rawTotal = laborPrice + markedUpPartCost + additionalFee;

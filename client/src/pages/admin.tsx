@@ -3151,10 +3151,11 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     return () => clearTimeout(timer);
   }, [customSearchQuery]);
 
-  const partsQueryUrl = useMemo(() => {
-    const params = new URLSearchParams({ page: page.toString(), limit: PARTS_PER_PAGE.toString(), isCustom: 'false' });
-    if (debouncedSearch) params.append('search', debouncedSearch);
-    return `/api/parts?${params}`;
+  // Mobilesentrix API search - requires at least 2 characters
+  const mobilesentrixQueryUrl = useMemo(() => {
+    if (!debouncedSearch || debouncedSearch.length < 2) return null;
+    const params = new URLSearchParams({ q: debouncedSearch, page: page.toString(), limit: PARTS_PER_PAGE.toString() });
+    return `/api/mobilesentrix/search?${params}`;
   }, [page, debouncedSearch]);
 
   const customPartsQueryUrl = useMemo(() => {
@@ -3163,8 +3164,11 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     return `/api/parts?${params}`;
   }, [customPage, customDebouncedSearch]);
   
-  const { data: partsData, isLoading } = useQuery<{ parts: Part[]; total: number }>({ 
-    queryKey: [partsQueryUrl]
+  // Query Mobilesentrix API for supplier parts
+  const { data: mobilesentrixData, isLoading, isFetching, isError, error: mobilesentrixError } = useQuery<{ products: Array<{ sku: string; name: string; price: string; inStock: boolean }>; total: number; page: number; limit: number }>({ 
+    queryKey: [mobilesentrixQueryUrl],
+    enabled: !!mobilesentrixQueryUrl,
+    retry: 1,
   });
 
   // Query for custom parts with search and pagination
@@ -3172,9 +3176,9 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     queryKey: [customPartsQueryUrl]
   });
 
-  const parts = partsData?.parts || [];
-  const totalParts = partsData?.total || 0;
-  const totalPages = Math.ceil(totalParts / PARTS_PER_PAGE);
+  const mobilesentrixProducts = mobilesentrixData?.products || [];
+  const totalMobilesentrix = mobilesentrixData?.total || 0;
+  const totalMobilesentrixPages = Math.ceil(totalMobilesentrix / PARTS_PER_PAGE);
   const customParts = customPartsData?.parts || [];
   const totalCustomParts = customPartsData?.total || 0;
   const totalCustomPages = Math.ceil(totalCustomParts / PARTS_PER_PAGE);
@@ -3321,8 +3325,7 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
           onClick={() => setActiveSubTab("supplier")}
           data-testid="button-supplier-parts-tab"
         >
-          Supplier Parts
-          {totalParts > 0 && <Badge variant="secondary" className="ml-2">{totalParts.toLocaleString()}</Badge>}
+          Mobilesentrix
         </Button>
         <Button
           variant={activeSubTab === "custom" ? "default" : "ghost"}
@@ -3334,102 +3337,40 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
         </Button>
       </div>
 
-      {/* Supplier Parts Tab */}
+      {/* Supplier Parts Tab - Mobilesentrix API Search */}
       {activeSubTab === "supplier" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
             <div>
-              <CardTitle>Supplier Parts</CardTitle>
-              <CardDescription>Manage parts inventory with SKU and pricing. Replaced when uploading new Excel file.</CardDescription>
+              <CardTitle>Mobilesentrix Product Search</CardTitle>
+              <CardDescription>Search the Mobilesentrix catalog for parts. Prices are fetched live from the API.</CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
-                  placeholder="Search SKU or name..." 
+                  placeholder="Search products (min 2 chars)..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 w-[200px]"
+                  className="pl-9 w-[250px]"
                   data-testid="input-search-parts"
                 />
+                {isFetching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
               </div>
-              <label htmlFor="file-upload">
-                <Button variant="outline" asChild disabled={uploading}>
-                  <span className="cursor-pointer">
-                    {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                    Upload Excel
-                  </span>
-                </Button>
-              </label>
-              <input 
-                id="file-upload" 
-                type="file" 
-                accept=".xlsx,.xls" 
-                onChange={handleFileUpload}
-                className="hidden"
-                data-testid="input-upload-parts"
-              />
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" data-testid="button-clear-supplier-parts">
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Clear All
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Clear All Supplier Parts?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will permanently delete all supplier parts from the inventory. Custom parts will be preserved. This action cannot be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => clearSupplierPartsMutation.mutate()} data-testid="button-confirm-clear-parts">
-                      Delete All Supplier Parts
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button data-testid="button-add-part"><Plus className="h-4 w-4 mr-2" />Add Part</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <form onSubmit={handleSubmit}>
-                    <DialogHeader>
-                      <DialogTitle>Add Part</DialogTitle>
-                      <DialogDescription>Add a new part to inventory</DialogDescription>
-                    </DialogHeader>
-                    <div className="space-y-4 py-4">
-                      <div className="space-y-2">
-                        <Label>SKU</Label>
-                        <Input value={sku} onChange={(e) => setSku(e.target.value)} placeholder="e.g., SCR-IP15-BLK" required data-testid="input-part-sku" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Name</Label>
-                        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g., iPhone 15 Screen" required data-testid="input-part-name" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Price ($)</Label>
-                        <Input type="number" step="0.01" min="0" value={price} onChange={(e) => setPrice(e.target.value)} placeholder="0.00" required data-testid="input-part-price" />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-part">
-                        {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                      </Button>
-                    </DialogFooter>
-                  </form>
-                </DialogContent>
-              </Dialog>
             </div>
           </CardHeader>
           <CardContent>
-            {isLoading ? (
+            {!debouncedSearch || debouncedSearch.length < 2 ? (
+              <p className="text-center py-8 text-muted-foreground">Enter at least 2 characters to search Mobilesentrix products</p>
+            ) : isLoading ? (
               <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
-            ) : parts.length === 0 ? (
-              <p className="text-center py-8 text-muted-foreground">{searchQuery ? "No parts match your search" : "No parts yet. Add your first one!"}</p>
+            ) : isError ? (
+              <div className="text-center py-8">
+                <p className="text-destructive mb-2">Failed to search Mobilesentrix API</p>
+                <p className="text-sm text-muted-foreground">{(mobilesentrixError as any)?.message || "Please check your API credentials and try again"}</p>
+              </div>
+            ) : mobilesentrixProducts.length === 0 ? (
+              <p className="text-center py-8 text-muted-foreground">No products found for "{debouncedSearch}"</p>
             ) : (
               <>
                 <Table>
@@ -3438,29 +3379,28 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                       <TableHead>SKU</TableHead>
                       <TableHead>Name</TableHead>
                       <TableHead>Price</TableHead>
-                      <TableHead className="w-[120px]">Actions</TableHead>
+                      <TableHead>Stock</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {parts.map((part) => (
-                      <TableRow key={part.id}>
-                        <TableCell><Badge variant="outline">{part.sku}</Badge></TableCell>
-                        <TableCell className="font-medium">{part.name}</TableCell>
-                        <TableCell>${part.price}</TableCell>
+                    {mobilesentrixProducts.map((product) => (
+                      <TableRow key={product.sku}>
+                        <TableCell><Badge variant="outline">{product.sku}</Badge></TableCell>
+                        <TableCell className="font-medium">{product.name}</TableCell>
+                        <TableCell>${product.price}</TableCell>
                         <TableCell>
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
-                          </div>
+                          <Badge variant={product.inStock ? "default" : "secondary"}>
+                            {product.inStock ? "In Stock" : "Out of Stock"}
+                          </Badge>
                         </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                {totalPages > 1 && (
+                {totalMobilesentrixPages > 1 && (
                   <div className="flex items-center justify-between mt-4 px-2">
                     <p className="text-sm text-muted-foreground">
-                      Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalParts)} of {totalParts.toLocaleString()} parts
+                      Showing {(page - 1) * PARTS_PER_PAGE + 1}-{Math.min(page * PARTS_PER_PAGE, totalMobilesentrix)} of {totalMobilesentrix.toLocaleString()} products
                     </p>
                     <div className="flex items-center gap-2">
                       <Button 
@@ -3473,12 +3413,12 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                         <ChevronLeft className="h-4 w-4" />
                         Previous
                       </Button>
-                      <span className="text-sm text-muted-foreground">Page {page} of {totalPages}</span>
+                      <span className="text-sm text-muted-foreground">Page {page} of {totalMobilesentrixPages}</span>
                       <Button 
                         variant="outline" 
                         size="sm" 
-                        onClick={() => setPage(p => Math.min(totalPages, p + 1))} 
-                        disabled={page === totalPages}
+                        onClick={() => setPage(p => Math.min(totalMobilesentrixPages, p + 1))} 
+                        disabled={page === totalMobilesentrixPages}
                         data-testid="button-parts-next-page"
                       >
                         Next
