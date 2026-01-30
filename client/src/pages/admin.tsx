@@ -2810,12 +2810,12 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 </div>
                 <div className="space-y-2">
                   <Label>Brand (optional)</Label>
-                  <Select value={brandId || ""} onValueChange={(v) => setBrandId(v || null)}>
+                  <Select value={brandId || "_none"} onValueChange={(v) => setBrandId(v === "_none" ? null : v)}>
                     <SelectTrigger data-testid="select-service-brand">
                       <SelectValue placeholder="Select a brand" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No brand</SelectItem>
+                      <SelectItem value="_none">No brand</SelectItem>
                       {brands.map(brand => (
                         <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                       ))}
@@ -2911,12 +2911,12 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                 </div>
                 <div className="space-y-2">
                   <Label>Brand (optional)</Label>
-                  <Select value={editItem?.brandId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, brandId: v || null} : null)}>
+                  <Select value={editItem?.brandId || "_none"} onValueChange={(v) => setEditItem(prev => prev ? {...prev, brandId: v === "_none" ? null : v} : null)}>
                     <SelectTrigger data-testid="select-edit-service-brand">
                       <SelectValue placeholder="Select a brand" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No brand</SelectItem>
+                      <SelectItem value="_none">No brand</SelectItem>
                       {brands.map(brand => (
                         <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                       ))}
