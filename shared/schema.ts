@@ -157,6 +157,7 @@ export const services = pgTable("services", {
   name: text("name").notNull().unique(),
   description: text("description"),
   categoryId: varchar("category_id").references(() => serviceCategories.id, { onDelete: "set null" }),
+  brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
   warranty: text("warranty"),
   repairTime: text("repair_time"),
   laborPrice: decimal("labor_price", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -173,6 +174,10 @@ export const servicesRelations = relations(services, ({ one }) => ({
   category: one(serviceCategories, {
     fields: [services.categoryId],
     references: [serviceCategories.id],
+  }),
+  brand: one(brands, {
+    fields: [services.brandId],
+    references: [brands.id],
   }),
 }));
 

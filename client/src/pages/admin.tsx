@@ -2589,6 +2589,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [brandId, setBrandId] = useState<string | null>(null);
   const [warranty, setWarranty] = useState("");
   const [repairTime, setRepairTime] = useState("");
   const [laborPrice, setLaborPrice] = useState("");
@@ -2600,20 +2601,24 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const [bypassRounding, setBypassRounding] = useState(false);
   const [imageUrl, setImageUrl] = useState("");
   const [filterCategoryId, setFilterCategoryId] = useState("all");
+  const [filterBrandId, setFilterBrandId] = useState("all");
 
   // Inline editing state
   const [inlineEditingService, setInlineEditingService] = useState<{ id: string; field: string; value: string } | null>(null);
 
   const { data: services = [], isLoading } = useQuery<Service[]>({ queryKey: ["/api/services"] });
   const { data: categories = [] } = useQuery<ServiceCategory[]>({ queryKey: ["/api/service-categories"] });
+  const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
 
   const filteredServices = useMemo(() => {
     let result = services;
-    if (filterCategoryId === "none") result = services.filter(s => !s.categoryId);
-    else if (filterCategoryId !== "all") result = services.filter(s => s.categoryId === filterCategoryId);
+    if (filterCategoryId === "none") result = result.filter(s => !s.categoryId);
+    else if (filterCategoryId !== "all") result = result.filter(s => s.categoryId === filterCategoryId);
+    if (filterBrandId === "none") result = result.filter(s => !s.brandId);
+    else if (filterBrandId !== "all") result = result.filter(s => s.brandId === filterBrandId);
     // Sort by name to maintain consistent order
     return [...result].sort((a, b) => a.name.localeCompare(b.name));
-  }, [services, filterCategoryId]);
+  }, [services, filterCategoryId, filterBrandId]);
 
   const getCategoryName = (catId: string | null) => {
     if (!catId) return "-";
@@ -2621,8 +2626,14 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     return cat?.name || "-";
   };
 
+  const getBrandName = (bId: string | null) => {
+    if (!bId) return "-";
+    const brand = brands.find(b => b.id === bId);
+    return brand?.name || "-";
+  };
+
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; categoryId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; bypassMultiDiscount?: boolean; bypassRounding?: boolean; imageUrl?: string }) => {
+    mutationFn: async (data: { name: string; categoryId?: string; brandId?: string; description?: string; warranty?: string; repairTime?: string; laborPrice: string; partsMarkup: string; secondaryPartPercentage?: number; notes?: string; labourOnly?: boolean; bypassMultiDiscount?: boolean; bypassRounding?: boolean; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/services", data);
       return res.json();
     },
@@ -2632,6 +2643,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       setName("");
       setDescription("");
       setCategoryId(null);
+      setBrandId(null);
       setWarranty("");
       setRepairTime("");
       setLaborPrice("");
@@ -2681,6 +2693,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     createMutation.mutate({ 
       name, 
       categoryId: categoryId || undefined,
+      brandId: brandId || undefined,
       description: description || undefined, 
       warranty: warranty || undefined,
       repairTime: repairTime || undefined,
@@ -2744,6 +2757,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
       data: { 
         name: editItem.name, 
         categoryId: editItem.categoryId || undefined,
+        brandId: editItem.brandId || undefined,
         description: editItem.description || undefined, 
         warranty: editItem.warranty || undefined,
         repairTime: editItem.repairTime || undefined,
@@ -2790,6 +2804,20 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                     <SelectContent>
                       {categories.map(cat => (
                         <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Brand (optional)</Label>
+                  <Select value={brandId || ""} onValueChange={(v) => setBrandId(v || null)}>
+                    <SelectTrigger data-testid="select-service-brand">
+                      <SelectValue placeholder="Select a brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No brand</SelectItem>
+                      {brands.map(brand => (
+                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -2882,6 +2910,20 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Brand (optional)</Label>
+                  <Select value={editItem?.brandId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, brandId: v || null} : null)}>
+                    <SelectTrigger data-testid="select-edit-service-brand">
+                      <SelectValue placeholder="Select a brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No brand</SelectItem>
+                      {brands.map(brand => (
+                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label>Description (optional)</Label>
                   <Textarea value={editItem?.description || ""} onChange={(e) => setEditItem(prev => prev ? {...prev, description: e.target.value} : null)} data-testid="input-edit-service-description" />
                 </div>
@@ -2953,6 +2995,16 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
               {categories.map((cat) => (<SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>))}
             </SelectContent>
           </Select>
+          <Select value={filterBrandId} onValueChange={setFilterBrandId}>
+            <SelectTrigger className="w-[180px]" data-testid="select-filter-brand">
+              <SelectValue placeholder="Filter by brand" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Brands</SelectItem>
+              <SelectItem value="none">No Brand</SelectItem>
+              {brands.map((brand) => (<SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>))}
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent>
@@ -2966,6 +3018,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
               <TableRow>
                 <TableHead className="w-16">Image</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Brand</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Labor</TableHead>
                 <TableHead>Markup</TableHead>
@@ -2986,6 +3039,7 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                     )}
                   </TableCell>
                   <TableCell><Badge variant="secondary">{getCategoryName(service.categoryId)}</Badge></TableCell>
+                  <TableCell><Badge variant="outline">{getBrandName(service.brandId)}</Badge></TableCell>
                   <TableCell className="font-medium">{service.name}</TableCell>
                   <TableCell>
                     {inlineEditingService?.id === service.id && inlineEditingService?.field === "laborPrice" ? (
