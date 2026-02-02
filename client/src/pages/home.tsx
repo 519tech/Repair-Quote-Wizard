@@ -1215,7 +1215,6 @@ export default function Home() {
                       type="tel"
                       value={contactInfo.phone}
                       onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                      placeholder="For SMS quote"
                       className="h-9"
                       data-testid="input-quote-phone"
                     />
