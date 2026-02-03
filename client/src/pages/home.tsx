@@ -118,6 +118,12 @@ export default function Home() {
   });
   const hidePricesCompletely = hidePricesCompletelySettings?.enabled ?? false;
 
+  // Pricing source setting (excel_upload or mobilesentrix_api)
+  const { data: pricingSourceSettings } = useQuery<{ source: string }>({
+    queryKey: ["/api/settings/pricing-source"],
+  });
+  const pricingSource = pricingSourceSettings?.source ?? "excel_upload";
+
   const formatLastUpdated = (isoDate: string | undefined) => {
     if (!isoDate) return null;
     try {
@@ -1390,10 +1396,20 @@ export default function Home() {
 
         {/* Footer */}
         <div className="pt-4 text-xs text-muted-foreground text-center space-y-1">
-          <p>All prices are estimates only and subject to change. In-store verification required.</p>
-          {partsLastUpdated?.content && (
-            <p>Prices last updated: {formatLastUpdated(partsLastUpdated.content)}</p>
-          )}
+          <p>The prices shown are estimates and may change. A final quote will be confirmed after in-store inspection.</p>
+          <p>
+            Prices last updated:{" "}
+            {pricingSource === "mobilesentrix_api" ? (
+              <span className="inline-flex items-center gap-1">
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                <span className="text-green-600 dark:text-green-400 font-medium">Live</span>
+              </span>
+            ) : partsLastUpdated?.content ? (
+              formatLastUpdated(partsLastUpdated.content)
+            ) : (
+              "Not available"
+            )}
+          </p>
         </div>
       </div>
     </div>

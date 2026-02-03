@@ -663,6 +663,13 @@ export async function registerRoutes(
       }
 
       const result = await storage.bulkReplaceSupplierParts(validParts);
+      
+      // Save the last updated timestamp
+      await storage.upsertMessageTemplate({
+        type: 'parts_last_updated',
+        content: new Date().toISOString()
+      });
+      
       res.json({ success: true, ...result });
     } catch (error: any) {
       console.error("Supplier parts upload error:", error);
