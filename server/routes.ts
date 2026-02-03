@@ -1479,7 +1479,7 @@ export async function registerRoutes(
     const cached = getCachedPrice(sku);
     if (cached) {
       return { 
-        price: cached.price, 
+        price: parseFloat(String(cached.price)) || 0, 
         name: cached.name, 
         found: cached.found, 
         source: 'api',
@@ -1505,7 +1505,7 @@ export async function registerRoutes(
           inStock: apiResult.inStock,
           found: apiResult.found,
         });
-        return { price: apiResult.price, name: apiResult.name, found: true, source: 'api' };
+        return { price: parseFloat(String(apiResult.price)) || 0, name: apiResult.name, found: true, source: 'api' };
       }
       // SKU not found in API - don't cache to allow retry
       console.log(`SKU ${sku} not found in Mobilesentrix API`);
@@ -1616,7 +1616,7 @@ export async function registerRoutes(
         laborPrice: service.laborPrice,
         partsMarkup: service.partsMarkup,
         secondaryPartPercentage: service.secondaryPartPercentage,
-        partCost: cheapestPrimaryPart?.price?.toFixed(2) || "0.00",
+        partCost: (typeof cheapestPrimaryPart?.price === 'number' ? cheapestPrimaryPart.price.toFixed(2) : "0.00"),
         partSku: cheapestPrimaryPart?.sku || null,
         partName: cheapestPrimaryPart?.name || null,
         primaryPartSkus, // All primary part SKUs (for stock: any in stock = in stock)
@@ -1630,8 +1630,9 @@ export async function registerRoutes(
         isAvailable,
         bypassMultiDiscount: service.bypassMultiDiscount || false,
       });
-    } catch (error) {
-      res.status(500).json({ error: "Failed to calculate quote" });
+    } catch (error: any) {
+      console.error('Calculate quote error:', error.message || error);
+      res.status(500).json({ error: "Failed to calculate quote", details: error.message });
     }
   });
 
