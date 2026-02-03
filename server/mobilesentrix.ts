@@ -236,7 +236,7 @@ export function getAuthorizationUrl(callbackUrl: string): string {
     flowentry: 'SignIn',
     consumer_key: consumerKey,
     consumer_secret: consumerSecret,
-    authorize_for: 'admin',
+    authorize_for: 'customer',
     callback: callbackUrl,
   });
   

@@ -80,7 +80,7 @@ The application's data model includes:
 - **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
 - **OAuth Authorization Flow**: 
   1. Admin navigates to Settings → Mobilesentrix tab
-  2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow
+  2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow (uses customer authentication)
   3. After authorization, add returned Access Token and Access Token Secret to Replit Secrets
 - **Required Secrets**:
   - `MOBILESENTRIX_CONSUMER_KEY`: Consumer key from Mobilesentrix
