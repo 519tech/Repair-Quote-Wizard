@@ -724,8 +724,13 @@ export async function registerRoutes(
       }
       
       const baseUrl = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
-      // Use custom domain for callback URL - must match what's registered with Mobilesentrix
-      const appBaseUrl = process.env.APP_BASE_URL || 'https://quote.519techservices.ca';
+      // Use custom domain for callback URL - detect dev vs production
+      // In development, use the request host; in production, use the custom domain
+      const isDev = process.env.NODE_ENV === 'development';
+      const host = req.get('host') || '';
+      const protocol = req.get('x-forwarded-proto') || (req.secure ? 'https' : 'http');
+      const devUrl = `${protocol}://${host}`;
+      const appBaseUrl = isDev ? devUrl : (process.env.APP_BASE_URL || 'https://quote.519techservices.ca');
       const callbackUrl = `${appBaseUrl}/api/mobilesentrix/callback`;
       
       const authUrl = `${baseUrl}/oauth/authorize/identifier?consumer=${encodeURIComponent('519 Tech Services')}&authtype=1&flowentry=SignIn&consumer_key=${encodeURIComponent(consumerKey)}&consumer_secret=${encodeURIComponent(consumerSecret)}&authorize_for=customer&callback=${encodeURIComponent(callbackUrl)}`;
