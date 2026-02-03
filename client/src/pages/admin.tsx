@@ -5149,7 +5149,7 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
 
   const { data: mobilesentrixAuthUrl } = useQuery<{ authUrl: string; callbackUrl: string }>({
     queryKey: ["/api/mobilesentrix/auth-url"],
-    enabled: !mobilesentrixStatus?.configured && !!mobilesentrixStatus,
+    enabled: !!mobilesentrixStatus, // Always fetch when we have status (for reauthorization)
   });
 
   const toggleStockCheck = useMutation({
@@ -6061,6 +6061,23 @@ $\{servicePrice} plus taxes
                 
                 {/* API Status Test */}
                 <MobilesentrixApiTest />
+                
+                {/* Reauthorize Button */}
+                {mobilesentrixAuthUrl?.authUrl && (
+                  <div className="pt-3 border-t">
+                    <p className="text-sm text-muted-foreground mb-2">
+                      If you're getting authentication errors, you may need to reauthorize:
+                    </p>
+                    <Button 
+                      variant="outline"
+                      onClick={() => window.open(mobilesentrixAuthUrl.authUrl, '_blank')}
+                      data-testid="button-mobilesentrix-reauthorize"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Reauthorize with Mobilesentrix
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
