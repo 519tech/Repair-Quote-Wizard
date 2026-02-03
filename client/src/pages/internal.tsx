@@ -167,6 +167,13 @@ export default function Internal() {
     setSelectedDevice(device);
     setSearchQuery("");
     setSearchResults([]);
+    
+    // Prefetch all parts for this device (for Mobilesentrix API caching)
+    fetch('/api/prefetch-category-parts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ deviceId: device.id }),
+    }).catch(() => {});
   };
 
   const clearSelection = () => {
