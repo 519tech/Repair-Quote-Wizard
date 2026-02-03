@@ -24,7 +24,7 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
-import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection } from "./mobilesentrix";
+import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection, getCachedPrice, setCachedPrice, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
 
 // Extend express-session types
@@ -869,6 +869,133 @@ export async function registerRoutes(
     }
   });
 
+  // Cache status endpoint - shows how many parts are cached
+  app.get("/api/mobilesentrix/cache-status", async (req, res) => {
+    try {
+      const status = getCacheStatus();
+      res.json(status);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to get cache status" });
+    }
+  });
+
+  // Clear cache endpoint (admin only)
+  app.post("/api/mobilesentrix/clear-cache", requireAdmin, async (req, res) => {
+    try {
+      clearPartsCache();
+      res.json({ success: true, message: "Cache cleared" });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message || "Failed to clear cache" });
+    }
+  });
+
+  // Pre-fetch parts for services in a category (for a specific device)
+  // This is called when user selects a category to pre-load prices
+  app.post("/api/prefetch-category-parts", async (req, res) => {
+    try {
+      const { deviceId, categoryId } = req.body;
+      
+      // Input validation
+      if (!deviceId || typeof deviceId !== 'string') {
+        return res.status(400).json({ error: "deviceId is required and must be a string" });
+      }
+      
+      if (categoryId && typeof categoryId !== 'string') {
+        return res.status(400).json({ error: "categoryId must be a string if provided" });
+      }
+      
+      // Check pricing source - only prefetch for API mode
+      const templates = await storage.getMessageTemplates();
+      const pricingSourceSetting = templates.find(t => t.type === 'pricing_source');
+      const pricingSource = pricingSourceSetting?.content || 'excel_upload';
+      
+      if (pricingSource === 'excel_upload') {
+        // Excel mode doesn't need prefetching
+        return res.json({ 
+          success: true, 
+          message: "Using Excel pricing - no prefetch needed",
+          source: 'excel',
+          skusFetched: 0 
+        });
+      }
+      
+      if (!isMobilesentrixConfigured()) {
+        return res.json({ 
+          success: false, 
+          message: "API not configured",
+          source: 'api',
+          skusFetched: 0 
+        });
+      }
+      
+      // Get all device services for this device (optionally filtered by category)
+      const deviceServices = await storage.getDeviceServicesByDevice(deviceId);
+      
+      // Filter by category if provided
+      const filteredServices = categoryId 
+        ? deviceServices.filter(ds => ds.service.categoryId === categoryId)
+        : deviceServices;
+      
+      // Collect all SKUs that need to be fetched
+      const skusToFetch: string[] = [];
+      
+      for (const ds of filteredServices) {
+        // Get primary part SKU
+        if (ds.partSku) {
+          skusToFetch.push(ds.partSku);
+        }
+        
+        // Get alternative primary part SKUs
+        if (ds.alternativePartSkus && Array.isArray(ds.alternativePartSkus)) {
+          for (const altSku of ds.alternativePartSkus) {
+            if (altSku && typeof altSku === 'string') {
+              skusToFetch.push(altSku);
+            }
+          }
+        }
+        
+        // Get additional parts SKUs
+        const additionalParts = await storage.getDeviceServiceParts(ds.id);
+        for (const ap of additionalParts) {
+          if (ap.part?.sku) {
+            skusToFetch.push(ap.part.sku);
+          }
+        }
+      }
+      
+      // Remove duplicates
+      const uniqueSkus = [...new Set(skusToFetch)];
+      
+      if (uniqueSkus.length === 0) {
+        return res.json({ 
+          success: true, 
+          message: "No parts to prefetch",
+          source: 'api',
+          skusFetched: 0 
+        });
+      }
+      
+      // Fetch and cache all SKUs
+      console.log(`Prefetching ${uniqueSkus.length} SKUs for device ${deviceId}${categoryId ? ` category ${categoryId}` : ''}`);
+      const results = await fetchAndCacheMultipleSkus(uniqueSkus);
+      
+      // Count how many were found
+      const foundCount = Array.from(results.values()).filter(r => r.found).length;
+      
+      res.json({ 
+        success: true, 
+        message: `Prefetched ${results.size} SKUs (${foundCount} found)`,
+        source: 'api',
+        skusFetched: results.size,
+        skusFound: foundCount,
+        cacheStatus: getCacheStatus()
+      });
+    } catch (error: any) {
+      console.error('Prefetch error:', error);
+      res.status(500).json({ error: error.message || "Failed to prefetch parts" });
+    }
+  });
+
   // Service Categories
   app.get("/api/service-categories", async (req, res) => {
     try {
@@ -1321,14 +1448,15 @@ export async function registerRoutes(
   }
 
   // Helper function to get SKU price based on pricing source setting (API or Excel upload)
-  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string }> {
+  // Uses 24-hour cache for API mode to reduce API calls
+  async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string; fromCache?: boolean }> {
     // Check pricing source setting
     const templates = await storage.getMessageTemplates();
     const pricingSourceSetting = templates.find(t => t.type === 'pricing_source');
     const pricingSource = pricingSourceSetting?.content || 'excel_upload';
     
     if (pricingSource === 'excel_upload') {
-      // Get price from uploaded supplier parts (Excel)
+      // Get price from uploaded supplier parts (Excel) - always works as backup
       try {
         const part = await storage.getSupplierPartBySku(sku);
         if (part) {
@@ -1342,6 +1470,18 @@ export async function registerRoutes(
       }
     }
     
+    // API mode - check cache first (24-hour cache)
+    const cached = getCachedPrice(sku);
+    if (cached) {
+      return { 
+        price: cached.price, 
+        name: cached.name, 
+        found: cached.found, 
+        source: 'api',
+        fromCache: true 
+      };
+    }
+    
     // Get price from Mobilesentrix API
     if (!isMobilesentrixConfigured()) {
       console.error('Mobilesentrix API not configured - cannot fetch prices');
@@ -1350,13 +1490,23 @@ export async function registerRoutes(
     
     try {
       const apiResult = await getProductBySku(sku);
+      
       if (apiResult.found) {
+        // Only cache successful results for 24 hours
+        setCachedPrice(sku, {
+          sku: apiResult.sku || sku,
+          name: apiResult.name,
+          price: apiResult.price,
+          inStock: apiResult.inStock,
+          found: apiResult.found,
+        });
         return { price: apiResult.price, name: apiResult.name, found: true, source: 'api' };
       }
-      // SKU not found in API
+      // SKU not found in API - don't cache to allow retry
       console.log(`SKU ${sku} not found in Mobilesentrix API`);
       return { price: 0, name: '', found: false, source: 'api' };
     } catch (error: any) {
+      // Don't cache errors - might be temporary API issues
       const errorMsg = error instanceof MobilesentrixApiError 
         ? `API error ${error.statusCode}: ${error.message}` 
         : error.message || 'Unknown API error';

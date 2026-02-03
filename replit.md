@@ -73,11 +73,20 @@ The application's data model includes:
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
 - **Pricing Source Toggle**: Admin can choose between two pricing sources in Settings → Mobilesentrix tab:
-  1. **Excel Upload** (default): Prices fetched from the `supplierParts` database table, populated via Excel file upload
-  2. **Mobilesentrix API**: Prices fetched in real-time from the Mobilesentrix API
+  1. **Excel Upload** (default): Prices fetched from the `supplierParts` database table, populated via Excel file upload. Always works as a reliable backup.
+  2. **Mobilesentrix API**: Prices fetched from the API with 24-hour caching
+- **24-Hour Parts Price Cache**: When using API mode, part prices are cached in memory for 24 hours to reduce API calls:
+  - Cache is populated when user selects a service category (prefetch all parts for that category)
+  - Individual SKU lookups also check cache first
+  - Cache expires after 24 hours and is refreshed on next request
+  - Admin can clear cache manually via Settings if needed
+- **Prefetch Endpoint**: `POST /api/prefetch-category-parts` - Called automatically when customer selects a category to pre-load all part prices for services in that category
+- **Cache Status Endpoint**: `GET /api/mobilesentrix/cache-status` - Shows cache count and age
 - **Supplier Parts Table**: Stores parts uploaded from Excel with SKU, name, and original price. Custom parts remain separate.
 - **Excel File Format**: Product SKU (col 0), Product Name (col 1), Original Price (col 2) - supports ~47,500 parts
 - **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
+- **API Status Testing**: Settings → Mobilesentrix tab includes "Test Connection" button to verify API connectivity with response time
+- **Error Notifications**: When Mobilesentrix API errors occur, an email notification is sent to the admin notification email address
 - **OAuth Authorization Flow**: 
   1. Admin navigates to Settings → Mobilesentrix tab
   2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow (uses customer authentication)

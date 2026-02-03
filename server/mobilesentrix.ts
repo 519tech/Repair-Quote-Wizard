@@ -82,6 +82,138 @@ export function clearDatabaseTokens(): void {
   cachedDbTokens = null;
 }
 
+// 24-hour parts price cache
+interface CachedPart {
+  sku: string;
+  name: string;
+  price: number;
+  inStock: boolean;
+  found: boolean;
+  cachedAt: number;
+}
+
+const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const partsCache = new Map<string, CachedPart>();
+
+export function getCacheStatus(): { count: number; oldestCacheTime: number | null; cacheAgeHours: number | null } {
+  if (partsCache.size === 0) {
+    return { count: 0, oldestCacheTime: null, cacheAgeHours: null };
+  }
+  
+  let oldestTime = Date.now();
+  const values = Array.from(partsCache.values());
+  for (const part of values) {
+    if (part.cachedAt < oldestTime) {
+      oldestTime = part.cachedAt;
+    }
+  }
+  
+  const ageHours = (Date.now() - oldestTime) / (1000 * 60 * 60);
+  return { 
+    count: partsCache.size, 
+    oldestCacheTime: oldestTime, 
+    cacheAgeHours: Math.round(ageHours * 10) / 10 
+  };
+}
+
+export function clearPartsCache(): void {
+  partsCache.clear();
+  console.log('Parts cache cleared');
+}
+
+function isCacheValid(cachedPart: CachedPart): boolean {
+  return (Date.now() - cachedPart.cachedAt) < CACHE_DURATION_MS;
+}
+
+export function getCachedPrice(sku: string): CachedPart | null {
+  const cached = partsCache.get(sku);
+  if (cached && isCacheValid(cached)) {
+    return cached;
+  }
+  // Remove stale entry
+  if (cached) {
+    partsCache.delete(sku);
+  }
+  return null;
+}
+
+export function setCachedPrice(sku: string, data: Omit<CachedPart, 'cachedAt'>): void {
+  partsCache.set(sku, {
+    ...data,
+    cachedAt: Date.now(),
+  });
+}
+
+export async function fetchAndCacheMultipleSkus(skus: string[]): Promise<Map<string, CachedPart>> {
+  const results = new Map<string, CachedPart>();
+  
+  // Dedupe and filter empty SKUs
+  const uniqueSkus = Array.from(new Set(skus.filter(sku => sku && sku.trim())));
+  const skusToFetch: string[] = [];
+  
+  // Check cache first
+  for (const sku of uniqueSkus) {
+    const cached = getCachedPrice(sku);
+    if (cached) {
+      results.set(sku, cached);
+    } else {
+      skusToFetch.push(sku);
+    }
+  }
+  
+  if (skusToFetch.length === 0) {
+    console.log(`All ${uniqueSkus.length} SKUs found in cache`);
+    return results;
+  }
+  
+  console.log(`Fetching ${skusToFetch.length} SKUs from API (${results.size} from cache)`);
+  
+  // Batch fetch in groups of 10 to avoid overwhelming the API
+  const batchSize = 10;
+  for (let i = 0; i < skusToFetch.length; i += batchSize) {
+    const batch = skusToFetch.slice(i, i + batchSize);
+    
+    // Fetch in parallel within each batch
+    const fetchPromises = batch.map(async (sku) => {
+      try {
+        const result = await getProductBySku(sku);
+        if (result.found) {
+          // Only cache successful results for 24 hours
+          const cached: CachedPart = {
+            sku: result.sku,
+            name: result.name,
+            price: result.price,
+            inStock: result.inStock,
+            found: result.found,
+            cachedAt: Date.now(),
+          };
+          setCachedPrice(sku, cached);
+          return { sku, cached };
+        } else {
+          // Don't cache not-found results - might be temporary
+          return { sku, cached: { sku, name: '', price: 0, inStock: false, found: false, cachedAt: 0 } };
+        }
+      } catch (error) {
+        console.error(`Failed to fetch SKU ${sku}:`, error);
+        // Don't cache errors - might be temporary API issues
+        return { sku, cached: { sku, name: '', price: 0, inStock: false, found: false, cachedAt: 0 } };
+      }
+    });
+    
+    const batchResults = await Promise.all(fetchPromises);
+    for (const { sku, cached } of batchResults) {
+      results.set(sku, cached);
+    }
+    
+    // Small delay between batches to be nice to the API
+    if (i + batchSize < skusToFetch.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
+  }
+  
+  return results;
+}
+
 function getAccessToken(): { key: string; secret: string } | null {
   // First check database tokens (set by OAuth callback)
   if (cachedDbTokens) {

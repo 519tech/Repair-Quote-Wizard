@@ -506,6 +506,19 @@ export default function Home() {
     // Show loading animation and start stock check immediately
     setCategoryLoading(true);
     
+    // Prefetch parts prices from API for this category (if using API mode)
+    // This runs in the background and caches prices for 24 hours
+    if (selectedDevice?.id) {
+      fetch('/api/prefetch-category-parts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          deviceId: selectedDevice.id, 
+          categoryId: catId !== "other" ? catId : null 
+        })
+      }).catch(err => console.log('Prefetch error (non-critical):', err));
+    }
+    
     // Check stock only for parts in this category (runs immediately)
     const allSkus = new Set<string>();
     catQuotes.forEach(q => {
