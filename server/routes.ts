@@ -24,7 +24,8 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
-import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens } from "./mobilesentrix";
+import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection } from "./mobilesentrix";
+import { sendApiErrorNotification } from "./gmail";
 
 // Extend express-session types
 declare module "express-session" {
@@ -98,6 +99,13 @@ export async function registerRoutes(
   } catch (error) {
     console.log('No Mobilesentrix tokens found in database, will use environment variables if available');
   }
+  
+  // Set up Mobilesentrix API error notification callback
+  setErrorNotificationCallback((errorMessage, endpoint) => {
+    sendApiErrorNotification('Mobilesentrix API', errorMessage, endpoint).catch(err => {
+      console.error('Failed to send API error notification:', err);
+    });
+  });
 
   // Admin login with username/password
   app.post("/api/admin/login", async (req, res) => {
@@ -693,6 +701,16 @@ export async function registerRoutes(
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
     const status = getMobilesentrixStatus();
     res.json(status);
+  });
+
+  // Test Mobilesentrix API connection
+  app.get("/api/mobilesentrix/test", requireAdmin, async (req, res) => {
+    try {
+      const result = await testConnection();
+      res.json(result);
+    } catch (error: any) {
+      res.json({ success: false, message: error.message || "Connection test failed" });
+    }
   });
 
   // Generate OAuth authorization URL for Mobilesentrix

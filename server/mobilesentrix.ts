@@ -3,6 +3,13 @@ import crypto from 'crypto';
 
 const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
 
+// Error notification callback - set by routes.ts
+let errorNotificationCallback: ((error: string, endpoint?: string) => void) | null = null;
+
+export function setErrorNotificationCallback(callback: (error: string, endpoint?: string) => void): void {
+  errorNotificationCallback = callback;
+}
+
 interface MobilesentrixProduct {
   entity_id: string;
   sku: string;
@@ -122,14 +129,41 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error(`Mobilesentrix API error (${response.status}):`, errorText);
-    throw new MobilesentrixApiError(
-      `Mobilesentrix API error (${response.status}): ${errorText.substring(0, 200)}`,
-      response.status
-    );
+    const errorMessage = `Mobilesentrix API error (${response.status}): ${errorText.substring(0, 200)}`;
+    console.error(errorMessage);
+    
+    // Send error notification
+    if (errorNotificationCallback) {
+      errorNotificationCallback(errorMessage, endpoint);
+    }
+    
+    throw new MobilesentrixApiError(errorMessage, response.status);
   }
 
   return response.json();
+}
+
+// Test the API connection by making a simple request
+export async function testConnection(): Promise<{ success: boolean; message: string; responseTime?: number }> {
+  const startTime = Date.now();
+  
+  try {
+    if (!isMobilesentrixConfigured()) {
+      return { success: false, message: 'API not configured. Please complete OAuth authorization.' };
+    }
+    
+    // Try to fetch a single product to verify the connection works
+    const endpoint = '/api/rest/products?limit=1';
+    await makeApiRequest(endpoint);
+    
+    const responseTime = Date.now() - startTime;
+    return { success: true, message: 'Connection successful', responseTime };
+  } catch (error) {
+    const errorMessage = error instanceof MobilesentrixApiError 
+      ? error.message 
+      : (error instanceof Error ? error.message : 'Unknown error');
+    return { success: false, message: errorMessage };
+  }
 }
 
 export async function searchProducts(query: string, page: number = 1, limit: number = 20): Promise<MobilesentrixSearchResponse> {

@@ -504,3 +504,51 @@ export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
   console.log(`Sending test email to ${recipientEmail}...`);
   return await sendCombinedQuoteEmail(testData);
 }
+
+// Send API error notification to admin
+export async function sendApiErrorNotification(serviceName: string, errorMessage: string, endpoint?: string): Promise<boolean> {
+  try {
+    const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
+    if (!adminEmailSetting?.content) {
+      console.log('Admin notification email not configured - skipping API error notification');
+      return false;
+    }
+    
+    const gmail = await getGmailClient();
+    
+    const subject = `⚠️ API Error: ${serviceName}`;
+    const emailBody = `API Error Notification
+
+Service: ${serviceName}
+Time: ${new Date().toLocaleString()}
+${endpoint ? `Endpoint: ${endpoint}` : ''}
+
+Error Details:
+${errorMessage}
+
+-------------------
+This is an automated notification from RepairQuote.
+Please check the integration settings and connection status.`;
+
+    const messageHeaders = [
+      `To: ${adminEmailSetting.content}`,
+      'Content-Type: text/plain; charset=utf-8',
+      'MIME-Version: 1.0',
+      `Subject: ${subject}`,
+    ].join('\r\n');
+
+    const message = `${messageHeaders}\r\n\r\n${emailBody}`;
+    const encodedMessage = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encodedMessage },
+    });
+
+    console.log(`API error notification sent to ${adminEmailSetting.content}`);
+    return true;
+  } catch (error) {
+    console.error('Failed to send API error notification:', error);
+    return false;
+  }
+}

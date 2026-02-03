@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database, RefreshCw, AlertCircle } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -5043,6 +5043,70 @@ function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>[
   );
 }
 
+function MobilesentrixApiTest() {
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; responseTime?: number } | null>(null);
+  const [isTesting, setIsTesting] = useState(false);
+  
+  const runTest = async () => {
+    setIsTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch('/api/mobilesentrix/test', { credentials: 'include' });
+      const result = await response.json();
+      setTestResult(result);
+    } catch (error) {
+      setTestResult({ success: false, message: 'Failed to connect to test endpoint' });
+    }
+    setIsTesting(false);
+  };
+  
+  return (
+    <div className="p-3 rounded-lg border bg-muted/50 space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium">API Status</p>
+        <Button 
+          variant="outline" 
+          size="sm" 
+          onClick={runTest}
+          disabled={isTesting}
+          data-testid="button-test-mobilesentrix-api"
+        >
+          {isTesting ? (
+            <>
+              <Loader2 className="h-3 w-3 mr-2 animate-spin" />
+              Testing...
+            </>
+          ) : (
+            <>
+              <RefreshCw className="h-3 w-3 mr-2" />
+              Test Connection
+            </>
+          )}
+        </Button>
+      </div>
+      
+      {testResult && (
+        <div className={`p-2 rounded text-sm ${testResult.success ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'}`}>
+          {testResult.success ? (
+            <div className="flex items-center gap-2">
+              <Check className="h-4 w-4" />
+              <span>{testResult.message}</span>
+              {testResult.responseTime && (
+                <span className="text-xs opacity-70">({testResult.responseTime}ms)</span>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-start gap-2">
+              <AlertCircle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+              <span>{testResult.message}</span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -5969,7 +6033,7 @@ $\{servicePrice} plus taxes
                   </div>
                 ) : mobilesentrixAuthUrl?.authUrl ? (
                   <div className="space-y-2">
-                    <p className="text-sm text-muted-foreground">Click below to authorize with your Mobilesentrix account:</p>
+                    <p className="text-sm text-muted-foreground">Click below to authorize with your Mobilesentrix customer account:</p>
                     <Button 
                       onClick={() => window.open(mobilesentrixAuthUrl.authUrl, '_blank')}
                       data-testid="button-mobilesentrix-authorize"
@@ -5978,7 +6042,7 @@ $\{servicePrice} plus taxes
                       Authorize with Mobilesentrix
                     </Button>
                     <p className="text-xs text-muted-foreground mt-2">
-                      After authorization, add the returned Access Token and Secret to your Replit Secrets.
+                      Authorization is automatic - tokens will be saved and you'll be redirected back.
                     </p>
                   </div>
                 ) : (
@@ -5988,10 +6052,15 @@ $\{servicePrice} plus taxes
             )}
 
             {mobilesentrixStatus?.configured && (
-              <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
-                <p className="text-sm text-green-700 dark:text-green-400">
-                  Parts pricing will be fetched from Mobilesentrix API during quote calculations.
-                </p>
+              <div className="space-y-3">
+                <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    Parts pricing will be fetched from Mobilesentrix API during quote calculations.
+                  </p>
+                </div>
+                
+                {/* API Status Test */}
+                <MobilesentrixApiTest />
               </div>
             )}
           </CardContent>
