@@ -1507,8 +1507,13 @@ export async function registerRoutes(
         });
         return { price: parseFloat(String(apiResult.price)) || 0, name: apiResult.name, found: true, source: 'api' };
       }
-      // SKU not found in API - don't cache to allow retry
-      console.log(`SKU ${sku} not found in Mobilesentrix API`);
+      // SKU not found in Mobilesentrix API - fall back to custom parts
+      console.log(`SKU ${sku} not found in Mobilesentrix API, checking custom parts...`);
+      const customPart = await storage.getPartBySku(sku);
+      if (customPart) {
+        console.log(`Found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
+        return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
+      }
       return { price: 0, name: '', found: false, source: 'api' };
     } catch (error: any) {
       // Don't cache errors - might be temporary API issues
@@ -1516,6 +1521,18 @@ export async function registerRoutes(
         ? `API error ${error.statusCode}: ${error.message}` 
         : error.message || 'Unknown API error';
       console.error(`Mobilesentrix API error for SKU ${sku}:`, errorMsg);
+      
+      // Fall back to custom parts on API error
+      try {
+        const customPart = await storage.getPartBySku(sku);
+        if (customPart) {
+          console.log(`API error but found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
+          return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
+        }
+      } catch (dbError) {
+        console.error(`Error checking custom parts for SKU ${sku}:`, dbError);
+      }
+      
       return { price: 0, name: '', found: false, source: 'api', apiError: errorMsg };
     }
   }
