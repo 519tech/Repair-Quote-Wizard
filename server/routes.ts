@@ -24,7 +24,7 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
-import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError } from "./mobilesentrix";
+import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens } from "./mobilesentrix";
 
 // Extend express-session types
 declare module "express-session" {
@@ -86,6 +86,18 @@ export async function registerRoutes(
 
   // Register Object Storage routes for file uploads
   registerObjectStorageRoutes(app);
+
+  // Load Mobilesentrix tokens from database on startup
+  try {
+    const accessToken = await storage.getMessageTemplate('mobilesentrix_access_token');
+    const accessTokenSecret = await storage.getMessageTemplate('mobilesentrix_access_token_secret');
+    if (accessToken?.content && accessTokenSecret?.content) {
+      setDatabaseTokens(accessToken.content, accessTokenSecret.content);
+      console.log('Mobilesentrix tokens loaded from database');
+    }
+  } catch (error) {
+    console.log('No Mobilesentrix tokens found in database, will use environment variables if available');
+  }
 
   // Admin login with username/password
   app.post("/api/admin/login", async (req, res) => {
@@ -741,20 +753,29 @@ export async function registerRoutes(
       const data = await response.json() as any;
       
       if (data.status === 1 && data.data?.access_token && data.data?.access_token_secret) {
-        // Success - display tokens for manual saving
+        // Success - automatically save tokens to database
+        await storage.upsertMessageTemplate({
+          type: 'mobilesentrix_access_token',
+          content: data.data.access_token
+        });
+        await storage.upsertMessageTemplate({
+          type: 'mobilesentrix_access_token_secret',
+          content: data.data.access_token_secret
+        });
+        
+        // Also load them into memory immediately so API works right away
+        setDatabaseTokens(data.data.access_token, data.data.access_token_secret);
+        
         res.send(`
           <html>
           <head><title>Mobilesentrix Authorization Complete</title></head>
           <body style="font-family: system-ui, sans-serif; padding: 40px; max-width: 600px; margin: 0 auto;">
             <h1 style="color: #22c55e;">✓ Authorization Successful!</h1>
-            <p>Please add these values to your Replit Secrets:</p>
+            <p>Your Mobilesentrix account has been connected automatically.</p>
             <div style="background: #f1f5f9; padding: 20px; border-radius: 8px; margin: 20px 0;">
-              <p><strong>MOBILESENTRIX_ACCESS_TOKEN:</strong></p>
-              <code style="word-break: break-all; background: white; padding: 8px; display: block; border-radius: 4px;">${data.data.access_token}</code>
-              <p style="margin-top: 16px;"><strong>MOBILESENTRIX_ACCESS_TOKEN_SECRET:</strong></p>
-              <code style="word-break: break-all; background: white; padding: 8px; display: block; border-radius: 4px;">${data.data.access_token_secret}</code>
+              <p style="color: #22c55e; font-weight: bold;">✓ Access tokens saved to database</p>
+              <p style="color: #64748b; font-size: 14px;">The connection is now active. You can close this window.</p>
             </div>
-            <p>After adding these secrets, restart the application for the changes to take effect.</p>
             <a href="/admin" style="display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; border-radius: 6px; text-decoration: none;">Return to Admin Panel</a>
           </body>
           </html>

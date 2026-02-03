@@ -64,7 +64,24 @@ function getOAuthClient(): OAuth {
   });
 }
 
+// Store tokens from database for use in API calls
+let cachedDbTokens: { key: string; secret: string } | null = null;
+
+export function setDatabaseTokens(accessToken: string, accessTokenSecret: string): void {
+  cachedDbTokens = { key: accessToken, secret: accessTokenSecret };
+}
+
+export function clearDatabaseTokens(): void {
+  cachedDbTokens = null;
+}
+
 function getAccessToken(): { key: string; secret: string } | null {
+  // First check database tokens (set by OAuth callback)
+  if (cachedDbTokens) {
+    return cachedDbTokens;
+  }
+  
+  // Fall back to environment variables
   const accessToken = process.env.MOBILESENTRIX_ACCESS_TOKEN;
   const accessTokenSecret = process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET;
   
@@ -202,21 +219,30 @@ export async function getProductPrice(sku: string): Promise<number | null> {
 
 export function isMobilesentrixConfigured(): boolean {
   const hasConsumerCreds = !!(process.env.MOBILESENTRIX_CONSUMER_KEY && process.env.MOBILESENTRIX_CONSUMER_SECRET);
-  const hasAccessToken = !!(process.env.MOBILESENTRIX_ACCESS_TOKEN && process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET);
+  // Check database tokens first, then environment variables
+  const hasAccessToken = !!cachedDbTokens || !!(process.env.MOBILESENTRIX_ACCESS_TOKEN && process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET);
   return hasConsumerCreds && hasAccessToken;
 }
 
-export function getMobilesentrixStatus(): { configured: boolean; missingCredentials: string[] } {
+export function getMobilesentrixStatus(): { configured: boolean; missingCredentials: string[]; tokenSource?: string } {
   const missing: string[] = [];
   
   if (!process.env.MOBILESENTRIX_CONSUMER_KEY) missing.push('MOBILESENTRIX_CONSUMER_KEY');
   if (!process.env.MOBILESENTRIX_CONSUMER_SECRET) missing.push('MOBILESENTRIX_CONSUMER_SECRET');
-  if (!process.env.MOBILESENTRIX_ACCESS_TOKEN) missing.push('MOBILESENTRIX_ACCESS_TOKEN');
-  if (!process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET) missing.push('MOBILESENTRIX_ACCESS_TOKEN_SECRET');
+  
+  // Check database tokens first
+  const hasDbTokens = !!cachedDbTokens;
+  const hasEnvTokens = !!(process.env.MOBILESENTRIX_ACCESS_TOKEN && process.env.MOBILESENTRIX_ACCESS_TOKEN_SECRET);
+  
+  if (!hasDbTokens && !hasEnvTokens) {
+    missing.push('MOBILESENTRIX_ACCESS_TOKEN');
+    missing.push('MOBILESENTRIX_ACCESS_TOKEN_SECRET');
+  }
   
   return {
     configured: missing.length === 0,
     missingCredentials: missing,
+    tokenSource: hasDbTokens ? 'database' : hasEnvTokens ? 'environment' : undefined,
   };
 }
 

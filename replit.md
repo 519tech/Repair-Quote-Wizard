@@ -81,7 +81,8 @@ The application's data model includes:
 - **OAuth Authorization Flow**: 
   1. Admin navigates to Settings → Mobilesentrix tab
   2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow (uses customer authentication)
-  3. After authorization, add returned Access Token and Access Token Secret to Replit Secrets
+  3. Authorization is fully automatic - tokens are saved to database and loaded on app restart
+  4. No manual secret management required for OAuth tokens
 - **Required Secrets**:
   - `MOBILESENTRIX_CONSUMER_KEY`: Consumer key from Mobilesentrix
   - `MOBILESENTRIX_CONSUMER_SECRET`: Consumer secret from Mobilesentrix  
