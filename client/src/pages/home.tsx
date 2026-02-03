@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail } from "lucide-react";
+import { ChevronRight, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -719,7 +719,7 @@ export default function Home() {
                   }}
                   data-testid="button-back-services"
                 >
-                  {selectedServices.size > 0 ? "Add another service" : "Back"}
+                  Back
                 </Button>
                 <Button
                   variant="ghost"
@@ -955,10 +955,21 @@ export default function Home() {
                                 </>
                               )}
                             </div>
-                            <Button size="sm" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
-                              <ChevronRight className="h-4 w-4 mr-1" />
-                              Continue
-                            </Button>
+                            <div className="flex items-center gap-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => setSelectedCategoryId(null)}
+                                data-testid="button-add-another-service"
+                              >
+                                <Plus className="h-4 w-4 mr-1" />
+                                Add another service
+                              </Button>
+                              <Button size="sm" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
+                                <ChevronRight className="h-4 w-4 mr-1" />
+                                Continue
+                              </Button>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
