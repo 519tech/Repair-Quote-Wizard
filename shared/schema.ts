@@ -194,6 +194,7 @@ export const deviceServices = pgTable("device_services", {
   partSku: varchar("part_sku"), // Stored separately so it persists when part is deleted
   alternativePartSkus: text("alternative_part_skus").array(), // Alternative primary parts (cheapest used)
   additionalFee: real("additional_fee").default(0), // Extra fee for specific device-service combos (e.g., Samsung charge port)
+  repairDeskServiceId: integer("repair_desk_service_id"), // Link to RepairDesk service/problem ID for price sync
 }, (table) => [
   unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
 ]);
@@ -320,6 +321,23 @@ export const repairDeskTokens = pgTable("repairdesk_tokens", {
 export const insertRepairDeskTokenSchema = createInsertSchema(repairDeskTokens).omit({ id: true, createdAt: true });
 export type InsertRepairDeskToken = z.infer<typeof insertRepairDeskTokenSchema>;
 export type RepairDeskToken = typeof repairDeskTokens.$inferSelect;
+
+// RepairDesk sync history (tracks price sync operations)
+export const repairDeskSyncHistory = pgTable("repairdesk_sync_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  syncType: text("sync_type").notNull(), // "manual" or "scheduled"
+  status: text("status").notNull(), // "success", "partial", "failed"
+  totalServices: integer("total_services").notNull().default(0),
+  syncedServices: integer("synced_services").notNull().default(0),
+  failedServices: integer("failed_services").notNull().default(0),
+  errorDetails: text("error_details"), // JSON string with details of failures
+  startedAt: text("started_at").notNull().default(sql`now()`),
+  completedAt: text("completed_at"),
+});
+
+export const insertRepairDeskSyncHistorySchema = createInsertSchema(repairDeskSyncHistory).omit({ id: true, startedAt: true });
+export type InsertRepairDeskSyncHistory = z.infer<typeof insertRepairDeskSyncHistorySchema>;
+export type RepairDeskSyncHistory = typeof repairDeskSyncHistory.$inferSelect;
 
 // Extended types for frontend with relations
 export type DeviceWithType = Device & { deviceType: DeviceType; brand: Brand | null };
