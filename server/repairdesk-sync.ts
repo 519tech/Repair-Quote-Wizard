@@ -1,7 +1,8 @@
 import { db } from "./db";
-import { deviceServices, devices, services, repairDeskSyncHistory, serviceCategories, parts } from "@shared/schema";
+import { deviceServices, devices, services, repairDeskSyncHistory } from "@shared/schema";
 import { eq, isNotNull, sql } from "drizzle-orm";
-import { getCachedPrice } from "./mobilesentrix";
+import { storage } from "./storage";
+import { getCachedPrice, getProductBySku, isMobilesentrixConfigured } from "./mobilesentrix";
 
 const REPAIRDESK_API_BASE = "https://api.repairdesk.co/api/web/v1";
 
@@ -43,80 +44,126 @@ export function isRepairDeskSyncConfigured(): boolean {
   return !!getApiKey();
 }
 
+async function getSkuPrice(sku: string): Promise<{ price: number; found: boolean }> {
+  const templates = await storage.getMessageTemplates();
+  const pricingSourceSetting = templates.find(t => t.type === "pricing_source");
+  const pricingSource = pricingSourceSetting?.content || "excel_upload";
+
+  if (pricingSource === "excel_upload") {
+    const supplierPart = await storage.getSupplierPartBySku(sku);
+    if (supplierPart) {
+      return { price: parseFloat(supplierPart.price), found: true };
+    }
+    return { price: 0, found: false };
+  }
+
+  const cached = getCachedPrice(sku);
+  if (cached?.found) {
+    return { price: parseFloat(String(cached.price)) || 0, found: true };
+  }
+
+  if (!isMobilesentrixConfigured()) {
+    const supplierPart = await storage.getSupplierPartBySku(sku);
+    if (supplierPart) {
+      return { price: parseFloat(supplierPart.price), found: true };
+    }
+    return { price: 0, found: false };
+  }
+
+  try {
+    const apiResult = await getProductBySku(sku);
+    if (apiResult) {
+      const price = parseFloat(apiResult.price) || 0;
+      return { price, found: price > 0 };
+    }
+  } catch (error) {
+    console.log(`Mobilesentrix API error for SKU ${sku}, trying fallback`);
+  }
+
+  const supplierPart = await storage.getSupplierPartBySku(sku);
+  if (supplierPart) {
+    return { price: parseFloat(supplierPart.price), found: true };
+  }
+
+  const customPart = await storage.getPartBySku(sku);
+  if (customPart) {
+    return { price: parseFloat(customPart.price), found: true };
+  }
+
+  return { price: 0, found: false };
+}
+
 async function calculateServicePrice(
   deviceServiceId: string
 ): Promise<{ price: number; error?: string }> {
   try {
-    const [ds] = await db
-      .select({
-        id: deviceServices.id,
-        partSku: deviceServices.partSku,
-        additionalFee: deviceServices.additionalFee,
-        alternativePartSkus: deviceServices.alternativePartSkus,
-        laborPrice: services.laborPrice,
-        partsMarkup: services.partsMarkup,
-        secondaryPartPercentage: services.secondaryPartPercentage,
-        labourOnly: services.labourOnly,
-        bypassRounding: services.bypassRounding,
-      })
-      .from(deviceServices)
-      .innerJoin(services, eq(deviceServices.serviceId, services.id))
-      .where(eq(deviceServices.id, deviceServiceId));
-
-    if (!ds) {
+    const dsWithRelations = await storage.getDeviceServiceWithRelations(deviceServiceId);
+    if (!dsWithRelations) {
       return { price: 0, error: "Device service not found" };
     }
 
-    const laborPrice = parseFloat(ds.laborPrice || "0");
-    const partsMarkup = parseFloat(ds.partsMarkup || "1.0");
-    const additionalFee = ds.additionalFee || 0;
+    const service = dsWithRelations.service;
+    if (!service) {
+      return { price: 0, error: "Service not found" };
+    }
 
-    if (ds.labourOnly) {
+    const laborPrice = parseFloat(service.laborPrice || "0");
+    const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+    const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
+    const additionalFee = (dsWithRelations as any).additionalFee || 0;
+
+    if (service.labourOnly) {
       let finalPrice = laborPrice + additionalFee;
-      if (!ds.bypassRounding) {
+      if (!service.bypassRounding) {
         finalPrice = Math.round(finalPrice / 5) * 5 - 1;
         if (finalPrice < 0) finalPrice = laborPrice + additionalFee;
       }
       return { price: finalPrice };
     }
 
-    let partCost = 0;
     const primarySkus: string[] = [];
-    if (ds.partSku) primarySkus.push(ds.partSku);
-    if (ds.alternativePartSkus?.length) {
-      primarySkus.push(...ds.alternativePartSkus);
+    const primaryPartSku = (dsWithRelations as any).partSku;
+    if (primaryPartSku) primarySkus.push(primaryPartSku);
+    const alternativeSkus = (dsWithRelations as any).alternativePartSkus || [];
+    if (alternativeSkus.length > 0) {
+      primarySkus.push(...alternativeSkus);
     }
 
-    if (primarySkus.length > 0) {
-      let lowestPrice = Infinity;
-      for (const sku of primarySkus) {
-        const cached = getCachedPrice(sku);
-        if (cached?.found) {
-          const price = parseFloat(String(cached.price)) || 0;
-          if (price > 0 && price < lowestPrice) {
-            lowestPrice = price;
-          }
-        } else {
-          const [part] = await db.select().from(parts).where(eq(parts.sku, sku));
-          if (part) {
-            const price = parseFloat(part.price) || 0;
-            if (price > 0 && price < lowestPrice) {
-              lowestPrice = price;
-            }
-          }
+    const primaryPartOptions: { sku: string; price: number }[] = [];
+    for (const sku of primarySkus) {
+      const priceResult = await getSkuPrice(sku);
+      if (priceResult.found) {
+        primaryPartOptions.push({ sku, price: priceResult.price });
+      }
+    }
+
+    let cheapestPrimaryPrice = 0;
+    if (primaryPartOptions.length > 0) {
+      cheapestPrimaryPrice = primaryPartOptions.reduce(
+        (min, p) => (p.price < min ? p.price : min),
+        primaryPartOptions[0].price
+      );
+    }
+
+    const additionalParts = await storage.getDeviceServiceParts(deviceServiceId);
+    let additionalPartsCost = 0;
+    for (const ap of additionalParts) {
+      if (!ap.isPrimary && ap.part?.sku) {
+        const priceResult = await getSkuPrice(ap.part.sku);
+        if (priceResult.found) {
+          additionalPartsCost += priceResult.price * secondaryPartPercentage;
         }
       }
-      if (lowestPrice !== Infinity) {
-        partCost = lowestPrice;
-      }
     }
 
-    const partsCostWithMarkup = partCost * partsMarkup;
-    let totalPrice = laborPrice + partsCostWithMarkup + additionalFee;
+    const totalPartCost = cheapestPrimaryPrice + additionalPartsCost;
+    const markedUpPartCost = totalPartCost * partsMarkup;
+    const rawTotal = laborPrice + markedUpPartCost + additionalFee;
 
-    if (!ds.bypassRounding) {
-      totalPrice = Math.round(totalPrice / 5) * 5 - 1;
-      if (totalPrice < 0) totalPrice = laborPrice + partsCostWithMarkup + additionalFee;
+    let totalPrice = rawTotal;
+    if (!service.bypassRounding) {
+      totalPrice = Math.round(rawTotal / 5) * 5 - 1;
+      if (totalPrice < 0) totalPrice = rawTotal;
     }
 
     return { price: totalPrice };

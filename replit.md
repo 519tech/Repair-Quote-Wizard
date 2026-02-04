@@ -70,6 +70,25 @@ The application's data model includes:
 - **Admin Management**: Connection status is shown in the Settings tab. The API key is managed via the `REPAIRDESK_API_KEY` secret.
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
 
+### RepairDesk Price Sync
+- **Purpose**: Automatically syncs calculated service prices from this application to RepairDesk services every 2 days.
+- **How it works**: 
+  1. Admin adds RepairDesk Service ID to device-service links via the admin panel (Edit link → "RepairDesk Service ID" field)
+  2. Price calculation uses the same logic as quotes: labor + (part cost × markup) + additional fee
+  3. Scheduled sync runs every 2 days automatically when the server starts
+  4. Manual sync available via Settings → RepairDesk → "Sync Prices Now" button
+- **Database Schema**:
+  - `repairDeskServiceId` field added to `deviceServices` table (integer, nullable)
+  - `repairDeskSyncHistory` table tracks all sync attempts with status, counts, and error details
+- **API Endpoints**:
+  - `GET /api/repairdesk/sync/status` - Returns sync configuration status and linked services count
+  - `POST /api/repairdesk/sync/trigger` - Triggers manual sync and returns results
+  - `GET /api/repairdesk/sync/history` - Returns recent sync history with results
+  - `GET /api/repairdesk/sync/broken-links` - Returns warnings about misconfigured links
+- **Sync Module**: Located at `server/repairdesk-sync.ts` with price calculation logic
+- **Broken Link Detection**: Identifies device-service links with missing parts or invalid RepairDesk IDs
+- **Note**: The actual RepairDesk API endpoint for updating service prices (PUT /problems/{id}) may need confirmation with RepairDesk support
+
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
 - **Pricing Source Toggle**: Admin can choose between two pricing sources in Settings → Mobilesentrix tab:
