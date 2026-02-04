@@ -5143,6 +5143,55 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     queryKey: ["/api/repairdesk/status"],
   });
 
+  // RepairDesk Sync Status
+  const { data: repairDeskSyncStatus, refetch: refetchSyncStatus } = useQuery<{ 
+    configured: boolean; 
+    connected: boolean; 
+    linkedServicesCount: number; 
+    lastSyncTime: string | null 
+  }>({
+    queryKey: ["/api/repairdesk/sync/status"],
+  });
+
+  const { data: repairDeskSyncHistory = [] } = useQuery<Array<{
+    id: string;
+    syncType: string;
+    status: string;
+    totalServices: number;
+    syncedServices: number;
+    failedServices: number;
+    startedAt: string;
+    completedAt: string | null;
+  }>>({
+    queryKey: ["/api/repairdesk/sync/history"],
+  });
+
+  const { data: repairDeskBrokenLinks = [] } = useQuery<Array<{
+    deviceServiceId: string;
+    deviceName: string;
+    serviceName: string;
+    repairDeskServiceId: number | null;
+    issue: string;
+  }>>({
+    queryKey: ["/api/repairdesk/sync/broken-links"],
+  });
+
+  const triggerSyncMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/repairdesk/sync/trigger");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/repairdesk/sync/status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repairdesk/sync/history"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/repairdesk/sync/broken-links"] });
+      toast({ title: "Sync completed", description: `${data.syncedServices}/${data.totalServices} services synced successfully` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Sync failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   // Mobilesentrix Integration
   const { data: mobilesentrixStatus, refetch: refetchMobilesentrixStatus } = useQuery<{ configured: boolean; missingCredentials: string[] }>({
     queryKey: ["/api/mobilesentrix/status"],
@@ -6002,6 +6051,121 @@ $\{servicePrice} plus taxes
               />
             </div>
             <p className="text-xs text-muted-foreground">Note: Requires RepairDesk API key to be configured</p>
+          </CardContent>
+        </Card>
+
+        {/* RepairDesk Price Sync Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              RepairDesk Price Sync
+            </CardTitle>
+            <CardDescription>Automatically sync calculated prices to RepairDesk services every 2 days</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Connection Status */}
+            <div className="flex items-center justify-between p-3 rounded-lg border">
+              <div>
+                <p className="font-medium text-sm">Sync Status</p>
+                <p className="text-xs text-muted-foreground">
+                  {repairDeskSyncStatus?.linkedServicesCount || 0} device-service links configured with RepairDesk IDs
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {repairDeskSyncStatus?.connected ? (
+                  <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <Check className="h-3 w-3 mr-1" />
+                    Ready
+                  </Badge>
+                ) : (
+                  <Badge variant="secondary" className="bg-muted">
+                    Not Configured
+                  </Badge>
+                )}
+              </div>
+            </div>
+
+            {/* Last Sync Time */}
+            {repairDeskSyncStatus?.lastSyncTime && (
+              <div className="p-3 rounded-lg border">
+                <p className="text-sm">
+                  <span className="font-medium">Last Sync:</span>{" "}
+                  {new Date(repairDeskSyncStatus.lastSyncTime).toLocaleString()}
+                </p>
+              </div>
+            )}
+
+            {/* Manual Sync Button */}
+            <Button
+              onClick={() => triggerSyncMutation.mutate()}
+              disabled={triggerSyncMutation.isPending || !repairDeskSyncStatus?.connected || (repairDeskSyncStatus?.linkedServicesCount || 0) === 0}
+              data-testid="button-trigger-sync"
+            >
+              {triggerSyncMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Syncing...
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync Prices Now
+                </>
+              )}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Prices automatically sync every 2 days. Click to sync immediately.
+            </p>
+
+            {/* Broken Links Warning */}
+            {repairDeskBrokenLinks.length > 0 && (
+              <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
+                <div className="flex items-center gap-2 mb-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <p className="font-medium text-sm text-amber-800 dark:text-amber-400">
+                    {repairDeskBrokenLinks.length} Warning{repairDeskBrokenLinks.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <ul className="space-y-1 text-xs text-amber-700 dark:text-amber-300">
+                  {repairDeskBrokenLinks.slice(0, 5).map((link) => (
+                    <li key={link.deviceServiceId}>
+                      {link.deviceName} - {link.serviceName}: {link.issue}
+                    </li>
+                  ))}
+                  {repairDeskBrokenLinks.length > 5 && (
+                    <li>...and {repairDeskBrokenLinks.length - 5} more</li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            {/* Sync History */}
+            {repairDeskSyncHistory.length > 0 && (
+              <div className="space-y-2">
+                <p className="font-medium text-sm">Recent Sync History</p>
+                <div className="space-y-1 max-h-40 overflow-y-auto">
+                  {repairDeskSyncHistory.slice(0, 5).map((sync) => (
+                    <div key={sync.id} className="flex items-center justify-between p-2 text-xs border rounded">
+                      <div className="flex items-center gap-2">
+                        <Badge variant={sync.status === "success" ? "secondary" : sync.status === "partial" ? "outline" : "destructive"} className="text-[10px]">
+                          {sync.status}
+                        </Badge>
+                        <span>{sync.syncedServices}/{sync.totalServices} synced</span>
+                        <span className="text-muted-foreground">({sync.syncType})</span>
+                      </div>
+                      <span className="text-muted-foreground">
+                        {new Date(sync.startedAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              To link a service: Edit a device-service link and add the RepairDesk Service ID.
+            </p>
           </CardContent>
         </Card>
       </TabsContent>
