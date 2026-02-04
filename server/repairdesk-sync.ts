@@ -184,9 +184,8 @@ async function updateRepairDeskServicePrice(
   }
 
   try {
-    // Note: RepairDesk public API does not currently have a documented endpoint
-    // for updating service/problem prices. This attempts PUT /problems/{id} which
-    // may need to be enabled by RepairDesk support or may not be available.
+    // Update service price in RepairDesk using PUT /problems/{id}
+    // This endpoint accepts price and online_price fields
     const response = await fetch(
       `${REPAIRDESK_API_BASE}/problems/${repairDeskServiceId}?api_key=${encodeURIComponent(apiKey)}`,
       {
