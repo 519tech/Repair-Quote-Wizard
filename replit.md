@@ -71,8 +71,8 @@ The application's data model includes:
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
 
 ### RepairDesk Price Sync
-- **Purpose**: Calculate service prices using the same logic as quotes and sync them to RepairDesk services.
-- **API Limitation**: The RepairDesk public API does not currently have a documented endpoint for updating service prices (PUT /problems/{id}). The system will attempt the sync but may fail until RepairDesk enables this functionality. Contact RepairDesk support to request API access for price updates.
+- **Purpose**: Calculate service prices using the same logic as quotes for syncing to RepairDesk services.
+- **API Limitation**: The RepairDesk public API does not currently have a working endpoint for updating service prices. PUT requests to /problems/{id} are accepted but silently ignored. Contact support@repairdesk.co to request API access for price updates. Until enabled, use the "View Calculated Prices" feature to see prices for manual entry into RepairDesk.
 - **How it works**: 
   1. Admin adds RepairDesk Service ID to device-service links via the admin panel (Edit link → "RepairDesk Service ID" field)
   2. Price calculation uses the same logic as quotes: labor + (cheapest primary part × markup) + (secondary parts × secondary% × markup) + additional fee
