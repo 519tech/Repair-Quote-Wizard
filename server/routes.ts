@@ -2426,6 +2426,18 @@ export async function registerRoutes(
     }
   });
 
+  // Get calculated prices for all linked services (for manual reference)
+  app.get("/api/repairdesk/sync/calculated-prices", requireAdmin, async (req, res) => {
+    try {
+      const { getCalculatedPrices } = await import("./repairdesk-sync");
+      const prices = await getCalculatedPrices();
+      res.json(prices);
+    } catch (error) {
+      console.error("Failed to get calculated prices:", error);
+      res.status(500).json({ error: "Failed to get calculated prices" });
+    }
+  });
+
   // Start scheduled sync on server startup (every 2 days)
   if (isRepairDeskSyncConfigured()) {
     startScheduledSync(2);

@@ -73,7 +73,9 @@ async function getSkuPrice(sku: string): Promise<{ price: number; found: boolean
   try {
     const apiResult = await getProductBySku(sku);
     if (apiResult) {
-      const price = parseFloat(apiResult.price) || 0;
+      const price = typeof apiResult.price === 'string' 
+        ? parseFloat(apiResult.price) 
+        : (apiResult.price || 0);
       return { price, found: price > 0 };
     }
   } catch (error) {
@@ -182,6 +184,9 @@ async function updateRepairDeskServicePrice(
   }
 
   try {
+    // Note: RepairDesk public API does not currently have a documented endpoint
+    // for updating service/problem prices. This attempts PUT /problems/{id} which
+    // may need to be enabled by RepairDesk support or may not be available.
     const response = await fetch(
       `${REPAIRDESK_API_BASE}/problems/${repairDeskServiceId}?api_key=${encodeURIComponent(apiKey)}`,
       {
@@ -202,7 +207,11 @@ async function updateRepairDeskServicePrice(
     const errorMsg = data.message || `HTTP ${response.status}`;
     
     if (response.status === 404) {
-      return { success: false, error: `Service ID ${repairDeskServiceId} not found in RepairDesk` };
+      return { success: false, error: `Service ID ${repairDeskServiceId} not found` };
+    }
+    
+    if (response.status === 405 || response.status === 501) {
+      return { success: false, error: "Price update endpoint not available - contact RepairDesk support" };
     }
     
     return { success: false, error: errorMsg };
@@ -385,6 +394,47 @@ export async function getLinkedServicesCount(): Promise<number> {
     .from(deviceServices)
     .where(isNotNull(deviceServices.repairDeskServiceId));
   return Number(result?.count) || 0;
+}
+
+export interface CalculatedPrice {
+  deviceServiceId: string;
+  repairDeskServiceId: number;
+  deviceName: string;
+  serviceName: string;
+  calculatedPrice: number;
+  error?: string;
+}
+
+export async function getCalculatedPrices(): Promise<CalculatedPrice[]> {
+  const linkedServices = await db
+    .select({
+      id: deviceServices.id,
+      repairDeskServiceId: deviceServices.repairDeskServiceId,
+      deviceName: devices.name,
+      serviceName: services.name,
+    })
+    .from(deviceServices)
+    .innerJoin(devices, eq(deviceServices.deviceId, devices.id))
+    .innerJoin(services, eq(deviceServices.serviceId, services.id))
+    .where(isNotNull(deviceServices.repairDeskServiceId));
+
+  const results: CalculatedPrice[] = [];
+  
+  for (const ds of linkedServices) {
+    if (!ds.repairDeskServiceId) continue;
+    
+    const priceResult = await calculateServicePrice(ds.id);
+    results.push({
+      deviceServiceId: ds.id,
+      repairDeskServiceId: ds.repairDeskServiceId,
+      deviceName: ds.deviceName,
+      serviceName: ds.serviceName,
+      calculatedPrice: priceResult.price,
+      error: priceResult.error,
+    });
+  }
+  
+  return results;
 }
 
 let syncInterval: NodeJS.Timeout | null = null;

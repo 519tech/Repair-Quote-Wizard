@@ -71,12 +71,14 @@ The application's data model includes:
 - **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
 
 ### RepairDesk Price Sync
-- **Purpose**: Automatically syncs calculated service prices from this application to RepairDesk services every 2 days.
+- **Purpose**: Calculate service prices using the same logic as quotes and sync them to RepairDesk services.
+- **API Limitation**: The RepairDesk public API does not currently have a documented endpoint for updating service prices (PUT /problems/{id}). The system will attempt the sync but may fail until RepairDesk enables this functionality. Contact RepairDesk support to request API access for price updates.
 - **How it works**: 
   1. Admin adds RepairDesk Service ID to device-service links via the admin panel (Edit link → "RepairDesk Service ID" field)
-  2. Price calculation uses the same logic as quotes: labor + (part cost × markup) + additional fee
-  3. Scheduled sync runs every 2 days automatically when the server starts
+  2. Price calculation uses the same logic as quotes: labor + (cheapest primary part × markup) + (secondary parts × secondary% × markup) + additional fee
+  3. Scheduled sync attempts run every 2 days automatically when the server starts
   4. Manual sync available via Settings → RepairDesk → "Sync Prices Now" button
+  5. Even if sync fails, calculated prices are visible in admin for manual reference
 - **Database Schema**:
   - `repairDeskServiceId` field added to `deviceServices` table (integer, nullable)
   - `repairDeskSyncHistory` table tracks all sync attempts with status, counts, and error details
@@ -85,9 +87,9 @@ The application's data model includes:
   - `POST /api/repairdesk/sync/trigger` - Triggers manual sync and returns results
   - `GET /api/repairdesk/sync/history` - Returns recent sync history with results
   - `GET /api/repairdesk/sync/broken-links` - Returns warnings about misconfigured links
+  - `GET /api/repairdesk/sync/calculated-prices` - Returns all calculated prices for linked services (for manual reference)
 - **Sync Module**: Located at `server/repairdesk-sync.ts` with price calculation logic
 - **Broken Link Detection**: Identifies device-service links with missing parts or invalid RepairDesk IDs
-- **Note**: The actual RepairDesk API endpoint for updating service prices (PUT /problems/{id}) may need confirmation with RepairDesk support
 
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
