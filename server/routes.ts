@@ -24,6 +24,7 @@ import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sen
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms, sendTestSms } from "./sms";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, createLead } from "./repairdesk";
+import { syncAllPricesToRepairDesk, getSyncHistory, getLastSyncTime, getBrokenLinks, getLinkedServicesCount, isRepairDeskSyncConfigured, startScheduledSync } from "./repairdesk-sync";
 import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection, getCachedPrice, setCachedPrice, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
 
@@ -2373,6 +2374,62 @@ export async function registerRoutes(
       res.status(500).json({ error: "Failed to check stock" });
     }
   });
+
+  // RepairDesk Sync API Routes
+  app.get("/api/repairdesk/sync/status", requireAdmin, async (req, res) => {
+    try {
+      const configured = isRepairDeskSyncConfigured();
+      const connected = configured ? await isRepairDeskConnected() : false;
+      const linkedServicesCount = await getLinkedServicesCount();
+      const lastSyncTime = await getLastSyncTime();
+      
+      res.json({
+        configured,
+        connected,
+        linkedServicesCount,
+        lastSyncTime,
+      });
+    } catch (error) {
+      console.error("Failed to get RepairDesk sync status:", error);
+      res.status(500).json({ error: "Failed to get sync status" });
+    }
+  });
+
+  app.post("/api/repairdesk/sync/trigger", requireAdmin, async (req, res) => {
+    try {
+      const result = await syncAllPricesToRepairDesk("manual");
+      res.json(result);
+    } catch (error) {
+      console.error("Failed to trigger RepairDesk sync:", error);
+      res.status(500).json({ error: "Failed to trigger sync" });
+    }
+  });
+
+  app.get("/api/repairdesk/sync/history", requireAdmin, async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const history = await getSyncHistory(limit);
+      res.json(history);
+    } catch (error) {
+      console.error("Failed to get sync history:", error);
+      res.status(500).json({ error: "Failed to get sync history" });
+    }
+  });
+
+  app.get("/api/repairdesk/sync/broken-links", requireAdmin, async (req, res) => {
+    try {
+      const brokenLinks = await getBrokenLinks();
+      res.json(brokenLinks);
+    } catch (error) {
+      console.error("Failed to get broken links:", error);
+      res.status(500).json({ error: "Failed to get broken links" });
+    }
+  });
+
+  // Start scheduled sync on server startup (every 2 days)
+  if (isRepairDeskSyncConfigured()) {
+    startScheduledSync(2);
+  }
 
   return httpServer;
 }
