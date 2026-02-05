@@ -1049,6 +1049,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [linkAlternativePartInfo, setLinkAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [linkAltPartSearch, setLinkAltPartSearch] = useState("");
   const [linkAdditionalFee, setLinkAdditionalFee] = useState<string>("");
+  const [linkManualPriceOverride, setLinkManualPriceOverride] = useState<string>("");
   const [debouncedLinkAltPartSearch, setDebouncedLinkAltPartSearch] = useState("");
 
   // Bulk add links state
@@ -1269,7 +1270,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateLinkMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number; manualPriceOverride?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -1277,6 +1278,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       queryClient.invalidateQueries({ queryKey: ["/api/device-services"] });
       setEditLinkOpen(false);
       setEditLinkItem(null);
+      setLinkManualPriceOverride("");
       toast({ title: "Service link updated" });
     },
     onError: (error: Error) => {
@@ -1389,6 +1391,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
     setLinkAlternativePartSkus(altSkus);
     setLinkAltPartSearch("");
     setLinkAdditionalFee((link as any).additionalFee ? String((link as any).additionalFee) : "");
+    setLinkManualPriceOverride((link as any).manualPriceOverride ? String((link as any).manualPriceOverride) : "");
     setEditLinkOpen(true);
     
     // Fetch part info for existing alternative SKUs
@@ -1421,6 +1424,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
         partSku: linkPartSku || undefined,
         alternativePartSkus: linkAlternativePartSkus,
         additionalFee: linkAdditionalFee ? parseFloat(linkAdditionalFee) : 0,
+        manualPriceOverride: linkManualPriceOverride ? linkManualPriceOverride : null,
       },
     });
   };
@@ -1975,7 +1979,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       </Dialog>
 
       {/* Edit Service Link Dialog */}
-      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); setLinkAdditionalFee(""); } }}>
+      <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); setLinkAdditionalFee(""); setLinkManualPriceOverride(""); } }}>
         <DialogContent className="max-w-lg">
           <form onSubmit={handleEditLinkSubmit}>
             <DialogHeader>
@@ -2091,6 +2095,22 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   data-testid="input-link-additional-fee"
                 />
                 <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination (e.g., Samsung charge port). Added to total before rounding.</p>
+              </div>
+
+              {/* Manual Price Override */}
+              <div className="space-y-2">
+                <Label htmlFor="link-manual-price-override">Manual Price Override ($)</Label>
+                <Input
+                  id="link-manual-price-override"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="e.g. 129.99"
+                  value={linkManualPriceOverride}
+                  onChange={(e) => setLinkManualPriceOverride(e.target.value)}
+                  data-testid="input-link-manual-price-override"
+                />
+                <p className="text-xs text-muted-foreground">If set, bypasses all price calculations (labor, parts, markup, rounding) and displays this exact price to customers.</p>
               </div>
               
               {/* Alternative Primary Parts Section */}
@@ -3691,6 +3711,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
   const [editAdditionalFee, setEditAdditionalFee] = useState<string>("");
   const [editRepairDeskServiceId, setEditRepairDeskServiceId] = useState<string>("");
+  const [editManualPriceOverride, setEditManualPriceOverride] = useState<string>("");
   const [additionalPartSku, setAdditionalPartSku] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
   const [debouncedEditPartSearch, setDebouncedEditPartSearch] = useState("");
@@ -3985,7 +4006,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number; repairDeskServiceId?: number | null } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number; repairDeskServiceId?: number | null; manualPriceOverride?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -4000,6 +4021,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
       setEditAltPartSearch("");
       setEditAdditionalFee("");
       setEditRepairDeskServiceId("");
+      setEditManualPriceOverride("");
       toast({ title: "Link updated" });
     },
     onError: (error: Error) => {
@@ -4096,6 +4118,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     setEditAltPartSearch("");
     setEditAdditionalFee((ds as any).additionalFee ? String((ds as any).additionalFee) : "");
     setEditRepairDeskServiceId((ds as any).repairDeskServiceId ? String((ds as any).repairDeskServiceId) : "");
+    setEditManualPriceOverride((ds as any).manualPriceOverride ? String((ds as any).manualPriceOverride) : "");
     setEditOpen(true);
     
     // Fetch part info for existing alternative SKUs to populate tooltips
@@ -4131,6 +4154,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
         additionalFee: editAdditionalFee ? parseFloat(editAdditionalFee) : 0,
         repairDeskServiceId: editRepairDeskServiceId ? parseInt(editRepairDeskServiceId, 10) : null,
+        manualPriceOverride: editManualPriceOverride ? editManualPriceOverride : null,
       },
     });
   };
@@ -4436,6 +4460,22 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                     data-testid="input-edit-additional-fee"
                   />
                   <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination. Added to total before rounding.</p>
+                </div>
+
+                {/* Manual Price Override */}
+                <div className="space-y-2">
+                  <Label htmlFor="edit-manual-price-override">Manual Price Override (optional)</Label>
+                  <Input
+                    id="edit-manual-price-override"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 129.99"
+                    value={editManualPriceOverride}
+                    onChange={(e) => setEditManualPriceOverride(e.target.value)}
+                    data-testid="input-edit-manual-price-override"
+                  />
+                  <p className="text-xs text-muted-foreground">If set, bypasses all price calculations (labor, parts, markup, rounding) and displays this exact price to customers.</p>
                 </div>
 
                 {/* RepairDesk Service ID */}

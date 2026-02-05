@@ -1143,6 +1143,8 @@ export async function registerRoutes(
     partId: z.string().optional(),
     alternativePartSkus: z.array(z.string()).optional(),
     additionalFee: z.number().optional(),
+    repairDeskServiceId: z.number().nullable().optional(),
+    manualPriceOverride: z.string().nullable().optional(), // If set, bypasses all pricing calculations
   });
 
   app.post("/api/device-services", requireAdmin, async (req, res) => {
@@ -1346,6 +1348,8 @@ export async function registerRoutes(
       if (partSku !== undefined) data.partSku = partSku || null;
       if (input.alternativePartSkus !== undefined) data.alternativePartSkus = input.alternativePartSkus || null;
       if (input.additionalFee !== undefined) data.additionalFee = input.additionalFee;
+      if (input.repairDeskServiceId !== undefined) data.repairDeskServiceId = input.repairDeskServiceId;
+      if (input.manualPriceOverride !== undefined) data.manualPriceOverride = input.manualPriceOverride;
       
       const deviceService = await storage.updateDeviceService(req.params.id, data);
       if (!deviceService) {
@@ -1540,6 +1544,7 @@ export async function registerRoutes(
 
   // Quote calculation endpoint - calculates price on server side
   // Formula: Labor price + (parts cost × parts markup), rounded to nearest 5 minus 1
+  // If manualPriceOverride is set, bypasses all calculations and returns that exact price
   app.get("/api/calculate-quote/:deviceServiceId", async (req, res) => {
     try {
       const deviceService = await storage.getDeviceServiceWithRelations(req.params.deviceServiceId);
@@ -1548,6 +1553,40 @@ export async function registerRoutes(
       }
       
       const service = deviceService.service;
+      
+      // Check for manual price override - bypasses all calculations
+      const manualPriceOverride = (deviceService as any).manualPriceOverride;
+      if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+        const overridePrice = parseFloat(manualPriceOverride);
+        if (!isNaN(overridePrice)) {
+          return res.json({
+            deviceServiceId: deviceService.id,
+            deviceName: deviceService.device.name,
+            serviceName: service.name,
+            serviceDescription: service.description,
+            warranty: service.warranty,
+            repairTime: service.repairTime,
+            laborPrice: "0.00",
+            partsMarkup: "1.0",
+            secondaryPartPercentage: 100,
+            partCost: "0.00",
+            partSku: null,
+            partName: null,
+            primaryPartSkus: [],
+            additionalPartSkus: [],
+            additionalPartsCount: 0,
+            additionalPartsCost: "0.00",
+            totalPartCost: "0.00",
+            totalPrice: overridePrice.toFixed(2),
+            hasPart: true,
+            isLabourOnly: false,
+            isAvailable: true,
+            bypassMultiDiscount: service.bypassMultiDiscount || false,
+            isManualPriceOverride: true,
+          });
+        }
+      }
+      
       const laborPrice = parseFloat(service.laborPrice || "0");
       const partsMarkup = parseFloat(service.partsMarkup || "1.0");
       const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;

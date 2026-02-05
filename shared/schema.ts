@@ -195,6 +195,7 @@ export const deviceServices = pgTable("device_services", {
   alternativePartSkus: text("alternative_part_skus").array(), // Alternative primary parts (cheapest used)
   additionalFee: real("additional_fee").default(0), // Extra fee for specific device-service combos (e.g., Samsung charge port)
   repairDeskServiceId: integer("repair_desk_service_id"), // Link to RepairDesk service/problem ID for price sync
+  manualPriceOverride: decimal("manual_price_override", { precision: 10, scale: 2 }), // If set, bypasses all pricing calculations
 }, (table) => [
   unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
 ]);

@@ -81,6 +81,7 @@ The application's data model includes:
   5. Even if sync fails, calculated prices are visible in admin for manual reference
 - **Database Schema**:
   - `repairDeskServiceId` field added to `deviceServices` table (integer, nullable)
+  - `manualPriceOverride` field added to `deviceServices` table (decimal, nullable) - bypasses all calculations when set
   - `repairDeskSyncHistory` table tracks all sync attempts with status, counts, and error details
 - **API Endpoints**:
   - `GET /api/repairdesk/sync/status` - Returns sync configuration status and linked services count

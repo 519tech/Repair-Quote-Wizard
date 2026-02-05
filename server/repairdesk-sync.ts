@@ -109,6 +109,15 @@ async function calculateServicePrice(
       return { price: 0, error: "Service not found" };
     }
 
+    // Check for manual price override - bypasses all calculations
+    const manualPriceOverride = (dsWithRelations as any).manualPriceOverride;
+    if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+      const overridePrice = parseFloat(manualPriceOverride);
+      if (!isNaN(overridePrice)) {
+        return { price: overridePrice };
+      }
+    }
+
     const laborPrice = parseFloat(service.laborPrice || "0");
     const partsMarkup = parseFloat(service.partsMarkup || "1.0");
     const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
