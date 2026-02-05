@@ -1723,23 +1723,48 @@ export async function registerRoutes(
       }
       
       const service = deviceService.service;
-      const laborPrice = parseFloat(service.laborPrice || "0");
-      const partsMarkup = parseFloat(service.partsMarkup || "1.0");
       
-      // Get part price from Mobilesentrix API (or database fallback)
-      let partCost = 0;
-      const primaryPartSku = (deviceService as any).partSku;
-      if (primaryPartSku) {
-        const priceResult = await getSkuPrice(primaryPartSku);
-        if (priceResult.found) {
-          partCost = priceResult.price;
+      // Check for manual price override first - bypasses all calculations
+      let quotedPrice: string;
+      const manualPriceOverride = (deviceService as any).manualPriceOverride;
+      if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+        const overridePrice = parseFloat(manualPriceOverride);
+        if (!isNaN(overridePrice)) {
+          quotedPrice = overridePrice.toFixed(2);
+        } else {
+          // Fallback to calculation if override is invalid
+          const laborPrice = parseFloat(service.laborPrice || "0");
+          const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+          let partCost = 0;
+          const primaryPartSku = (deviceService as any).partSku;
+          if (primaryPartSku) {
+            const priceResult = await getSkuPrice(primaryPartSku);
+            if (priceResult.found) {
+              partCost = priceResult.price;
+            }
+          }
+          const markedUpPartCost = partCost * partsMarkup;
+          const additionalFee = (deviceService as any).additionalFee || 0;
+          const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+          quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
         }
+      } else {
+        // Normal price calculation
+        const laborPrice = parseFloat(service.laborPrice || "0");
+        const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+        let partCost = 0;
+        const primaryPartSku = (deviceService as any).partSku;
+        if (primaryPartSku) {
+          const priceResult = await getSkuPrice(primaryPartSku);
+          if (priceResult.found) {
+            partCost = priceResult.price;
+          }
+        }
+        const markedUpPartCost = partCost * partsMarkup;
+        const additionalFee = (deviceService as any).additionalFee || 0;
+        const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+        quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
       }
-      
-      const markedUpPartCost = partCost * partsMarkup;
-      const additionalFee = (deviceService as any).additionalFee || 0;
-      const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-      const quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
       
       const quote = await storage.createQuoteRequest({
         customerName: input.customerName,
@@ -1813,23 +1838,48 @@ export async function registerRoutes(
         
         deviceName = deviceService.device.name;
         const service = deviceService.service;
-        const laborPrice = parseFloat(service.laborPrice || "0");
-        const partsMarkup = parseFloat(service.partsMarkup || "1.0");
         
-        // Get part price from Mobilesentrix API (or database fallback)
-        let partCost = 0;
-        const primaryPartSku = (deviceService as any).partSku;
-        if (primaryPartSku) {
-          const priceResult = await getSkuPrice(primaryPartSku);
-          if (priceResult.found) {
-            partCost = priceResult.price;
+        // Check for manual price override first - bypasses all calculations
+        let quotedPrice: number;
+        const manualPriceOverride = (deviceService as any).manualPriceOverride;
+        if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+          const overridePrice = parseFloat(manualPriceOverride);
+          if (!isNaN(overridePrice)) {
+            quotedPrice = overridePrice;
+          } else {
+            // Fallback to calculation if override is invalid
+            const laborPrice = parseFloat(service.laborPrice || "0");
+            const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+            let partCost = 0;
+            const primaryPartSku = (deviceService as any).partSku;
+            if (primaryPartSku) {
+              const priceResult = await getSkuPrice(primaryPartSku);
+              if (priceResult.found) {
+                partCost = priceResult.price;
+              }
+            }
+            const markedUpPartCost = partCost * partsMarkup;
+            const additionalFee = (deviceService as any).additionalFee || 0;
+            const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+            quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
           }
+        } else {
+          // Normal price calculation
+          const laborPrice = parseFloat(service.laborPrice || "0");
+          const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+          let partCost = 0;
+          const primaryPartSku = (deviceService as any).partSku;
+          if (primaryPartSku) {
+            const priceResult = await getSkuPrice(primaryPartSku);
+            if (priceResult.found) {
+              partCost = priceResult.price;
+            }
+          }
+          const markedUpPartCost = partCost * partsMarkup;
+          const additionalFee = (deviceService as any).additionalFee || 0;
+          const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+          quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
         }
-        
-        const markedUpPartCost = partCost * partsMarkup;
-        const additionalFee = (deviceService as any).additionalFee || 0;
-        const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-        const quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
         
         servicesData.push({
           serviceName: service.name,
