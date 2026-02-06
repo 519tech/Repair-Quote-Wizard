@@ -912,23 +912,29 @@ export default function Embed() {
                   {selectedServices.size > 0 && (
                     <div className="sticky bottom-2 mt-4">
                       <Card className="shadow-lg border-primary/20">
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between gap-4">
-                            <div>
-                              <p className="text-sm text-muted-foreground">
-                                {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
-                              </p>
-                              {!hidePricesUntilContact && !hidePricesCompletely && (
-                                <>
-                                  {getMultiServiceDiscount() > 0 && (
-                                    <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
-                                  )}
-                                  <p className="text-xl font-bold text-primary">
-                                    Total: ${getGrandTotal().toFixed(2)}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground">plus taxes</p>
-                                </>
-                              )}
+                        <CardContent className="p-3 sm:p-4">
+                          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex items-center justify-between sm:block gap-2">
+                              <div>
+                                <p className="text-sm text-muted-foreground">
+                                  {selectedServices.size} service{selectedServices.size > 1 ? 's' : ''} selected
+                                </p>
+                                {!hidePricesUntilContact && !hidePricesCompletely && (
+                                  <>
+                                    {getMultiServiceDiscount() > 0 && (
+                                      <p className="text-xs text-green-600 font-medium">Multi-service discount: -${getMultiServiceDiscount().toFixed(2)}</p>
+                                    )}
+                                    <p className="text-xl font-bold text-primary">
+                                      Total: ${getGrandTotal().toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">plus taxes</p>
+                                  </>
+                                )}
+                              </div>
+                              <Button size="sm" className="sm:hidden" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
+                                <ChevronRight className="h-4 w-4 mr-1" />
+                                Continue
+                              </Button>
                             </div>
                             <div className="flex items-center gap-2">
                               <Button 
@@ -940,7 +946,7 @@ export default function Embed() {
                                 <Plus className="h-4 w-4 mr-1" />
                                 Add another service
                               </Button>
-                              <Button size="sm" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
+                              <Button size="sm" className="hidden sm:inline-flex" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
                                 <ChevronRight className="h-4 w-4 mr-1" />
                                 Continue
                               </Button>
