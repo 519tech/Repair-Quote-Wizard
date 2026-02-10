@@ -168,6 +168,9 @@ function SubmissionsTab() {
 }
 
 export default function Admin() {
+  useEffect(() => {
+    document.title = "Admin Panel | 519 Tech Services";
+  }, []);
   const { toast } = useToast();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");

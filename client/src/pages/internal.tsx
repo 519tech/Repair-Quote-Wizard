@@ -33,6 +33,9 @@ interface QuoteData {
 }
 
 export default function Internal() {
+  useEffect(() => {
+    document.title = "Counter Lookup | 519 Tech Services";
+  }, []);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -231,8 +234,8 @@ export default function Internal() {
 
       <main className="container mx-auto px-4 py-6 max-w-4xl">
         <div className="mb-6">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+          <div className="relative" role="search">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
             <Input
               ref={inputRef}
               value={searchQuery}
@@ -240,6 +243,7 @@ export default function Internal() {
               placeholder="Search device model..."
               className="pl-10 pr-10 h-14 text-lg"
               data-testid="input-internal-search"
+              aria-label="Search for a device model"
               autoFocus
             />
             {searchQuery && (

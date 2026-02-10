@@ -138,6 +138,18 @@ export default function Home() {
     }
   };
 
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      search: "Get a Repair Quote | 519 Tech Services",
+      services: "Select Repair Services | 519 Tech Services",
+      quote: "Your Repair Quote | 519 Tech Services",
+      contact: "Contact Details | 519 Tech Services",
+      unknown: "Describe Your Device | 519 Tech Services",
+      success: "Quote Submitted | 519 Tech Services",
+    };
+    document.title = titles[view] || "Get a Repair Quote | 519 Tech Services";
+  }, [view]);
+
   // Search effect
   useEffect(() => {
     if (searchTimeoutRef.current) {
@@ -558,7 +570,7 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4">
+    <main className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5 p-4">
       <div className="max-w-3xl mx-auto space-y-4">
         
         {/* Admin Button */}
@@ -579,7 +591,7 @@ export default function Home() {
             <CardHeader className="text-center">
               <img 
                 src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
-                alt="519 Tech Services" 
+                alt="519 Tech Services - Device Repair Specialists" 
                 className="h-16 mx-auto mb-2"
               />
               <CardTitle className="text-lg">Get a Repair Quote</CardTitle>
@@ -587,8 +599,8 @@ export default function Home() {
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="relative" role="search">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input
                   placeholder="Search your device model..."
                   value={searchQuery}
@@ -596,6 +608,7 @@ export default function Home() {
                   onFocus={() => setShowSearch(true)}
                   className="pl-9 pr-10 h-12 text-base"
                   data-testid="input-device-search"
+                  aria-label="Search for your device model"
                 />
                 {searchQuery && (
                   <div className="absolute right-0 top-0 h-full flex items-center pr-1">
@@ -1442,6 +1455,6 @@ export default function Home() {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
