@@ -78,7 +78,7 @@ export default function Internal() {
       } finally {
         setSearchLoading(false);
       }
-    }, 300);
+    }, 200);
     return () => {
       if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
     };

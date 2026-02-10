@@ -28,6 +28,37 @@ import { syncAllPricesToRepairDesk, getSyncHistory, getLastSyncTime, getBrokenLi
 import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection, getCachedPrice, setCachedPrice, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
 
+let deviceSearchCache: {
+  devices: any[];
+  brands: Map<string, any>;
+  types: Map<string, any>;
+  timestamp: number;
+} | null = null;
+const DEVICE_CACHE_TTL = 2 * 60 * 1000;
+
+async function getDeviceSearchData() {
+  const now = Date.now();
+  if (deviceSearchCache && (now - deviceSearchCache.timestamp) < DEVICE_CACHE_TTL) {
+    return deviceSearchCache;
+  }
+  const [allDevices, allBrands, allTypes] = await Promise.all([
+    storage.getDevices(),
+    storage.getBrands(),
+    storage.getDeviceTypes(),
+  ]);
+  deviceSearchCache = {
+    devices: allDevices,
+    brands: new Map(allBrands.map(b => [b.id, b])),
+    types: new Map(allTypes.map(t => [t.id, t])),
+    timestamp: now,
+  };
+  return deviceSearchCache;
+}
+
+function invalidateDeviceSearchCache() {
+  deviceSearchCache = null;
+}
+
 // Extend express-session types
 declare module "express-session" {
   interface SessionData {
@@ -217,6 +248,7 @@ export async function registerRoutes(
     try {
       const data = insertDeviceTypeSchema.parse(req.body);
       const type = await storage.createDeviceType(data);
+      invalidateDeviceSearchCache();
       res.status(201).json(type);
     } catch (error: any) {
       if (error.message?.includes("unique constraint")) {
@@ -234,6 +266,7 @@ export async function registerRoutes(
       if (!type) {
         return res.status(404).json({ error: "Device type not found" });
       }
+      invalidateDeviceSearchCache();
       res.json(type);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update device type" });
@@ -243,6 +276,7 @@ export async function registerRoutes(
   app.delete("/api/device-types/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteDeviceType(req.params.id);
+      invalidateDeviceSearchCache();
       res.status(204).send();
     } catch (error: any) {
       console.error("Delete device type error:", error);
@@ -273,6 +307,7 @@ export async function registerRoutes(
     try {
       const data = insertBrandSchema.parse(req.body);
       const brand = await storage.createBrand(data);
+      invalidateDeviceSearchCache();
       res.status(201).json(brand);
     } catch (error: any) {
       if (error.message?.includes("unique constraint")) {
@@ -290,6 +325,7 @@ export async function registerRoutes(
       if (!brand) {
         return res.status(404).json({ error: "Brand not found" });
       }
+      invalidateDeviceSearchCache();
       res.json(brand);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update brand" });
@@ -299,6 +335,7 @@ export async function registerRoutes(
   app.delete("/api/brands/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteBrand(req.params.id);
+      invalidateDeviceSearchCache();
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete brand" });
@@ -379,29 +416,20 @@ export async function registerRoutes(
       if (!query || query.length < 2) {
         return res.json([]);
       }
-      const allDevices = await storage.getDevices();
-      const allBrands = await storage.getBrands();
-      const allTypes = await storage.getDeviceTypes();
-      
-      const brandsMap = new Map(allBrands.map(b => [b.id, b]));
-      const typesMap = new Map(allTypes.map(t => [t.id, t]));
-      
-      // Split query into words for flexible matching
+      const cached = await getDeviceSearchData();
       const queryWords = query.split(/\s+/).filter(w => w.length > 0);
       
-      const results = allDevices
+      const results = cached.devices
         .map(device => ({
           ...device,
-          brand: device.brandId ? brandsMap.get(device.brandId) : null,
-          deviceType: typesMap.get(device.deviceTypeId),
+          brand: device.brandId ? cached.brands.get(device.brandId) : null,
+          deviceType: cached.types.get(device.deviceTypeId),
         }))
         .filter(device => {
           const deviceName = device.name.toLowerCase();
           const brandName = device.brand?.name?.toLowerCase() || "";
           const typeName = device.deviceType?.name?.toLowerCase() || "";
           const fullText = `${brandName} ${deviceName} ${typeName}`;
-          
-          // All query words must be found somewhere in the full text
           return queryWords.every(word => fullText.includes(word));
         })
         .slice(0, 20);
@@ -443,6 +471,7 @@ export async function registerRoutes(
     try {
       const data = insertDeviceSchema.parse(req.body);
       const device = await storage.createDevice(data);
+      invalidateDeviceSearchCache();
       res.status(201).json(device);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to create device" });
@@ -456,6 +485,7 @@ export async function registerRoutes(
       if (!device) {
         return res.status(404).json({ error: "Device not found" });
       }
+      invalidateDeviceSearchCache();
       res.json(device);
     } catch (error: any) {
       res.status(400).json({ error: error.message || "Failed to update device" });
@@ -465,6 +495,7 @@ export async function registerRoutes(
   app.delete("/api/devices/:id", requireAdmin, async (req, res) => {
     try {
       await storage.deleteDevice(req.params.id);
+      invalidateDeviceSearchCache();
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete device" });
@@ -551,6 +582,7 @@ export async function registerRoutes(
         }
       }
       
+      invalidateDeviceSearchCache();
       res.json(results);
     } catch (error: any) {
       console.error("Bulk import error:", error);
@@ -2229,6 +2261,26 @@ export async function registerRoutes(
       res.json({ success: true, enabled });
     } catch (error) {
       res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  app.get("/api/settings/quote-flow", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const get = (type: string) => templates.find(t => t.type === type);
+
+      res.json({
+        multiDiscount: {
+          enabled: get('multi_discount_enabled')?.content === 'true',
+          amount: get('multi_discount_amount') ? parseFloat(get('multi_discount_amount')!.content) : 10,
+        },
+        hidePricesUntilContact: get('hide_prices_until_contact')?.content === 'true',
+        hidePricesCompletely: get('hide_prices_completely')?.content === 'true',
+        pricingSource: get('pricing_source')?.content || 'excel_upload',
+        partsLastUpdated: get('parts_last_updated') || null,
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get quote settings" });
     }
   });
 

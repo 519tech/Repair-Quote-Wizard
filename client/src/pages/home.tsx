@@ -97,32 +97,21 @@ export default function Home() {
     queryKey: ["/api/service-categories"],
   });
 
-  const { data: partsLastUpdated } = useQuery<MessageTemplate>({
-    queryKey: ["/api/message-templates", "parts_last_updated"],
+  const { data: quoteFlowSettings } = useQuery<{
+    multiDiscount: { enabled: boolean; amount: number };
+    hidePricesUntilContact: boolean;
+    hidePricesCompletely: boolean;
+    pricingSource: string;
+    partsLastUpdated: MessageTemplate | null;
+  }>({
+    queryKey: ["/api/settings/quote-flow"],
   });
 
-  // Multi-service discount settings
-  const { data: multiDiscountSettings } = useQuery<{ enabled: boolean; amount: number }>({
-    queryKey: ["/api/settings/multi-discount"],
-  });
-
-  // Hide prices until contact setting
-  const { data: hidePricesSettings } = useQuery<{ enabled: boolean }>({
-    queryKey: ["/api/settings/hide-prices-until-contact"],
-  });
-  const hidePricesUntilContact = hidePricesSettings?.enabled ?? false;
-
-  // Hide prices completely setting (only show in email/SMS)
-  const { data: hidePricesCompletelySettings } = useQuery<{ enabled: boolean }>({
-    queryKey: ["/api/settings/hide-prices-completely"],
-  });
-  const hidePricesCompletely = hidePricesCompletelySettings?.enabled ?? false;
-
-  // Pricing source setting (excel_upload or mobilesentrix_api)
-  const { data: pricingSourceSettings } = useQuery<{ source: string }>({
-    queryKey: ["/api/settings/pricing-source"],
-  });
-  const pricingSource = pricingSourceSettings?.source ?? "excel_upload";
+  const multiDiscountSettings = quoteFlowSettings?.multiDiscount;
+  const hidePricesUntilContact = quoteFlowSettings?.hidePricesUntilContact ?? false;
+  const hidePricesCompletely = quoteFlowSettings?.hidePricesCompletely ?? false;
+  const pricingSource = quoteFlowSettings?.pricingSource ?? "excel_upload";
+  const partsLastUpdated = quoteFlowSettings?.partsLastUpdated;
 
   const formatLastUpdated = (isoDate: string | undefined) => {
     if (!isoDate) return null;
@@ -173,7 +162,7 @@ export default function Home() {
       } finally {
         setSearchLoading(false);
       }
-    }, 300);
+    }, 200);
     return () => {
       if (searchTimeoutRef.current) {
         clearTimeout(searchTimeoutRef.current);
