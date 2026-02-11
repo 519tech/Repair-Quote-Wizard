@@ -587,46 +587,67 @@ export async function registerRoutes(
 
       let updated = 0;
       let failed = 0;
+      let skippedRateLimit = 0;
       const results: Array<{ name: string; date: string | null; error?: string }> = [];
 
-      for (const device of devicesWithoutDate) {
+      const detectWithRetry = async (deviceName: string, brandName: string, maxRetries = 3): Promise<string> => {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            const prompt = `What is the release date of the ${brandName ? brandName + " " : ""}${deviceName}? Reply with ONLY the date in YYYY-MM-DD format (e.g., 2024-09-20). If you can only determine the month, use the 1st of that month. If you can only determine the year, use January 1st. If you cannot determine the release date at all, reply with "unknown".`;
+            const response = await openai.chat.completions.create({
+              model: "gpt-4o-mini",
+              messages: [
+                { role: "system", content: "You are a device release date lookup assistant. You respond with only the release date in YYYY-MM-DD format or 'unknown'. No explanations." },
+                { role: "user", content: prompt },
+              ],
+              max_tokens: 20,
+            });
+            return response.choices[0]?.message?.content?.trim() || "unknown";
+          } catch (err: any) {
+            const isRateLimit = err.status === 429 || err.message?.includes("rate") || err.message?.includes("429");
+            if (isRateLimit && attempt < maxRetries - 1) {
+              const waitTime = Math.pow(2, attempt + 1) * 5000;
+              console.log(`Rate limited on "${brandName} ${deviceName}", waiting ${waitTime / 1000}s before retry ${attempt + 2}/${maxRetries}`);
+              await new Promise(resolve => setTimeout(resolve, waitTime));
+            } else {
+              throw err;
+            }
+          }
+        }
+        return "unknown";
+      };
+
+      for (let i = 0; i < devicesWithoutDate.length; i++) {
+        const device = devicesWithoutDate[i];
         const brandName = brandMap.get(device.brandId) || "";
-        const prompt = `What is the release date of the ${brandName ? brandName + " " : ""}${device.name}? Reply with ONLY the date in YYYY-MM-DD format (e.g., 2024-09-20). If you can only determine the month, use the 1st of that month. If you can only determine the year, use January 1st. If you cannot determine the release date at all, reply with "unknown".`;
 
         try {
-          const response = await openai.chat.completions.create({
-            model: "gpt-4o-mini",
-            messages: [
-              { role: "system", content: "You are a device release date lookup assistant. You respond with only the release date in YYYY-MM-DD format or 'unknown'. No explanations." },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 20,
-          });
-
-          const result = response.choices[0]?.message?.content?.trim() || "unknown";
+          const result = await detectWithRetry(device.name, brandName);
           const dateMatch = result.match(/^\d{4}-\d{2}-\d{2}$/);
 
           if (dateMatch) {
             await storage.updateDevice(device.id, { releaseDate: dateMatch[0] });
             updated++;
             results.push({ name: `${brandName} ${device.name}`, date: dateMatch[0] });
-            console.log(`Bulk detect: ${brandName} ${device.name} -> ${dateMatch[0]}`);
+            console.log(`Bulk detect [${i + 1}/${devicesWithoutDate.length}]: ${brandName} ${device.name} -> ${dateMatch[0]}`);
           } else {
             failed++;
             results.push({ name: `${brandName} ${device.name}`, date: null, error: `AI returned: ${result}` });
-            console.log(`Bulk detect: ${brandName} ${device.name} -> unknown (${result})`);
+            console.log(`Bulk detect [${i + 1}/${devicesWithoutDate.length}]: ${brandName} ${device.name} -> unknown (${result})`);
           }
         } catch (err: any) {
           failed++;
+          const isRateLimit = err.status === 429 || err.message?.includes("rate") || err.message?.includes("429");
+          if (isRateLimit) skippedRateLimit++;
           results.push({ name: `${brandName} ${device.name}`, date: null, error: err.message });
-          console.error(`Bulk detect error for ${device.name}:`, err.message);
+          console.error(`Bulk detect error [${i + 1}/${devicesWithoutDate.length}] for ${device.name}:`, err.message);
         }
 
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 1500));
       }
 
       invalidateDeviceSearchCache();
-      res.json({ message: "Bulk detection complete", total, updated, failed, results });
+      res.json({ message: "Bulk detection complete", total, updated, failed, skippedRateLimit, results });
     } catch (error: any) {
       console.error("Bulk release date detection error:", error);
       res.status(500).json({ error: "Failed to run bulk detection" });

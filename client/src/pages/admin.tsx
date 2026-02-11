@@ -1834,9 +1834,12 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 try {
                   const res = await apiRequest("POST", "/api/devices/bulk-detect-release-dates");
                   const data = await res.json();
+                  const desc = data.skippedRateLimit > 0
+                    ? `${data.updated} updated, ${data.failed} failed (${data.skippedRateLimit} hit rate limits). Click again to retry remaining.`
+                    : `${data.updated} updated, ${data.failed} failed out of ${data.total} devices`;
                   toast({
                     title: "Bulk Detection Complete",
-                    description: `${data.updated} updated, ${data.failed} failed out of ${data.total} devices`,
+                    description: desc,
                   });
                   queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
                 } catch (error: any) {
