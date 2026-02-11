@@ -331,6 +331,7 @@ export default function Admin() {
         <Tabs defaultValue="device-types" className="space-y-4 sm:space-y-6">
           <TabsList className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
             <TabsTrigger value="device-types" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-device-types">Types</TabsTrigger>
+            <TabsTrigger value="brands" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-brands">Brands</TabsTrigger>
             <TabsTrigger value="devices" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-devices">Devices</TabsTrigger>
             <TabsTrigger value="categories" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-categories">Categories</TabsTrigger>
             <TabsTrigger value="services" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-services">Services</TabsTrigger>
@@ -342,6 +343,10 @@ export default function Admin() {
 
           <TabsContent value="device-types">
             <DeviceTypesTab toast={toast} />
+          </TabsContent>
+
+          <TabsContent value="brands">
+            <BrandsTab toast={toast} />
           </TabsContent>
           
           <TabsContent value="devices">
