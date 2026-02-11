@@ -1983,7 +1983,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
 
       {/* Edit Service Link Dialog */}
       <Dialog open={editLinkOpen} onOpenChange={(open) => { setEditLinkOpen(open); if (!open) { setAdditionalPartSku(""); setLinkAlternativePartSkus([]); setLinkAlternativePartInfo({}); setLinkAltPartSearch(""); setLinkAdditionalFee(""); setLinkManualPriceOverride(""); } }}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
           <form onSubmit={handleEditLinkSubmit}>
             <DialogHeader>
               <DialogTitle>Edit Service Link</DialogTitle>
