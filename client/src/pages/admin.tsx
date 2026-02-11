@@ -1978,7 +1978,12 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                           {!link.part && link.partSku && <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">missing</Badge>}
                         </TableCell>
                         <TableCell>
-                          {link.part || service?.labourOnly ? `$${totalPrice}` : <span className="text-muted-foreground">Not Available</span>}
+                          {(link as any).manualPriceOverride ? (
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span>${Number((link as any).manualPriceOverride).toFixed(2)}</span>
+                              <Badge variant="secondary" className="text-xs"><DollarSign className="h-3 w-3 mr-0.5" />Override</Badge>
+                            </div>
+                          ) : link.part || service?.labourOnly ? `$${totalPrice}` : <span className="text-muted-foreground">Not Available</span>}
                         </TableCell>
                         <TableCell>
                           <div className="flex gap-1">
