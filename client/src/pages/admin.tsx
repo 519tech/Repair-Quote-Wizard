@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database, RefreshCw, AlertCircle } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database, RefreshCw, AlertCircle, Wand2 } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -441,6 +441,33 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
     },
   });
 
+  const reorderMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      await apiRequest("POST", "/api/device-types/reorder", { orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/device-types"] });
+      toast({ title: "Device types reordered" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleTypeMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newOrder = [...deviceTypes];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    reorderMutation.mutate(newOrder.map(t => t.id));
+  };
+
+  const handleTypeMoveDown = (index: number) => {
+    if (index === deviceTypes.length - 1) return;
+    const newOrder = [...deviceTypes];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    reorderMutation.mutate(newOrder.map(t => t.id));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     createMutation.mutate({ name, icon, imageUrl: imageUrl || undefined });
@@ -598,6 +625,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-20">Order</TableHead>
                 <TableHead className="w-[60px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Icon</TableHead>
@@ -605,8 +633,14 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
               </TableRow>
             </TableHeader>
             <TableBody>
-              {deviceTypes.map((type) => (
+              {deviceTypes.map((type, index) => (
                 <TableRow key={type.id}>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" onClick={() => handleTypeMoveUp(index)} disabled={index === 0 || reorderMutation.isPending} data-testid={`button-move-up-type-${type.id}`}><ArrowUp className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" onClick={() => handleTypeMoveDown(index)} disabled={index === deviceTypes.length - 1 || reorderMutation.isPending} data-testid={`button-move-down-type-${type.id}`}><ArrowDown className="h-4 w-4" /></Button>
+                    </div>
+                  </TableCell>
                   <TableCell>
                     {(type as any).imageUrl ? (
                       <img src={(type as any).imageUrl} alt={type.name} className="h-8 w-8 object-contain rounded" />
@@ -734,6 +768,33 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
     },
   });
 
+  const reorderBrandsMutation = useMutation({
+    mutationFn: async (orderedIds: string[]) => {
+      await apiRequest("POST", "/api/brands/reorder", { orderedIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/brands"] });
+      toast({ title: "Brands reordered" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleBrandMoveUp = (index: number) => {
+    if (index === 0) return;
+    const newOrder = [...brands];
+    [newOrder[index - 1], newOrder[index]] = [newOrder[index], newOrder[index - 1]];
+    reorderBrandsMutation.mutate(newOrder.map(b => b.id));
+  };
+
+  const handleBrandMoveDown = (index: number) => {
+    if (index === brands.length - 1) return;
+    const newOrder = [...brands];
+    [newOrder[index], newOrder[index + 1]] = [newOrder[index + 1], newOrder[index]];
+    reorderBrandsMutation.mutate(newOrder.map(b => b.id));
+  };
+
   const getLinkedTypes = (brandId: string) => {
     return brandDeviceTypeLinks.filter(link => link.brandId === brandId);
   };
@@ -839,6 +900,7 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-20">Order</TableHead>
                 <TableHead className="w-[60px]">Logo</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Device Types</TableHead>
@@ -846,10 +908,16 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {brands.map((brand) => {
+              {brands.map((brand, index) => {
                 const linkedTypes = getLinkedTypes(brand.id);
                 return (
                   <TableRow key={brand.id}>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleBrandMoveUp(index)} disabled={index === 0 || reorderBrandsMutation.isPending} data-testid={`button-move-up-brand-${brand.id}`}><ArrowUp className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleBrandMoveDown(index)} disabled={index === brands.length - 1 || reorderBrandsMutation.isPending} data-testid={`button-move-down-brand-${brand.id}`}><ArrowDown className="h-4 w-4" /></Button>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {brand.logo ? (
                         <img src={brand.logo} alt={brand.name} className="h-8 w-8 object-contain rounded" />
@@ -1142,6 +1210,9 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [imageUrl, setImageUrl] = useState("");
   const [cloneFromDeviceId, setCloneFromDeviceId] = useState("");
   const [cloneDeviceSearch, setCloneDeviceSearch] = useState("");
+  const [releaseDate, setReleaseDate] = useState("");
+  const [detectingReleaseDate, setDetectingReleaseDate] = useState(false);
+  const [detectingEditReleaseDate, setDetectingEditReleaseDate] = useState(false);
   const [filterTypeId, setFilterTypeId] = useState("all");
   const [filterBrandId, setFilterBrandId] = useState("all");
   const [deviceSearch, setDeviceSearch] = useState("");
@@ -1296,7 +1367,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   }, [devices, bulkLinkTypeId, bulkLinkBrandId]);
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string; cloneFromDeviceId?: string }) => {
+    mutationFn: async (data: { name: string; deviceTypeId: string; brandId?: string; imageUrl?: string; releaseDate?: string; cloneFromDeviceId?: string }) => {
       const { cloneFromDeviceId, ...deviceData } = data;
       const res = await apiRequest("POST", "/api/devices", deviceData);
       const newDevice = await res.json();
@@ -1321,6 +1392,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       setDeviceTypeId("");
       setBrandId("");
       setImageUrl("");
+      setReleaseDate("");
       setCloneFromDeviceId("");
       setCloneDeviceSearch("");
       if (variables.cloneFromDeviceId && result.cloneResult) {
@@ -1338,7 +1410,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string; brandId?: string | null; imageUrl?: string | null } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; deviceTypeId?: string; brandId?: string | null; imageUrl?: string | null; releaseDate?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/devices/${id}`, data);
       return res.json();
     },
@@ -1551,8 +1623,34 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
       deviceTypeId, 
       brandId: brandId && brandId !== "none" ? brandId : undefined,
       imageUrl: imageUrl || undefined,
+      releaseDate: releaseDate || undefined,
       cloneFromDeviceId: cloneFromDeviceId || undefined
     });
+  };
+
+  const detectReleaseDate = async (deviceName: string, brandName: string | undefined, setter: (date: string) => void, setLoading: (v: boolean) => void) => {
+    if (!deviceName) {
+      toast({ title: "Enter a device name first", variant: "destructive" });
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await apiRequest("POST", "/api/devices/detect-release-date", {
+        modelName: deviceName,
+        brandName
+      });
+      const data = await res.json();
+      if (data.releaseDate) {
+        setter(data.releaseDate);
+        toast({ title: "Release date detected", description: data.releaseDate });
+      } else {
+        toast({ title: "Could not detect release date", description: "Please enter it manually", variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "Detection failed", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Filter devices for the clone dropdown based on search
@@ -1581,7 +1679,8 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
         name: editItem.name, 
         deviceTypeId: editItem.deviceTypeId, 
         brandId: editItem.brandId,
-        imageUrl: editItem.imageUrl 
+        imageUrl: editItem.imageUrl,
+        releaseDate: (editItem as any).releaseDate || null
       } 
     });
   };
@@ -1761,6 +1860,32 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   placeholder="Enter image URL"
                   testIdPrefix="device-image"
                 />
+                <div className="space-y-2">
+                  <Label>Release Date</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={releaseDate}
+                      onChange={(e) => setReleaseDate(e.target.value)}
+                      data-testid="input-device-release-date"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      disabled={detectingReleaseDate || !name}
+                      onClick={() => {
+                        const brandName = brandId && brandId !== "none" ? brands.find(b => b.id === brandId)?.name : undefined;
+                        detectReleaseDate(name, brandName, setReleaseDate, setDetectingReleaseDate);
+                      }}
+                      data-testid="button-detect-release-date"
+                    >
+                      {detectingReleaseDate ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Wand2 className="h-4 w-4 mr-1" />}
+                      Auto-detect
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Used for sorting devices (newest first). Click Auto-detect to look up automatically.</p>
+                </div>
                 <div className="space-y-2 pt-2 border-t">
                   <Label>Clone Service Links From (Optional)</Label>
                   <p className="text-xs text-muted-foreground">Copy all service links from an existing device. Parts will need to be assigned separately.</p>
@@ -1867,6 +1992,33 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   placeholder="Enter image URL"
                   testIdPrefix="edit-device-image"
                 />
+                <div className="space-y-2">
+                  <Label>Release Date</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={(editItem as any)?.releaseDate || ""}
+                      onChange={(e) => setEditItem(prev => prev ? {...prev, releaseDate: e.target.value} : null)}
+                      data-testid="input-edit-device-release-date"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      disabled={detectingEditReleaseDate || !editItem?.name}
+                      onClick={() => {
+                        if (!editItem) return;
+                        const brandName = editItem.brandId ? brands.find(b => b.id === editItem.brandId)?.name : undefined;
+                        detectReleaseDate(editItem.name, brandName, (date) => setEditItem(prev => prev ? {...prev, releaseDate: date} : null), setDetectingEditReleaseDate);
+                      }}
+                      data-testid="button-edit-detect-release-date"
+                    >
+                      {detectingEditReleaseDate ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Wand2 className="h-4 w-4 mr-1" />}
+                      Auto-detect
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">Used for sorting devices (newest first)</p>
+                </div>
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-device">

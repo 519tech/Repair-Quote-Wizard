@@ -27,6 +27,7 @@ import { isRepairDeskConnected, disconnectRepairDesk, checkInventoryBySku, creat
 import { syncAllPricesToRepairDesk, getSyncHistory, getLastSyncTime, getBrokenLinks, getLinkedServicesCount, isRepairDeskSyncConfigured, startScheduledSync } from "./repairdesk-sync";
 import { searchProducts, getProductBySku, getProductPrice, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, setErrorNotificationCallback, testConnection, getCachedPrice, setCachedPrice, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
+import OpenAI from "openai";
 
 let deviceSearchCache: {
   devices: any[];
@@ -525,6 +526,43 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete device" });
+    }
+  });
+
+  app.post("/api/devices/detect-release-date", requireAdmin, async (req, res) => {
+    try {
+      const { modelName, brandName } = req.body;
+      if (!modelName) {
+        return res.status(400).json({ error: "modelName is required" });
+      }
+
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const prompt = `What is the release date of the ${brandName ? brandName + " " : ""}${modelName}? Reply with ONLY the date in YYYY-MM-DD format (e.g., 2024-09-20). If you can only determine the month, use the 1st of that month. If you can only determine the year, use January 1st. If you cannot determine the release date at all, reply with "unknown".`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [
+          { role: "system", content: "You are a device release date lookup assistant. You respond with only the release date in YYYY-MM-DD format or 'unknown'. No explanations." },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 20,
+      });
+
+      const result = response.choices[0]?.message?.content?.trim() || "unknown";
+      const dateMatch = result.match(/^\d{4}-\d{2}-\d{2}$/);
+
+      if (dateMatch) {
+        res.json({ releaseDate: dateMatch[0] });
+      } else {
+        res.json({ releaseDate: null, message: "Could not determine release date" });
+      }
+    } catch (error: any) {
+      console.error("Release date detection error:", error);
+      res.status(500).json({ error: "Failed to detect release date" });
     }
   });
 

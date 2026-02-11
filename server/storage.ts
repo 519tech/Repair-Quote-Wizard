@@ -246,7 +246,7 @@ export class DatabaseStorage implements IStorage {
         brand: true,
       },
     });
-    return links.map((link) => link.brand);
+    return links.map((link) => link.brand).sort((a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0));
   }
 
   async createBrandDeviceType(data: InsertBrandDeviceType): Promise<BrandDeviceType> {
