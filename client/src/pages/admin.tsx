@@ -507,6 +507,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                       <SelectItem value="battery">Battery</SelectItem>
                       <SelectItem value="cable">Cable / Charger</SelectItem>
                       <SelectItem value="tool">Tool / Accessory</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -565,6 +566,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                       <SelectItem value="battery">Battery</SelectItem>
                       <SelectItem value="cable">Cable / Charger</SelectItem>
                       <SelectItem value="tool">Tool / Accessory</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
