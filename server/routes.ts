@@ -139,6 +139,57 @@ export async function registerRoutes(
     });
   });
 
+  // One-time cleanup: Remove iPhone back glass services from Apple Tablets
+  (async () => {
+    try {
+      const idsToDelete = [
+        "aea126c0-f9df-4002-acdd-9d229690ad48","507902ad-e13e-4a7e-b40b-a83bdad17d94",
+        "5cf53b1e-d254-4a4b-95fa-c208d410c75f","4ba6f274-fd3d-48fe-ae0f-938486dc785b",
+        "3f4f56f5-d236-48b9-8745-5e70e82d44b3","721b5ddc-fc2b-4c0f-b40e-c5b435b11105",
+        "53963a52-ea6c-4534-a281-76c985acb953","69f6b3a5-f601-4a3b-a05f-840ba81259d2",
+        "00fdfe24-a2e2-469c-99c8-c21e04bdb529","8ee12744-6c11-4ed5-89e7-0a4805e61a92",
+        "d362e8fa-de82-49b4-b2ac-295cea797b7f","f036686a-5567-466b-b3cc-78014e98dfdb",
+        "3c2c980d-c97f-4066-b088-89bf8cfbe700","43dcbab6-13b4-43d2-a2e8-6fe93bd8b75f",
+        "021512b6-a2ab-44d8-9be0-15bbfcf9aab1","c9c207a9-53f6-4784-ad81-d247652cf597",
+        "59b528a0-93c5-48d2-b022-cc4be68b5d7b","f471737d-6d2f-4310-82e3-17b6285a6949",
+        "3fa15019-4723-4f83-b4a2-9b9c3edbf4b1","5dadba11-5a1c-4372-9ad5-65fa807a944d",
+        "5ffa6d58-4534-4726-868b-6e4666daef04","fe113f1b-efaf-4ab2-beca-df4b0998e57f",
+        "950d0bdb-2f5a-429b-9b18-0c19def7e8bf","ce6ff970-23bb-4c70-885e-66d7a015b8a7",
+        "c1dbf5d8-9428-4581-acc6-5c18600b504b","0ee93e2e-7eb6-4d78-8e12-09e4b54f3c66",
+        "616b8405-568d-45c0-a2e2-f2f4d31770a9","f991d012-a599-4fd2-b4e9-e2ca43936090",
+        "2668c060-58a1-414a-a3d4-f200fb2860d0","7abafe8f-2b81-4d4e-b897-ad8c5c23504a",
+        "8e10fd70-9a62-49e3-bc41-57dc6e114d7f","e245265d-ed14-4450-90ce-406ab44712bb",
+        "60ac953d-7df7-4d97-8f5e-c1fc2882493e","6a8800c1-64fb-4333-b29e-12cb59d88fe6",
+        "9f226e82-0cf8-43e6-b20b-b44074ad783e","885ce5dc-0240-4a10-8c76-38b5a64a3d58",
+        "f745ce50-330f-48c1-bb35-635a646e47e4","8a05417a-abd3-4a22-8967-ef7a053943c8",
+        "3a676575-958c-4f65-bc1b-5d14b4f037ea","48b1c23d-7f1d-4535-8ef6-2c5be73623b3",
+        "dab229a0-6b8e-4e9e-bbd9-f4dc2310b195","b309e5fc-ab46-4968-8911-c27fe7830343",
+        "36bde9dd-de72-41ea-8358-9edce4723fd2","7bdf4ad1-52e1-4e0a-b8dd-a9aa4632441a",
+        "bffe0de0-0c59-4316-b399-53fc0dbfb4f9","3f5cedd9-698c-4472-bfa7-05f70e805e6a",
+        "32d07428-6f2b-4c89-9a19-03a9b4ea8f8a","08bbe0f2-c105-4dca-bd83-20880242cc06",
+        "39294dcc-753e-4a41-9d51-9175edf74635","4a736d83-b18d-42c9-a646-259420bced5e",
+        "f4f32814-dd2c-44bd-9c53-91b426719936","a7f406ff-5d20-40ba-8cc5-23efb747ca36",
+        "e22ee77d-d88d-4b72-87c9-aa70c4e4e48a","a8bf382c-3738-411c-b3e7-2c26ed23dad2",
+        "d5f15cfd-3ada-47ac-a512-1697594de34d","dab9a124-5548-4524-b381-64d351edba63",
+        "9124f69f-8880-46ed-8e7e-a4ba4a2c941b","5194c71c-777b-47ff-9e4a-d44cba1824b1",
+        "bb08fad1-54cb-41c4-a359-345ae3c2d460","cc1745c5-c853-416a-ac87-404553f9adce",
+        "3546a1d0-609c-4d17-8e8e-7691d6075aa5","ca5ec553-28c3-4a07-9a7e-188bbff004c3",
+        "22ed2ad3-17a8-4e70-bcc3-26cdaf78e665","7956477e-2468-43a5-81d8-e725c852c37b",
+        "7578a9e1-0dd0-402e-9334-90701a279f6e","5a8192e4-ba29-43de-baf9-021876f80e21",
+        "20c3f836-f20f-4321-bbc5-a787d6a852dd","3e0859b4-4188-4d46-b501-5f5db62fe761",
+        "99be5062-5237-4e86-8103-24bf12c83566","b345d44c-9829-415b-a291-152e323387ce",
+        "d16510ab-4c97-44e3-88fc-ce58ada1d737","d8117f1b-2424-4b59-b49e-b4dc3f6be232"
+      ];
+      let deleted = 0;
+      for (const id of idsToDelete) {
+        try { await storage.deleteDeviceService(id); deleted++; } catch {}
+      }
+      console.log(`[Cleanup] Removed ${deleted} incorrect iPhone back glass links from Apple Tablets`);
+    } catch (error) {
+      console.error('[Cleanup] Failed:', error);
+    }
+  })();
+
   // Admin login with username/password
   app.post("/api/admin/login", async (req, res) => {
     try {
