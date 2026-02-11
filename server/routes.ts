@@ -567,6 +567,72 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/devices/bulk-detect-release-dates", requireAdmin, async (req, res) => {
+    try {
+      const openai = new OpenAI({
+        apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+        baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+      });
+
+      const allDevices = await storage.getDevices();
+      const brands = await storage.getBrands();
+      const brandMap = new Map(brands.map(b => [b.id, b.name]));
+
+      const devicesWithoutDate = allDevices.filter(d => !d.releaseDate);
+      const total = devicesWithoutDate.length;
+
+      if (total === 0) {
+        return res.json({ message: "All devices already have release dates", updated: 0, failed: 0, total: 0 });
+      }
+
+      let updated = 0;
+      let failed = 0;
+      const results: Array<{ name: string; date: string | null; error?: string }> = [];
+
+      for (const device of devicesWithoutDate) {
+        const brandName = brandMap.get(device.brandId) || "";
+        const prompt = `What is the release date of the ${brandName ? brandName + " " : ""}${device.name}? Reply with ONLY the date in YYYY-MM-DD format (e.g., 2024-09-20). If you can only determine the month, use the 1st of that month. If you can only determine the year, use January 1st. If you cannot determine the release date at all, reply with "unknown".`;
+
+        try {
+          const response = await openai.chat.completions.create({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: "You are a device release date lookup assistant. You respond with only the release date in YYYY-MM-DD format or 'unknown'. No explanations." },
+              { role: "user", content: prompt },
+            ],
+            max_tokens: 20,
+          });
+
+          const result = response.choices[0]?.message?.content?.trim() || "unknown";
+          const dateMatch = result.match(/^\d{4}-\d{2}-\d{2}$/);
+
+          if (dateMatch) {
+            await storage.updateDevice(device.id, { releaseDate: dateMatch[0] });
+            updated++;
+            results.push({ name: `${brandName} ${device.name}`, date: dateMatch[0] });
+            console.log(`Bulk detect: ${brandName} ${device.name} -> ${dateMatch[0]}`);
+          } else {
+            failed++;
+            results.push({ name: `${brandName} ${device.name}`, date: null, error: `AI returned: ${result}` });
+            console.log(`Bulk detect: ${brandName} ${device.name} -> unknown (${result})`);
+          }
+        } catch (err: any) {
+          failed++;
+          results.push({ name: `${brandName} ${device.name}`, date: null, error: err.message });
+          console.error(`Bulk detect error for ${device.name}:`, err.message);
+        }
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
+
+      invalidateDeviceSearchCache();
+      res.json({ message: "Bulk detection complete", total, updated, failed, results });
+    } catch (error: any) {
+      console.error("Bulk release date detection error:", error);
+      res.status(500).json({ error: "Failed to run bulk detection" });
+    }
+  });
+
   // Device bulk import template
   app.get("/api/devices/template", requireAdmin, async (req, res) => {
     try {

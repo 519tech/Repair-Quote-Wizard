@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database, RefreshCw, AlertCircle, Wand2 } from "lucide-react";
+import { Plus, Trash2, Loader2, Wrench, ArrowLeft, Pencil, Search, Upload, LogOut, Lock, Check, X, Filter, Link2, Layers, ChevronLeft, ChevronRight, AlertTriangle, Settings, Mail, MessageSquare, Users, FileText, Phone, Clock, EyeOff, DollarSign, ArrowUp, ArrowDown, ExternalLink, Database, RefreshCw, AlertCircle, Wand2, Calendar } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1217,6 +1217,7 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
   const [filterBrandId, setFilterBrandId] = useState("all");
   const [deviceSearch, setDeviceSearch] = useState("");
   const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkDetecting, setBulkDetecting] = useState(false);
   const [bulkResults, setBulkResults] = useState<{ created: number; errors: string[] } | null>(null);
 
   // Service links management state
@@ -1818,6 +1819,36 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            <Button
+              variant="outline"
+              disabled={bulkDetecting}
+              data-testid="button-bulk-detect-dates"
+              onClick={async () => {
+                const devicesWithoutDate = devices.filter(d => !d.releaseDate);
+                if (devicesWithoutDate.length === 0) {
+                  toast({ title: "All devices already have release dates" });
+                  return;
+                }
+                if (!confirm(`Auto-detect release dates for ${devicesWithoutDate.length} devices without dates? This may take a few minutes.`)) return;
+                setBulkDetecting(true);
+                try {
+                  const res = await apiRequest("POST", "/api/devices/bulk-detect-release-dates");
+                  const data = await res.json();
+                  toast({
+                    title: "Bulk Detection Complete",
+                    description: `${data.updated} updated, ${data.failed} failed out of ${data.total} devices`,
+                  });
+                  queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
+                } catch (error: any) {
+                  toast({ title: "Bulk detection failed", description: error.message, variant: "destructive" });
+                } finally {
+                  setBulkDetecting(false);
+                }
+              }}
+            >
+              {bulkDetecting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
+              {bulkDetecting ? "Detecting..." : "Auto-Detect Dates"}
+            </Button>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
                 <Button data-testid="button-add-device"><Plus className="h-4 w-4 mr-2" />Add Device</Button>
