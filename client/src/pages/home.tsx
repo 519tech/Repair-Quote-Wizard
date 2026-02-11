@@ -106,12 +106,12 @@ export default function Home() {
     queryKey: ["/api/device-types"],
   });
 
-  const { data: pickerBrands = [], isLoading: pickerBrandsLoading } = useQuery<Brand[]>({
+  const { data: pickerBrands = [], isLoading: pickerBrandsLoading, isFetched: pickerBrandsFetched } = useQuery<Brand[]>({
     queryKey: ["/api/brands/by-type", pickerTypeId],
     enabled: !!pickerTypeId,
   });
 
-  const { data: pickerDevices = [], isLoading: pickerDevicesLoading } = useQuery<DeviceSearchResult[]>({
+  const { data: pickerDevices = [], isLoading: pickerDevicesLoading, isFetched: pickerDevicesFetched } = useQuery<DeviceSearchResult[]>({
     queryKey: [`/api/devices?typeId=${pickerTypeId}&brandId=${pickerBrandId}`],
     enabled: !!pickerTypeId && !!pickerBrandId,
   });
@@ -157,6 +157,40 @@ export default function Home() {
     };
     document.title = titles[view] || "Get a Repair Quote | 519 Tech Services";
   }, [view]);
+
+  const handlePickerTypeClick = async (typeId: string, typeName: string) => {
+    try {
+      const res = await fetch(`/api/devices?typeId=${typeId}`);
+      if (res.ok) {
+        const devices = await res.json();
+        if (devices.length === 0) {
+          setUnknownDeviceInfo(prev => ({
+            ...prev,
+            deviceDescription: typeName,
+          }));
+          setView('unknown');
+          return;
+        }
+      }
+    } catch {}
+    setPickerTypeId(typeId);
+    setPickerBrandId(null);
+  };
+
+  useEffect(() => {
+    if (pickerTypeId && pickerBrandId && pickerDevicesFetched && !pickerDevicesLoading && pickerDevices.length === 0) {
+      const typeName = pickerDeviceTypes.find(t => t.id === pickerTypeId)?.name || "";
+      const brandName = pickerBrands.find(b => b.id === pickerBrandId)?.name || "";
+      setUnknownDeviceInfo(prev => ({
+        ...prev,
+        deviceDescription: [brandName, typeName].filter(Boolean).join(" "),
+      }));
+      setPickerTypeId(null);
+      setPickerBrandId(null);
+      setView('unknown');
+    }
+  }, [pickerTypeId, pickerBrandId, pickerDevices, pickerDevicesLoading, pickerDevicesFetched]);
+
 
   // Search effect
   useEffect(() => {
@@ -735,7 +769,7 @@ export default function Home() {
                               key={type.id}
                               type="button"
                               className="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all hover:border-primary/50 hover-elevate"
-                              onClick={() => { setPickerTypeId(type.id); setPickerBrandId(null); }}
+                              onClick={() => handlePickerTypeClick(type.id, type.name)}
                               data-testid={`picker-type-${type.id}`}
                             >
                               {type.imageUrl ? (
