@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, ChevronLeft, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Package, Mail, Plus, Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Package, Mail, Plus, Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera, Tv, Speaker, Printer, Keyboard, Mouse, Router, HardDrive, MemoryStick, Cpu, Battery, Cable, PenTool } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -750,6 +750,18 @@ export default function Embed() {
                             watch: Watch,
                             headphones: Headphones,
                             camera: Camera,
+                            tv: Tv,
+                            speaker: Speaker,
+                            printer: Printer,
+                            keyboard: Keyboard,
+                            mouse: Mouse,
+                            router: Router,
+                            harddrive: HardDrive,
+                            memory: MemoryStick,
+                            cpu: Cpu,
+                            battery: Battery,
+                            cable: Cable,
+                            tool: PenTool,
                           }[type.icon] || Smartphone;
                           return (
                             <button

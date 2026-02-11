@@ -495,6 +495,18 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                       <SelectItem value="watch">Smart Watch</SelectItem>
                       <SelectItem value="headphones">Headphones</SelectItem>
                       <SelectItem value="camera">Camera</SelectItem>
+                      <SelectItem value="tv">TV / Display</SelectItem>
+                      <SelectItem value="speaker">Speaker</SelectItem>
+                      <SelectItem value="printer">Printer</SelectItem>
+                      <SelectItem value="keyboard">Keyboard</SelectItem>
+                      <SelectItem value="mouse">Mouse</SelectItem>
+                      <SelectItem value="router">Router / Network</SelectItem>
+                      <SelectItem value="harddrive">Hard Drive / Storage</SelectItem>
+                      <SelectItem value="memory">Memory / RAM</SelectItem>
+                      <SelectItem value="cpu">Processor / CPU</SelectItem>
+                      <SelectItem value="battery">Battery</SelectItem>
+                      <SelectItem value="cable">Cable / Charger</SelectItem>
+                      <SelectItem value="tool">Tool / Accessory</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -541,6 +553,18 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                       <SelectItem value="watch">Smart Watch</SelectItem>
                       <SelectItem value="headphones">Headphones</SelectItem>
                       <SelectItem value="camera">Camera</SelectItem>
+                      <SelectItem value="tv">TV / Display</SelectItem>
+                      <SelectItem value="speaker">Speaker</SelectItem>
+                      <SelectItem value="printer">Printer</SelectItem>
+                      <SelectItem value="keyboard">Keyboard</SelectItem>
+                      <SelectItem value="mouse">Mouse</SelectItem>
+                      <SelectItem value="router">Router / Network</SelectItem>
+                      <SelectItem value="harddrive">Hard Drive / Storage</SelectItem>
+                      <SelectItem value="memory">Memory / RAM</SelectItem>
+                      <SelectItem value="cpu">Processor / CPU</SelectItem>
+                      <SelectItem value="battery">Battery</SelectItem>
+                      <SelectItem value="cable">Cable / Charger</SelectItem>
+                      <SelectItem value="tool">Tool / Accessory</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
