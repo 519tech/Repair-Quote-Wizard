@@ -1402,6 +1402,23 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/device-services/bulk-delete", requireAdmin, async (req, res) => {
+    try {
+      const { ids } = req.body;
+      if (!Array.isArray(ids) || ids.length === 0) {
+        return res.status(400).json({ error: "ids array is required" });
+      }
+      let deleted = 0;
+      for (const id of ids) {
+        await storage.deleteDeviceService(id);
+        deleted++;
+      }
+      res.json({ deleted });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to bulk delete device services" });
+    }
+  });
+
   // Device Service Parts (additional parts for a device-service link)
   app.get("/api/device-services/:id/parts", requireAdmin, async (req, res) => {
     try {
