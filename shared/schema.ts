@@ -8,6 +8,7 @@ export const deviceTypes = pgTable("device_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   icon: text("icon").notNull().default("smartphone"),
+  imageUrl: text("image_url"),
 });
 
 export const deviceTypesRelations = relations(deviceTypes, ({ many }) => ({

@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { ChevronRight, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail, Plus } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, CheckCircle, Loader2, Search, X, Wrench, HelpCircle, Settings, Package, Mail, Plus, Smartphone, Tablet, Laptop, Monitor, Gamepad2, Watch, Headphones, Camera } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -36,6 +36,10 @@ export default function Home() {
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
   const [categoryLoading, setCategoryLoading] = useState(false);
   const [showSearch, setShowSearch] = useState(false);
+  
+  // Picker flow state
+  const [pickerTypeId, setPickerTypeId] = useState<string | null>(null);
+  const [pickerBrandId, setPickerBrandId] = useState<string | null>(null);
   
   // Quote data
   const [allQuotes, setAllQuotes] = useState<Array<{
@@ -95,6 +99,21 @@ export default function Home() {
 
   const { data: serviceCategoriesData = [] } = useQuery<{ id: string; name: string; description?: string; imageUrl?: string; displayOrder: number }[]>({
     queryKey: ["/api/service-categories"],
+  });
+
+  // Picker flow queries
+  const { data: pickerDeviceTypes = [] } = useQuery<(DeviceType & { imageUrl?: string })[]>({
+    queryKey: ["/api/device-types"],
+  });
+
+  const { data: pickerBrands = [], isLoading: pickerBrandsLoading } = useQuery<Brand[]>({
+    queryKey: ["/api/brands/by-type", pickerTypeId],
+    enabled: !!pickerTypeId,
+  });
+
+  const { data: pickerDevices = [], isLoading: pickerDevicesLoading } = useQuery<DeviceSearchResult[]>({
+    queryKey: [`/api/devices?typeId=${pickerTypeId}&brandId=${pickerBrandId}`],
+    enabled: !!pickerTypeId && !!pickerBrandId,
   });
 
   const { data: quoteFlowSettings } = useQuery<{
@@ -236,6 +255,8 @@ export default function Home() {
     setSelectedDevice(device);
     setSelectedDeviceId(device.id);
     clearSearch();
+    setPickerTypeId(null);
+    setPickerBrandId(null);
     setView('services');
   };
 
@@ -651,6 +672,163 @@ export default function Home() {
                         </Button>
                       ))}
                     </div>
+                  )}
+                </div>
+              )}
+
+              {/* Browse by Category Picker - shown when not searching */}
+              {!(showSearch && searchQuery.length >= 2) && (
+                <div className="space-y-3">
+                  {/* Picker breadcrumb / back navigation */}
+                  {(pickerTypeId || pickerBrandId) && (
+                    <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap">
+                      <button
+                        type="button"
+                        className="hover:text-foreground transition-colors"
+                        onClick={() => { setPickerTypeId(null); setPickerBrandId(null); }}
+                        data-testid="picker-nav-types"
+                      >
+                        Device Type
+                      </button>
+                      {pickerTypeId && (
+                        <>
+                          <ChevronRight className="h-3 w-3" />
+                          <button
+                            type="button"
+                            className="hover:text-foreground transition-colors"
+                            onClick={() => { setPickerBrandId(null); }}
+                            data-testid="picker-nav-brands"
+                          >
+                            {pickerDeviceTypes.find(t => t.id === pickerTypeId)?.name || "Brand"}
+                          </button>
+                        </>
+                      )}
+                      {pickerBrandId && (
+                        <>
+                          <ChevronRight className="h-3 w-3" />
+                          <span className="text-foreground">
+                            {pickerBrands.find(b => b.id === pickerBrandId)?.name || "Model"}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Step 1: Device Types */}
+                  {!pickerTypeId && (
+                    <>
+                      <p className="text-sm text-muted-foreground text-center">Or browse by category</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {pickerDeviceTypes.map(type => {
+                          const IconComponent = {
+                            smartphone: Smartphone,
+                            tablet: Tablet,
+                            laptop: Laptop,
+                            desktop: Monitor,
+                            gaming: Gamepad2,
+                            watch: Watch,
+                            headphones: Headphones,
+                            camera: Camera,
+                          }[type.icon] || Smartphone;
+                          return (
+                            <button
+                              key={type.id}
+                              type="button"
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all hover:border-primary/50 hover-elevate"
+                              onClick={() => { setPickerTypeId(type.id); setPickerBrandId(null); }}
+                              data-testid={`picker-type-${type.id}`}
+                            >
+                              {type.imageUrl ? (
+                                <img src={type.imageUrl} alt={type.name} className="h-10 w-10 object-contain" />
+                              ) : (
+                                <IconComponent className="h-10 w-10 text-muted-foreground" />
+                              )}
+                              <span className="text-sm font-medium text-center">{type.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  )}
+
+                  {/* Step 2: Brands for selected type */}
+                  {pickerTypeId && !pickerBrandId && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => setPickerTypeId(null)} data-testid="picker-back-to-types">
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <p className="text-sm font-medium">Select a brand</p>
+                      </div>
+                      {pickerBrandsLoading ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : pickerBrands.length === 0 ? (
+                        <p className="text-center py-6 text-sm text-muted-foreground">No brands found for this category</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          {pickerBrands.map(brand => (
+                            <button
+                              key={brand.id}
+                              type="button"
+                              className="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all hover:border-primary/50 hover-elevate"
+                              onClick={() => setPickerBrandId(brand.id)}
+                              data-testid={`picker-brand-${brand.id}`}
+                            >
+                              {brand.logo ? (
+                                <img src={brand.logo} alt={brand.name} className="h-10 w-10 object-contain" />
+                              ) : (
+                                <div className="h-10 w-10 bg-muted rounded-md flex items-center justify-center text-lg font-bold text-muted-foreground">
+                                  {brand.name.charAt(0)}
+                                </div>
+                              )}
+                              <span className="text-sm font-medium text-center">{brand.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {/* Step 3: Models for selected brand + type */}
+                  {pickerTypeId && pickerBrandId && (
+                    <>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={() => setPickerBrandId(null)} data-testid="picker-back-to-brands">
+                          <ChevronLeft className="h-4 w-4" />
+                        </Button>
+                        <p className="text-sm font-medium">Select your model</p>
+                      </div>
+                      {pickerDevicesLoading ? (
+                        <div className="flex justify-center py-6">
+                          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                      ) : pickerDevices.length === 0 ? (
+                        <p className="text-center py-6 text-sm text-muted-foreground">No models found</p>
+                      ) : (
+                        <div className="border rounded-md max-h-64 overflow-y-auto">
+                          <div className="p-1 space-y-1">
+                            {pickerDevices.map(device => (
+                              <Button
+                                key={device.id}
+                                variant="ghost"
+                                className="w-full justify-start text-left h-auto py-3 hover-elevate"
+                                onClick={() => handleSelectDevice(device)}
+                                data-testid={`picker-device-${device.id}`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  {device.imageUrl ? (
+                                    <img src={device.imageUrl} alt={device.name} className="h-8 w-8 object-contain rounded" />
+                                  ) : null}
+                                  <span className="font-medium">{device.name}</span>
+                                </div>
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
                 </div>
               )}

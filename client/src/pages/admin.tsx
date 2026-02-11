@@ -383,13 +383,14 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
   const [editItem, setEditItem] = useState<DeviceType | null>(null);
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("smartphone");
+  const [imageUrl, setImageUrl] = useState("");
 
   const { data: deviceTypes = [], isLoading } = useQuery<DeviceType[]>({
     queryKey: ["/api/device-types"],
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { name: string; icon: string }) => {
+    mutationFn: async (data: { name: string; icon: string; imageUrl?: string }) => {
       const res = await apiRequest("POST", "/api/device-types", data);
       return res.json();
     },
@@ -398,6 +399,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
       setOpen(false);
       setName("");
       setIcon("smartphone");
+      setImageUrl("");
       toast({ title: "Device type created" });
     },
     onError: (error: Error) => {
@@ -406,7 +408,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { name?: string; icon?: string } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { name?: string; icon?: string; imageUrl?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/device-types/${id}`, data);
       return res.json();
     },
@@ -436,7 +438,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    createMutation.mutate({ name, icon });
+    createMutation.mutate({ name, icon, imageUrl: imageUrl || undefined });
   };
 
   const handleEdit = (type: DeviceType) => {
@@ -447,7 +449,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
   const handleEditSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editItem) return;
-    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, icon: editItem.icon } });
+    updateMutation.mutate({ id: editItem.id, data: { name: editItem.name, icon: editItem.icon, imageUrl: (editItem as any).imageUrl } });
   };
 
   return (
@@ -491,6 +493,14 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                     </SelectContent>
                   </Select>
                 </div>
+                <ImageInput
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
+                  label="Image"
+                  placeholder="Enter image URL"
+                  testIdPrefix="type-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending} data-testid="button-save-type">
@@ -529,6 +539,14 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                     </SelectContent>
                   </Select>
                 </div>
+                <ImageInput
+                  value={(editItem as any)?.imageUrl || ""}
+                  onChange={(url) => setEditItem(prev => prev ? {...prev, imageUrl: url || null} as any : null)}
+                  onError={(msg) => toast({ title: "Upload Error", description: msg, variant: "destructive" })}
+                  label="Image"
+                  placeholder="Enter image URL"
+                  testIdPrefix="edit-type-image"
+                />
               </div>
               <DialogFooter>
                 <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-type">
@@ -549,6 +567,7 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-[60px]">Image</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Icon</TableHead>
                 <TableHead className="w-[120px]">Actions</TableHead>
@@ -557,6 +576,13 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
             <TableBody>
               {deviceTypes.map((type) => (
                 <TableRow key={type.id}>
+                  <TableCell>
+                    {(type as any).imageUrl ? (
+                      <img src={(type as any).imageUrl} alt={type.name} className="h-8 w-8 object-contain rounded" />
+                    ) : (
+                      <div className="h-8 w-8 bg-muted rounded flex items-center justify-center text-xs text-muted-foreground">-</div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{type.name}</TableCell>
                   <TableCell><Badge variant="secondary">{type.icon}</Badge></TableCell>
                   <TableCell>
