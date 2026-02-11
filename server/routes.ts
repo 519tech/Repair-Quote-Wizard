@@ -2150,6 +2150,26 @@ export async function registerRoutes(
         const firstName = nameParts[0] || input.customerName;
         const lastName = nameParts.slice(1).join(' ') || '';
         
+        const servicesList = servicesData.map(s => 
+          `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
+        ).join('\n');
+        const discountLine = discountAmount > 0 ? `\nMulti-Service Discount: -$${discountAmount.toFixed(2)}` : '';
+        const leadNotes = `Quote from Website
+
+Customer Information:
+- Name: ${input.customerName}
+- Email: ${input.customerEmail}
+- Phone: ${input.customerPhone || 'Not provided'}
+
+Device: ${deviceName}
+
+Selected Services:
+${servicesList}
+${discountLine}
+Grand Total: $${finalTotal.toFixed(2)} plus taxes
+
+${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
+
         createLead({
           summary: {
             firstName,
@@ -2165,7 +2185,7 @@ export async function registerRoutes(
               name: s.serviceName,
             })),
             additionalProblem: servicesData.map(s => s.serviceName).join(', '),
-            customerNotes: input.notes,
+            customerNotes: leadNotes,
           }],
         }).catch(err => console.error('RepairDesk lead creation error:', err));
       }
