@@ -1147,7 +1147,7 @@ export default function Home() {
                                   } else {
                                     return (
                                       <Badge variant="secondary" className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-xs whitespace-normal text-left">
-                                        Out of stock, parts order may be required. Contact us for confirmation
+                                        Parts order may be required. Contact us for confirmation
                                       </Badge>
                                     );
                                   }
@@ -1299,7 +1299,7 @@ export default function Home() {
                                   return (
                                     <Badge variant="secondary" className="text-xs py-0 px-1.5 mt-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
                                       <Package className="h-3 w-3 mr-1 shrink-0" />
-                                      Out of stock, parts order may be required. Contact us for confirmation
+                                      Parts order may be required. Contact us for confirmation
                                     </Badge>
                                   );
                                 }
@@ -1555,7 +1555,7 @@ export default function Home() {
                       id="unknown-issue"
                       value={unknownDeviceInfo.issueDescription}
                       onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, issueDescription: e.target.value })}
-                      placeholder="Describe what's wrong with your device..."
+                      placeholder="Describe what's wrong with your device, provide model number if possible.."
                       required
                       className="resize-none"
                       rows={3}

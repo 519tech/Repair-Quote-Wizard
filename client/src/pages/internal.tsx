@@ -376,7 +376,7 @@ export default function Internal() {
                                       return (
                                         <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
                                           <Package className="h-3 w-3 mr-1 shrink-0" />
-                                          Out of stock, parts order may be required. Contact us for confirmation
+                                          Parts order may be required
                                         </Badge>
                                       );
                                     }
