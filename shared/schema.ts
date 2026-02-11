@@ -9,6 +9,7 @@ export const deviceTypes = pgTable("device_types", {
   name: text("name").notNull().unique(),
   icon: text("icon").notNull().default("smartphone"),
   imageUrl: text("image_url"),
+  displayOrder: integer("display_order").notNull().default(0),
 });
 
 export const deviceTypesRelations = relations(deviceTypes, ({ many }) => ({
@@ -25,6 +26,7 @@ export const brands = pgTable("brands", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull().unique(),
   logo: text("logo"),
+  displayOrder: integer("display_order").notNull().default(0),
 });
 
 export const brandsRelations = relations(brands, ({ many }) => ({
@@ -66,6 +68,7 @@ export const devices = pgTable("devices", {
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
   brandId: varchar("brand_id").references(() => brands.id, { onDelete: "set null" }),
   imageUrl: text("image_url"),
+  releaseDate: text("release_date"),
 }, (table) => [
   unique("devices_name_brand_type_unique").on(table.name, table.brandId, table.deviceTypeId),
 ]);

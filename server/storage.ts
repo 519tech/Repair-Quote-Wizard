@@ -49,7 +49,7 @@ import {
   type DismissedServiceLinkAlert,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, or, ilike, sql } from "drizzle-orm";
+import { eq, and, or, ilike, sql, desc } from "drizzle-orm";
 import { users } from "@shared/models/auth";
 
 export interface IStorage {
@@ -59,6 +59,7 @@ export interface IStorage {
   createDeviceType(data: InsertDeviceType): Promise<DeviceType>;
   updateDeviceType(id: string, data: Partial<InsertDeviceType>): Promise<DeviceType | undefined>;
   deleteDeviceType(id: string): Promise<void>;
+  reorderDeviceTypes(orderedIds: string[]): Promise<void>;
 
   // Brands
   getBrands(): Promise<Brand[]>;
@@ -66,6 +67,7 @@ export interface IStorage {
   createBrand(data: InsertBrand): Promise<Brand>;
   updateBrand(id: string, data: Partial<InsertBrand>): Promise<Brand | undefined>;
   deleteBrand(id: string): Promise<void>;
+  reorderBrands(orderedIds: string[]): Promise<void>;
 
   // Brand-DeviceType Links
   getBrandDeviceTypes(): Promise<BrandDeviceTypeWithRelations[]>;
@@ -164,7 +166,7 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // Device Types
   async getDeviceTypes(): Promise<DeviceType[]> {
-    return db.select().from(deviceTypes);
+    return db.select().from(deviceTypes).orderBy(deviceTypes.displayOrder);
   }
 
   async getDeviceType(id: string): Promise<DeviceType | undefined> {
@@ -186,9 +188,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(deviceTypes).where(eq(deviceTypes.id, id));
   }
 
+  async reorderDeviceTypes(orderedIds: string[]): Promise<void> {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(deviceTypes)
+        .set({ displayOrder: i })
+        .where(eq(deviceTypes.id, orderedIds[i]));
+    }
+  }
+
   // Brands
   async getBrands(): Promise<Brand[]> {
-    return db.select().from(brands);
+    return db.select().from(brands).orderBy(brands.displayOrder);
   }
 
   async getBrand(id: string): Promise<Brand | undefined> {
@@ -208,6 +218,14 @@ export class DatabaseStorage implements IStorage {
 
   async deleteBrand(id: string): Promise<void> {
     await db.delete(brands).where(eq(brands.id, id));
+  }
+
+  async reorderBrands(orderedIds: string[]): Promise<void> {
+    for (let i = 0; i < orderedIds.length; i++) {
+      await db.update(brands)
+        .set({ displayOrder: i })
+        .where(eq(brands.id, orderedIds[i]));
+    }
   }
 
   // Brand-DeviceType Links
@@ -272,17 +290,17 @@ export class DatabaseStorage implements IStorage {
 
   // Devices
   async getDevices(): Promise<Device[]> {
-    return db.select().from(devices);
+    return db.select().from(devices).orderBy(desc(devices.releaseDate));
   }
 
   async getDevicesByType(typeId: string): Promise<Device[]> {
-    return db.select().from(devices).where(eq(devices.deviceTypeId, typeId));
+    return db.select().from(devices).where(eq(devices.deviceTypeId, typeId)).orderBy(desc(devices.releaseDate));
   }
 
   async getDevicesByTypeAndBrand(typeId: string, brandId: string): Promise<Device[]> {
     return db.select().from(devices).where(
       and(eq(devices.deviceTypeId, typeId), eq(devices.brandId, brandId))
-    );
+    ).orderBy(desc(devices.releaseDate));
   }
 
   async getDevice(id: string): Promise<Device | undefined> {

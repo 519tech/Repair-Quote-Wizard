@@ -284,6 +284,19 @@ export async function registerRoutes(
     }
   });
 
+  app.post("/api/device-types/reorder", requireAdmin, async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "orderedIds must be an array" });
+      }
+      await storage.reorderDeviceTypes(orderedIds);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder device types" });
+    }
+  });
+
   // Brands
   app.get("/api/brands", async (req, res) => {
     try {
@@ -339,6 +352,19 @@ export async function registerRoutes(
       res.status(204).send();
     } catch (error) {
       res.status(500).json({ error: "Failed to delete brand" });
+    }
+  });
+
+  app.post("/api/brands/reorder", requireAdmin, async (req, res) => {
+    try {
+      const { orderedIds } = req.body;
+      if (!Array.isArray(orderedIds)) {
+        return res.status(400).json({ error: "orderedIds must be an array" });
+      }
+      await storage.reorderBrands(orderedIds);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to reorder brands" });
     }
   });
 
