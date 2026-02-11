@@ -562,7 +562,21 @@ function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"]
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(type)} data-testid={`button-edit-type-${type.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(type.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-type-${type.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-type-${type.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This will permanently delete this device type. This action cannot be undone.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMutation.mutate(type.id)} data-testid={`confirm-delete-type-${type.id}`}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -813,7 +827,21 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(brand)} data-testid={`button-edit-brand-${brand.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(brand.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-${brand.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-brand-${brand.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>This will permanently delete this brand. This action cannot be undone.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteMutation.mutate(brand.id)} data-testid={`confirm-delete-brand-${brand.id}`}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -843,16 +871,29 @@ function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                           return type ? (
                             <Badge key={link.id} variant="secondary" className="flex items-center gap-1">
                               {type.name}
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-4 w-4 ml-1" 
-                                onClick={() => removeTypeLinkMutation.mutate(link.id)}
-                                disabled={removeTypeLinkMutation.isPending}
-                                data-testid={`button-remove-type-${link.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-4 w-4 ml-1" 
+                                    disabled={removeTypeLinkMutation.isPending}
+                                    data-testid={`button-remove-type-${link.id}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                    <AlertDialogDescription>This will remove this device type from the brand. This action cannot be undone.</AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => removeTypeLinkMutation.mutate(link.id)} data-testid={`confirm-remove-type-${link.id}`}>Remove</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </Badge>
                           ) : null;
                         })}
@@ -1007,7 +1048,21 @@ function BrandDeviceTypeLinksTab({ toast }: { toast: ReturnType<typeof useToast>
                   <TableCell className="font-medium">{getBrandName(link.brandId)}</TableCell>
                   <TableCell><Badge variant="secondary">{getTypeName(link.deviceTypeId)}</Badge></TableCell>
                   <TableCell>
-                    <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(link.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-brand-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-brand-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                          <AlertDialogDescription>This will permanently delete this brand-type link. This action cannot be undone.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => deleteMutation.mutate(link.id)} data-testid={`confirm-delete-brand-link-${link.id}`}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </TableCell>
                 </TableRow>
               ))}
@@ -1846,7 +1901,21 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(device)} data-testid={`button-edit-device-${device.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(device.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-device-${device.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-device-${device.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This will permanently delete this device and all its service links. This action cannot be undone.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMutation.mutate(device.id)} data-testid={`confirm-delete-device-${device.id}`}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1914,7 +1983,21 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                         <TableCell>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEditLink(link)} data-testid={`button-edit-link-${link.id}`}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteLinkMutation.mutate(link.id)} disabled={deleteLinkMutation.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" disabled={deleteLinkMutation.isPending} data-testid={`button-delete-link-${link.id}`}><Trash2 className="h-4 w-4" /></Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>This will permanently delete this service link. This action cannot be undone.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteLinkMutation.mutate(link.id)} data-testid={`confirm-delete-link-${link.id}`}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -2034,16 +2117,30 @@ function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) 
                           )}
                           {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
                         </span>
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="h-6 w-6"
-                          onClick={() => removeAdditionalPartMutation.mutate(ap.id)}
-                          disabled={removeAdditionalPartMutation.isPending}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6"
+                              disabled={removeAdditionalPartMutation.isPending}
+                              data-testid={`button-remove-additional-part-${ap.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>This will remove this additional part from the service link. This action cannot be undone.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => removeAdditionalPartMutation.mutate(ap.id)} data-testid={`confirm-remove-additional-part-${ap.id}`}>Remove</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     ))}
                   </div>
@@ -2559,7 +2656,21 @@ function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useToast>["t
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" onClick={() => handleEdit(category)} data-testid={`button-edit-category-${category.id}`}><Pencil className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(category.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-category-${category.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>This will permanently delete this service category. This action cannot be undone.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => deleteMutation.mutate(category.id)} data-testid={`confirm-delete-category-${category.id}`}>Delete</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -3176,7 +3287,21 @@ function ServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
                   <TableCell>
                     <div className="flex gap-1">
                       <Button variant="ghost" size="icon" onClick={() => handleEdit(service)} data-testid={`button-edit-service-${service.id}`}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(service.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-service-${service.id}`}><Trash2 className="h-4 w-4" /></Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-service-${service.id}`}><Trash2 className="h-4 w-4" /></Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>This will permanently delete this service. This action cannot be undone.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => deleteMutation.mutate(service.id)} data-testid={`confirm-delete-service-${service.id}`}>Delete</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -3616,7 +3741,21 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                         <TableCell>
                           <div className="flex gap-1">
                             <Button variant="ghost" size="icon" onClick={() => handleEdit(part)} data-testid={`button-edit-custom-part-${part.id}`}><Pencil className="h-4 w-4" /></Button>
-                            <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(part.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-custom-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-custom-part-${part.id}`}><Trash2 className="h-4 w-4" /></Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                  <AlertDialogDescription>This will permanently delete this custom part. This action cannot be undone.</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => deleteMutation.mutate(part.id)} data-testid={`confirm-delete-custom-part-${part.id}`}>Delete</AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </TableCell>
                       </TableRow>
@@ -4522,17 +4661,30 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                             )}
                             {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
                           </span>
-                          <Button 
-                            type="button" 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-6 w-6"
-                            onClick={() => dsRemoveAdditionalPartMutation.mutate(ap.id)}
-                            disabled={dsRemoveAdditionalPartMutation.isPending}
-                            data-testid={`button-remove-ds-additional-part-${ap.id}`}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                type="button" 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6"
+                                disabled={dsRemoveAdditionalPartMutation.isPending}
+                                data-testid={`button-remove-ds-additional-part-${ap.id}`}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>This will remove this additional part from the service link. This action cannot be undone.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => dsRemoveAdditionalPartMutation.mutate(ap.id)} data-testid={`confirm-remove-ds-additional-part-${ap.id}`}>Remove</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       ))}
                     </div>
@@ -4975,7 +5127,21 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                       <TableCell>
                         <div className="flex gap-1">
                           <Button variant="ghost" size="icon" onClick={() => handleEdit(ds)} data-testid={`button-edit-link-${ds.id}`}><Pencil className="h-4 w-4" /></Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(ds.id)} disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" disabled={deleteMutation.isPending} data-testid={`button-delete-link-${ds.id}`}><Trash2 className="h-4 w-4" /></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>This will permanently delete this device-service link. This action cannot be undone.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteMutation.mutate(ds.id)} data-testid={`confirm-delete-link-${ds.id}`}>Delete</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </div>
                       </TableCell>
                     </TableRow>
