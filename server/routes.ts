@@ -544,15 +544,16 @@ export async function registerRoutes(
       const prompt = `What is the release date of the ${brandName ? brandName + " " : ""}${modelName}? Reply with ONLY the date in YYYY-MM-DD format (e.g., 2024-09-20). If you can only determine the month, use the 1st of that month. If you can only determine the year, use January 1st. If you cannot determine the release date at all, reply with "unknown".`;
 
       const response = await openai.chat.completions.create({
-        model: "gpt-5-nano",
+        model: "gpt-4o-mini",
         messages: [
           { role: "system", content: "You are a device release date lookup assistant. You respond with only the release date in YYYY-MM-DD format or 'unknown'. No explanations." },
           { role: "user", content: prompt },
         ],
-        max_completion_tokens: 20,
+        max_tokens: 20,
       });
 
       const result = response.choices[0]?.message?.content?.trim() || "unknown";
+      console.log(`Release date detection for "${brandName ? brandName + ' ' : ''}${modelName}": AI returned "${result}"`);
       const dateMatch = result.match(/^\d{4}-\d{2}-\d{2}$/);
 
       if (dateMatch) {
