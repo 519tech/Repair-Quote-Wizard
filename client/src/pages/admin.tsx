@@ -4296,6 +4296,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   // 2. Missing part: no part assigned AND service is NOT labour-only
   const errorLinks = useMemo(() => {
     return deviceServices.filter(ds => {
+      if ((ds as any).manualPriceOverride) return false;
       const hasPart = ds.part !== null;
       const hasOrphanedSku = ds.partSku && !hasPart; // SKU was set but part was deleted
       const isLabourOnly = ds.service?.labourOnly === true;
@@ -4307,11 +4308,12 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   // Separate orphaned SKU errors from missing part errors for better messaging
   // Filter out dismissed alerts
   const orphanedSkuLinks = useMemo(() => {
-    return deviceServices.filter(ds => ds.partSku && !ds.part && !dismissedAlertIds.includes(ds.id));
+    return deviceServices.filter(ds => ds.partSku && !ds.part && !(ds as any).manualPriceOverride && !dismissedAlertIds.includes(ds.id));
   }, [deviceServices, dismissedAlertIds]);
   
   const missingPartLinks = useMemo(() => {
     return deviceServices.filter(ds => {
+      if ((ds as any).manualPriceOverride) return false;
       const hasPart = ds.part !== null;
       const isLabourOnly = ds.service?.labourOnly === true;
       return !hasPart && !isLabourOnly && !ds.partSku && !dismissedAlertIds.includes(ds.id);
