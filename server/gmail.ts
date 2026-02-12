@@ -1,11 +1,20 @@
 // Gmail integration for sending quote emails
-// Using Replit's Gmail connector
-// WARNING: Never cache the Gmail client - access tokens expire
+// Using Replit's Gmail connector (connection:conn_google-mail)
 import { google } from 'googleapis';
 import { storage } from './storage';
 
+let cachedConnectionSettings: any = null;
+
 async function getAccessToken() {
+  if (cachedConnectionSettings && cachedConnectionSettings.settings?.expires_at && new Date(cachedConnectionSettings.settings.expires_at).getTime() > Date.now()) {
+    return cachedConnectionSettings.settings.access_token;
+  }
+
   const hostname = process.env.REPLIT_CONNECTORS_HOSTNAME;
+  if (!hostname) {
+    throw new Error('REPLIT_CONNECTORS_HOSTNAME not set - Gmail connector not available');
+  }
+
   const xReplitToken = process.env.REPL_IDENTITY 
     ? 'repl ' + process.env.REPL_IDENTITY 
     : process.env.WEB_REPL_RENEWAL 
@@ -13,23 +22,30 @@ async function getAccessToken() {
     : null;
 
   if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
+    throw new Error('X_REPLIT_TOKEN not found for repl/depl - cannot authenticate with Gmail connector');
   }
 
-  const connectionSettings = await fetch(
-    'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail',
-    {
-      headers: {
-        'Accept': 'application/json',
-        'X_REPLIT_TOKEN': xReplitToken
-      }
+  const url = 'https://' + hostname + '/api/v2/connection?include_secrets=true&connector_names=google-mail';
+  const response = await fetch(url, {
+    headers: {
+      'Accept': 'application/json',
+      'X_REPLIT_TOKEN': xReplitToken
     }
-  ).then(res => res.json()).then(data => data.items?.[0]);
+  });
 
-  const accessToken = connectionSettings?.settings?.access_token || connectionSettings?.settings?.oauth?.credentials?.access_token;
+  if (!response.ok) {
+    const text = await response.text();
+    throw new Error(`Gmail connector fetch failed (${response.status}): ${text}`);
+  }
 
-  if (!connectionSettings || !accessToken) {
-    throw new Error('Gmail not connected');
+  const data = await response.json();
+  cachedConnectionSettings = data.items?.[0];
+
+  const accessToken = cachedConnectionSettings?.settings?.access_token || cachedConnectionSettings?.settings?.oauth?.credentials?.access_token;
+
+  if (!cachedConnectionSettings || !accessToken) {
+    console.error('Gmail connector response (no token found):', JSON.stringify(data, null, 2));
+    throw new Error('Gmail not connected - no access token in connector response');
   }
   return accessToken;
 }
@@ -99,7 +115,14 @@ The RepairQuote Team`;
 
 export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
     
     // Fetch custom templates from database
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
@@ -202,7 +225,14 @@ async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteE
 
 export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
     
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
     const bodyTemplate = await storage.getMessageTemplate('email_body');
@@ -278,14 +308,20 @@ interface AdminNotificationData {
 
 export async function sendAdminNotificationEmail(data: AdminNotificationData): Promise<boolean> {
   try {
-    // Get admin email from settings
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
     if (!adminEmailSetting?.content) {
       console.log('Admin notification email not configured');
       return false;
     }
     
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
     
     const servicesList = data.services.map(s => 
       `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
@@ -355,7 +391,14 @@ interface UnknownDeviceQuoteEmailData {
 
 export async function sendUnknownDeviceQuoteEmail(data: UnknownDeviceQuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
     
     // Fetch custom template from database
     const bodyTemplate = await storage.getMessageTemplate('unknown_device_email');
@@ -423,7 +466,14 @@ export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuot
       return false;
     }
     
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
 
     const subject = `New Unknown Device Quote Request - ${data.customerName}`;
     const emailBody = `New Unknown Device Quote Request Received
@@ -514,7 +564,14 @@ export async function sendApiErrorNotification(serviceName: string, errorMessage
       return false;
     }
     
-    const gmail = await getGmailClient();
+    let gmail;
+    try {
+      gmail = await getGmailClient();
+    } catch (tokenErr) {
+      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+      cachedConnectionSettings = null;
+      gmail = await getGmailClient();
+    }
     
     const subject = `⚠️ API Error: ${serviceName}`;
     const emailBody = `API Error Notification
