@@ -624,8 +624,10 @@ export default function Embed() {
                 src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
                 alt="519 Tech Services - Device Repair Specialists" 
                 className="h-16 mx-auto mb-2"
+                width={400}
+                height={400}
               />
-              <CardTitle className="text-lg">Get a Repair Quote</CardTitle>
+              <CardTitle className="text-lg text-pretty">Get a Repair Quote</CardTitle>
               <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -633,11 +635,13 @@ export default function Embed() {
               <div className="relative" role="search">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
                 <Input
-                  placeholder="Search your device model..."
+                  placeholder="Search your device model…"
                   value={searchQuery}
                   onChange={(e) => { setSearchQuery(e.target.value); setShowSearch(true); }}
                   onFocus={() => setShowSearch(true)}
                   className="pl-9 pr-10 h-12 text-base"
+                  name="device-search"
+                  autoComplete="off"
                   data-testid="input-device-search"
                   aria-label="Search for your device model"
                 />
@@ -648,6 +652,7 @@ export default function Embed() {
                       variant="ghost"
                       size="icon"
                       onClick={clearSearch}
+                      aria-label="Clear search"
                       data-testid="button-clear-search"
                     >
                       <X className="h-4 w-4" />
@@ -713,7 +718,7 @@ export default function Embed() {
                       </button>
                       {pickerTypeId && (
                         <>
-                          <ChevronRight className="h-3 w-3" />
+                          <ChevronRight className="h-3 w-3" aria-hidden="true" />
                           <button
                             type="button"
                             className="hover:text-foreground transition-colors"
@@ -726,7 +731,7 @@ export default function Embed() {
                       )}
                       {pickerBrandId && (
                         <>
-                          <ChevronRight className="h-3 w-3" />
+                          <ChevronRight className="h-3 w-3" aria-hidden="true" />
                           <span className="text-foreground">
                             {pickerBrands.find(b => b.id === pickerBrandId)?.name || "Model"}
                           </span>
@@ -773,9 +778,9 @@ export default function Embed() {
                               data-testid={`picker-type-${type.id}`}
                             >
                               {type.imageUrl ? (
-                                <img src={type.imageUrl} alt={type.name} className="h-10 w-10 object-contain" />
+                                <img src={type.imageUrl} alt={type.name} className="h-10 w-10 object-contain" loading="lazy" />
                               ) : (
-                                <IconComponent className="h-10 w-10 text-muted-foreground" />
+                                <IconComponent className="h-10 w-10 text-muted-foreground" aria-hidden="true" />
                               )}
                               <span className="text-sm font-medium text-center">{type.name}</span>
                             </button>
@@ -789,7 +794,7 @@ export default function Embed() {
                   {pickerTypeId && !pickerBrandId && (
                     <>
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => setPickerTypeId(null)} data-testid="picker-back-to-types">
+                        <Button variant="ghost" size="icon" onClick={() => setPickerTypeId(null)} aria-label="Back to device types" data-testid="picker-back-to-types">
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <p className="text-sm font-medium">Select a brand</p>
@@ -811,7 +816,7 @@ export default function Embed() {
                               data-testid={`picker-brand-${brand.id}`}
                             >
                               {brand.logo ? (
-                                <img src={brand.logo} alt={brand.name} className="h-10 w-10 object-contain" />
+                                <img src={brand.logo} alt={brand.name} className="h-10 w-10 object-contain" loading="lazy" />
                               ) : (
                                 <div className="h-10 w-10 bg-muted rounded-md flex items-center justify-center text-lg font-bold text-muted-foreground">
                                   {brand.name.charAt(0)}
@@ -829,7 +834,7 @@ export default function Embed() {
                   {pickerTypeId && pickerBrandId && (
                     <>
                       <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" onClick={() => setPickerBrandId(null)} data-testid="picker-back-to-brands">
+                        <Button variant="ghost" size="icon" onClick={() => setPickerBrandId(null)} aria-label="Back to brands" data-testid="picker-back-to-brands">
                           <ChevronLeft className="h-4 w-4" />
                         </Button>
                         <p className="text-sm font-medium">Select your model</p>
@@ -853,7 +858,7 @@ export default function Embed() {
                               >
                                 <div className="flex items-center gap-3">
                                   {device.imageUrl ? (
-                                    <img src={device.imageUrl} alt={device.name} className="h-8 w-8 object-contain rounded" />
+                                    <img src={device.imageUrl} alt={device.name} className="h-8 w-8 object-contain rounded" loading="lazy" />
                                   ) : null}
                                   <span className="font-medium">{device.name}</span>
                                 </div>
@@ -875,7 +880,7 @@ export default function Embed() {
                   onClick={() => setView('unknown')}
                   data-testid="button-unknown-device"
                 >
-                  <HelpCircle className="h-4 w-4 mr-2" />
+                  <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />
                   I don't know what device I have
                 </Button>
               </div>
@@ -895,10 +900,11 @@ export default function Embed() {
                         src={selectedDevice.imageUrl} 
                         alt={selectedDevice.name}
                         className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                        <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                       </div>
                     )}
                   </div>
@@ -910,7 +916,7 @@ export default function Embed() {
                       <span className="font-medium text-foreground">{selectedDevice.name}</span>
                     </p>
                   )}
-                  <CardTitle className="text-base">
+                  <CardTitle className="text-base text-pretty">
                     {selectedCategoryId ? "Compare Options" : "Select Repair Category"}
                   </CardTitle>
                   <CardDescription className="text-xs">
@@ -950,7 +956,7 @@ export default function Embed() {
                   }}
                   data-testid="button-start-over"
                 >
-                  <X className="h-4 w-4 mr-1" />
+                  <X className="h-4 w-4 mr-1" aria-hidden="true" />
                   Start over
                 </Button>
               </div>
@@ -959,10 +965,10 @@ export default function Embed() {
                 <div className="flex flex-col items-center justify-center py-12 space-y-4">
                   <div className="relative">
                     <div className="w-16 h-16 rounded-full border-4 border-muted animate-pulse" />
-                    <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-primary" />
+                    <Loader2 className="absolute inset-0 m-auto h-8 w-8 animate-spin text-primary" aria-hidden="true" />
                   </div>
                   <p className="text-sm text-muted-foreground animate-pulse">
-                    {categoryLoading ? "Loading repair options..." : "Loading services..."}
+                    {categoryLoading ? "Loading repair options…" : "Loading services…"}
                   </p>
                 </div>
               ) : !selectedCategoryId && categories.length > 0 ? (
@@ -976,6 +982,9 @@ export default function Embed() {
                         key={cat.id}
                         className="p-3 rounded-lg border transition-all cursor-pointer hover:border-primary/50 hover-elevate"
                         onClick={() => handleCategorySelect(cat.id)}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCategorySelect(cat.id); } }}
+                        role="button"
+                        tabIndex={0}
                         data-testid={`category-${cat.id}`}
                       >
                         <div className="flex items-center gap-3">
@@ -984,10 +993,11 @@ export default function Embed() {
                               src={cat.imageUrl} 
                               alt={cat.name}
                               className="w-12 h-12 object-contain rounded-lg bg-muted p-1 shrink-0"
+                              loading="lazy"
                             />
                           ) : (
                             <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                              <Wrench className="h-5 w-5 text-muted-foreground" />
+                              <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                             </div>
                           )}
                           <div className="flex-1 min-w-0">
@@ -1001,7 +1011,7 @@ export default function Embed() {
                               <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{cat.description}</p>
                             )}
                           </div>
-                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                         </div>
                       </div>
                     );
@@ -1010,11 +1020,14 @@ export default function Embed() {
                     <div
                       className="p-3 rounded-lg border transition-all cursor-pointer hover:border-primary/50 hover-elevate"
                       onClick={() => handleCategorySelect("other")}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCategorySelect("other"); } }}
+                      role="button"
+                      tabIndex={0}
                       data-testid="category-other"
                     >
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                          <Wrench className="h-5 w-5 text-muted-foreground" />
+                          <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex justify-between items-start gap-2">
@@ -1024,7 +1037,7 @@ export default function Embed() {
                             </span>
                           </div>
                         </div>
-                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                       </div>
                     </div>
                   )}
@@ -1042,11 +1055,26 @@ export default function Embed() {
                       }));
                       setView('unknown');
                     }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        const deviceName = selectedDevice?.name || "";
+                        const brandName = selectedDevice?.brand?.name || "";
+                        const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+                        setUnknownDeviceInfo(prev => ({
+                          ...prev,
+                          deviceDescription: fullDeviceName
+                        }));
+                        setView('unknown');
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
                     data-testid="category-not-listed"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                        <HelpCircle className="h-5 w-5 text-muted-foreground" />
+                        <HelpCircle className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-medium">Other / Not Listed</p>
@@ -1054,7 +1082,7 @@ export default function Embed() {
                           Describe your issue and we'll provide a custom quote
                         </p>
                       </div>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
                     </div>
                   </div>
                 </div>
@@ -1068,6 +1096,9 @@ export default function Embed() {
                     <div
                       key={quote.serviceId}
                       onClick={() => toggleServiceSelection(quote.serviceId)}
+                      onKeyDown={(e) => { if ((e.key === 'Enter' || e.key === ' ') && quote.isAvailable) { e.preventDefault(); toggleServiceSelection(quote.serviceId); } }}
+                      role="button"
+                      tabIndex={quote.isAvailable ? 0 : -1}
                       className={`p-3 rounded-lg border transition-all cursor-pointer ${
                         !quote.isAvailable 
                           ? 'opacity-50 cursor-not-allowed' 
@@ -1088,10 +1119,11 @@ export default function Embed() {
                             src={quote.serviceImageUrl} 
                             alt={quote.serviceName}
                             className="w-10 h-10 object-contain rounded-lg bg-muted p-1 shrink-0"
+                            loading="lazy"
                           />
                         ) : (
                           <div className="w-10 h-10 rounded-lg bg-muted flex items-center justify-center shrink-0">
-                            <Wrench className="h-4 w-4 text-muted-foreground" />
+                            <Wrench className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
                           </div>
                         )}
                         <div className="flex-1 min-w-0">
@@ -1113,8 +1145,8 @@ export default function Embed() {
                               {(quote.primaryPartSkus?.length || 0) > 0 && (
                                 stockLoading ? (
                                   <span className="flex items-center gap-1 text-muted-foreground">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                    <span>Checking stock...</span>
+                                    <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                                    <span>Checking stock…</span>
                                   </span>
                                 ) : (() => {
                                   const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
@@ -1169,7 +1201,7 @@ export default function Embed() {
                                 )}
                               </div>
                               <Button size="sm" className="sm:hidden" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
-                                <ChevronRight className="h-4 w-4 mr-1" />
+                                <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
                             </div>
@@ -1180,11 +1212,11 @@ export default function Embed() {
                                 onClick={() => setSelectedCategoryId(null)}
                                 data-testid="button-add-another-service"
                               >
-                                <Plus className="h-4 w-4 mr-1" />
+                                <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Add another service
                               </Button>
                               <Button size="sm" className="hidden sm:inline-flex" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
-                                <ChevronRight className="h-4 w-4 mr-1" />
+                                <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
                             </div>
@@ -1211,10 +1243,11 @@ export default function Embed() {
                         src={selectedDevice.imageUrl} 
                         alt={selectedDevice.name}
                         className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                        <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                       </div>
                     )}
                   </div>
@@ -1226,7 +1259,7 @@ export default function Embed() {
                       <span className="font-medium text-foreground">{selectedDevice.name}</span>
                     </p>
                   )}
-                  <CardTitle className="text-lg">Your Repair Quote</CardTitle>
+                  <CardTitle className="text-lg text-pretty">Your Repair Quote</CardTitle>
                   <CardDescription className="text-xs">Review your selected services</CardDescription>
                 </div>
               </div>
@@ -1245,7 +1278,7 @@ export default function Embed() {
               <div className="space-y-4">
                 {/* Quote Summary */}
                 <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-                  <h3 className="font-semibold text-sm">Selected Services</h3>
+                  <h3 className="font-semibold text-sm text-pretty">Selected Services</h3>
                   <div className="space-y-2">
                     {getSelectedQuotes().map(q => (
                       <div key={q.serviceId} className="py-2 border-b last:border-b-0">
@@ -1261,8 +1294,8 @@ export default function Embed() {
                             {(q.primaryPartSkus?.length || 0) > 0 && (
                               stockLoading ? (
                                 <span className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                  <span>Checking stock...</span>
+                                  <Loader2 className="h-3 w-3 animate-spin" aria-hidden="true" />
+                                  <span>Checking stock…</span>
                                 </span>
                               ) : (() => {
                                 const anyPrimaryInStock = q.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
@@ -1303,6 +1336,7 @@ export default function Embed() {
                                   return next;
                                 });
                               }}
+                              aria-label="Remove service"
                               data-testid={`button-remove-service-${q.serviceId}`}
                             >
                               <X className="h-3 w-3" />
@@ -1336,12 +1370,12 @@ export default function Embed() {
                     <div className="flex items-center gap-2 p-3 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
                       {submitCombinedQuoteMutation.isPending ? (
                         <>
-                          <Loader2 className="h-5 w-5 animate-spin text-green-600" />
-                          <span className="text-sm text-green-700 dark:text-green-300">Sending your quote...</span>
+                          <Loader2 className="h-5 w-5 animate-spin text-green-600" aria-hidden="true" />
+                          <span className="text-sm text-green-700 dark:text-green-300">Sending your quote…</span>
                         </>
                       ) : (
                         <>
-                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" />
+                          <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 shrink-0" aria-hidden="true" />
                           <div>
                             <p className="font-medium text-green-700 dark:text-green-300 text-sm">Quote Sent!</p>
                             <p className="text-xs text-muted-foreground">
@@ -1370,7 +1404,7 @@ export default function Embed() {
                     {submitCombinedQuoteMutation.isPending ? (
                       <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     ) : (
-                      <Mail className="h-4 w-4 mr-2" />
+                      <Mail className="h-4 w-4 mr-2" aria-hidden="true" />
                     )}
                     Send Quote
                   </Button>
@@ -1380,7 +1414,7 @@ export default function Embed() {
                     onClick={() => setView('contact')}
                     data-testid="button-send-me-quote"
                   >
-                    <Mail className="h-4 w-4 mr-2" />
+                    <Mail className="h-4 w-4 mr-2" aria-hidden="true" />
                     Send Me Quote
                   </Button>
                 )}
@@ -1401,10 +1435,11 @@ export default function Embed() {
                         src={selectedDevice.imageUrl} 
                         alt={selectedDevice.name}
                         className="w-12 h-12 object-contain rounded-lg bg-muted p-1"
+                        loading="lazy"
                       />
                     ) : (
                       <div className="w-12 h-12 rounded-lg bg-muted flex items-center justify-center">
-                        <Wrench className="h-5 w-5 text-muted-foreground" />
+                        <Wrench className="h-5 w-5 text-muted-foreground" aria-hidden="true" />
                       </div>
                     )}
                   </div>
@@ -1413,7 +1448,7 @@ export default function Embed() {
                   <p className="text-xs text-muted-foreground mb-1">
                     {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
                   </p>
-                  <CardTitle className="text-lg">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
+                  <CardTitle className="text-lg text-pretty">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
                   <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
                 </div>
               </div>
@@ -1440,6 +1475,8 @@ export default function Embed() {
                       placeholder="Your name"
                       required
                       className="h-9"
+                      name="name"
+                      autoComplete="name"
                       data-testid="input-quote-name"
                     />
                   </div>
@@ -1453,6 +1490,9 @@ export default function Embed() {
                       placeholder="your@email.com"
                       required
                       className="h-9"
+                      name="email"
+                      autoComplete="email"
+                      spellCheck={false}
                       data-testid="input-quote-email"
                     />
                   </div>
@@ -1463,8 +1503,10 @@ export default function Embed() {
                       type="tel"
                       value={contactInfo.phone}
                       onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
-                      placeholder="For SMS quote"
+                      placeholder="e.g. 226-555-1234"
                       className="h-9"
+                      name="phone"
+                      autoComplete="tel"
                       data-testid="input-quote-phone"
                     />
                   </div>
@@ -1474,9 +1516,11 @@ export default function Embed() {
                       id="quote-notes"
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      placeholder="Any additional information..."
+                      placeholder="Any additional information…"
                       className="resize-none"
                       rows={2}
+                      name="notes"
+                      autoComplete="off"
                       data-testid="input-quote-notes"
                     />
                   </div>
@@ -1490,9 +1534,9 @@ export default function Embed() {
                   {submitCombinedQuoteMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : hidePricesUntilContact ? (
-                    <ChevronRight className="h-4 w-4 mr-2" />
+                    <ChevronRight className="h-4 w-4 mr-2" aria-hidden="true" />
                   ) : (
-                    <Check className="h-4 w-4 mr-2" />
+                    <Check className="h-4 w-4 mr-2" aria-hidden="true" />
                   )}
                   {hidePricesUntilContact ? "View My Quote" : "Send My Quote"}
                 </Button>
@@ -1505,7 +1549,7 @@ export default function Embed() {
         {view === 'unknown' && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Request a Quote</CardTitle>
+              <CardTitle className="text-lg text-pretty">Request a Quote</CardTitle>
               <CardDescription className="text-xs">
                 Tell us about your device and we'll get back to you with a quote
               </CardDescription>
@@ -1532,6 +1576,8 @@ export default function Embed() {
                       placeholder="e.g., Samsung phone, black, about 2 years old"
                       required
                       className="h-9"
+                      name="device-description"
+                      autoComplete="off"
                       data-testid="input-unknown-device"
                     />
                   </div>
@@ -1541,17 +1587,19 @@ export default function Embed() {
                       id="unknown-issue"
                       value={unknownDeviceInfo.issueDescription}
                       onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, issueDescription: e.target.value })}
-                      placeholder="Describe what's wrong with your device, provide model number if possible.."
+                      placeholder="Describe what's wrong with your device, provide model number if possible…"
                       required
                       className="resize-none"
                       rows={3}
+                      name="issue-description"
+                      autoComplete="off"
                       data-testid="input-unknown-issue"
                     />
                   </div>
                 </div>
 
                 <div className="border-t pt-4 space-y-3">
-                  <h3 className="font-semibold text-sm">Your Contact Info</h3>
+                  <h3 className="font-semibold text-sm text-pretty">Your Contact Info</h3>
                   <div className="space-y-1">
                     <Label htmlFor="unknown-name" className="text-xs">Name *</Label>
                     <Input
@@ -1561,6 +1609,8 @@ export default function Embed() {
                       placeholder="Your name"
                       required
                       className="h-9"
+                      name="name"
+                      autoComplete="name"
                       data-testid="input-unknown-name"
                     />
                   </div>
@@ -1574,6 +1624,9 @@ export default function Embed() {
                       placeholder="your@email.com"
                       required
                       className="h-9"
+                      name="email"
+                      autoComplete="email"
+                      spellCheck={false}
                       data-testid="input-unknown-email"
                     />
                   </div>
@@ -1584,8 +1637,10 @@ export default function Embed() {
                       type="tel"
                       value={unknownDeviceInfo.phone}
                       onChange={(e) => setUnknownDeviceInfo({ ...unknownDeviceInfo, phone: e.target.value })}
-                      placeholder="For faster response"
+                      placeholder="e.g. 226-555-1234"
                       className="h-9"
+                      name="phone"
+                      autoComplete="tel"
                       data-testid="input-unknown-phone"
                     />
                   </div>
@@ -1601,7 +1656,7 @@ export default function Embed() {
                   {submitUnknownDeviceMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                   ) : (
-                    <Check className="h-4 w-4 mr-2" />
+                    <Check className="h-4 w-4 mr-2" aria-hidden="true" />
                   )}
                   Request Quote
                 </Button>
@@ -1616,10 +1671,10 @@ export default function Embed() {
             <CardContent className="p-6">
               <div className="text-center space-y-4">
                 <div className="w-16 h-16 mx-auto rounded-full bg-green-100 dark:bg-green-950 flex items-center justify-center">
-                  <Check className="h-8 w-8 text-green-600 dark:text-green-400" />
+                  <Check className="h-8 w-8 text-green-600 dark:text-green-400" aria-hidden="true" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold">
+                  <h2 className="text-xl font-semibold text-pretty">
                     {unknownQuoteSent ? "Request Received!" : "Quote Sent!"}
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">

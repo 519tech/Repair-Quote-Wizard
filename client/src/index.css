@@ -158,6 +158,11 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  button, a, [role="button"] {
+    touch-action: manipulation;
   }
 }
 
