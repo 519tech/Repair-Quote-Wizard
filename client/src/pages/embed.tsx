@@ -166,10 +166,10 @@ export default function Embed() {
 
   const handlePickerTypeClick = async (typeId: string, typeName: string) => {
     try {
-      const res = await fetch(`/api/devices?typeId=${typeId}`);
+      const res = await fetch(`/api/brands/by-type/${typeId}`);
       if (res.ok) {
-        const devices = await res.json();
-        if (devices.length === 0) {
+        const linkedBrands = await res.json();
+        if (linkedBrands.length === 0) {
           setUnknownDeviceInfo(prev => ({
             ...prev,
             deviceDescription: typeName,
