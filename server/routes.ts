@@ -1079,6 +1079,109 @@ export async function registerRoutes(
     }
   });
 
+  // Validate all service link SKUs against Mobilesentrix API
+  let skuValidationInProgress = false;
+  let skuValidationProgress = { checked: 0, total: 0, missing: [] as any[], errors: [] as string[] };
+
+  app.get("/api/mobilesentrix/validate-skus/progress", requireAdmin, async (req, res) => {
+    res.json({
+      inProgress: skuValidationInProgress,
+      ...skuValidationProgress,
+    });
+  });
+
+  app.post("/api/mobilesentrix/validate-skus", requireAdmin, async (req, res) => {
+    if (skuValidationInProgress) {
+      return res.status(409).json({ error: "Validation already in progress" });
+    }
+
+    try {
+      if (!isMobilesentrixConfigured()) {
+        return res.status(400).json({ error: "Mobilesentrix API is not configured" });
+      }
+
+      const allDeviceServices = await storage.getDeviceServices();
+      const skuToLinks = new Map<string, Array<{ id: string; deviceName: string; brandName: string; serviceName: string; isPrimary: boolean }>>();
+
+      for (const ds of allDeviceServices) {
+        const deviceName = ds.device?.name || "Unknown";
+        const brandName = ds.device?.brand?.name || "";
+        const serviceName = ds.service?.name || "Unknown";
+
+        if (ds.partSku) {
+          if (!skuToLinks.has(ds.partSku)) skuToLinks.set(ds.partSku, []);
+          skuToLinks.get(ds.partSku)!.push({ id: ds.id, deviceName, brandName, serviceName, isPrimary: true });
+        }
+
+        const altSkus = (ds as any).alternativePartSkus;
+        if (Array.isArray(altSkus)) {
+          for (const altSku of altSkus) {
+            if (altSku && altSku.trim()) {
+              if (!skuToLinks.has(altSku)) skuToLinks.set(altSku, []);
+              skuToLinks.get(altSku)!.push({ id: ds.id, deviceName, brandName, serviceName, isPrimary: false });
+            }
+          }
+        }
+      }
+
+      const uniqueSkus = Array.from(skuToLinks.keys());
+      if (uniqueSkus.length === 0) {
+        return res.json({ checked: 0, total: 0, missing: [], errors: [] });
+      }
+
+      skuValidationInProgress = true;
+      skuValidationProgress = { checked: 0, total: uniqueSkus.length, missing: [], errors: [] };
+
+      res.json({ started: true, total: uniqueSkus.length });
+
+      const batchSize = 5;
+      const delayBetweenBatches = 1500;
+
+      for (let i = 0; i < uniqueSkus.length; i += batchSize) {
+        const batch = uniqueSkus.slice(i, i + batchSize);
+
+        const results = await Promise.allSettled(
+          batch.map(async (sku) => {
+            try {
+              const result = await getProductBySku(sku);
+              return { sku, found: result.found, name: result.name };
+            } catch (error: any) {
+              return { sku, found: false, error: error.message };
+            }
+          })
+        );
+
+        for (const result of results) {
+          skuValidationProgress.checked++;
+          if (result.status === 'fulfilled') {
+            const val = result.value;
+            if (!val.found) {
+              const links = skuToLinks.get(val.sku) || [];
+              skuValidationProgress.missing.push({
+                sku: val.sku,
+                error: (val as any).error || undefined,
+                affectedLinks: links,
+              });
+            }
+          } else {
+            skuValidationProgress.errors.push(result.reason?.message || 'Unknown error');
+          }
+        }
+
+        if (i + batchSize < uniqueSkus.length) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenBatches));
+        }
+      }
+
+      skuValidationInProgress = false;
+      console.log(`SKU validation complete: ${skuValidationProgress.checked} checked, ${skuValidationProgress.missing.length} missing`);
+    } catch (error: any) {
+      skuValidationInProgress = false;
+      skuValidationProgress.errors.push(error.message);
+      console.error("SKU validation error:", error);
+    }
+  });
+
   // Pre-fetch parts for services in a category (for a specific device)
   // This is called when user selects a category to pre-load prices
   app.post("/api/prefetch-category-parts", async (req, res) => {

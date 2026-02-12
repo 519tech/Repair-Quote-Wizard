@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5519,6 +5519,191 @@ function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>[
   );
 }
 
+interface SkuValidationResult {
+  sku: string;
+  error?: string;
+  affectedLinks: Array<{
+    id: string;
+    deviceName: string;
+    brandName: string;
+    serviceName: string;
+    isPrimary: boolean;
+  }>;
+}
+
+function SkuValidationCard() {
+  const [isValidating, setIsValidating] = useState(false);
+  const [progress, setProgress] = useState<{ checked: number; total: number; missing: SkuValidationResult[]; errors: string[] } | null>(null);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return () => stopPolling();
+  }, [stopPolling]);
+
+  const startPolling = () => {
+    stopPolling();
+    pollRef.current = setInterval(async () => {
+      try {
+        const pollRes = await fetch('/api/mobilesentrix/validate-skus/progress', { credentials: 'include' });
+        if (pollRes.ok) {
+          const pollData = await pollRes.json();
+          setProgress({ checked: pollData.checked, total: pollData.total, missing: pollData.missing, errors: pollData.errors });
+          if (!pollData.inProgress && pollData.total > 0) {
+            setIsValidating(false);
+            stopPolling();
+          }
+        }
+      } catch {}
+    }, 2000);
+  };
+
+  const startValidation = async () => {
+    setIsValidating(true);
+    setProgress(null);
+    try {
+      const res = await fetch('/api/mobilesentrix/validate-skus', { method: 'POST', credentials: 'include' });
+      if (res.status === 409) {
+        setProgress(null);
+        startPolling();
+        return;
+      }
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `Request failed (${res.status})` }));
+        setProgress({ checked: 0, total: 0, missing: [], errors: [errData.error || 'Failed to start validation'] });
+        setIsValidating(false);
+        return;
+      }
+      const data = await res.json();
+      if (data.started) {
+        setProgress({ checked: 0, total: data.total, missing: [], errors: [] });
+        startPolling();
+      } else if (data.total === 0) {
+        setProgress({ checked: 0, total: 0, missing: [], errors: [] });
+        setIsValidating(false);
+      }
+    } catch (error: any) {
+      setProgress({ checked: 0, total: 0, missing: [], errors: [error.message || 'Failed to start validation'] });
+      setIsValidating(false);
+    }
+  };
+
+  const progressPercent = progress && progress.total > 0 ? Math.round((progress.checked / progress.total) * 100) : 0;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Search className="h-5 w-5" />
+          SKU Validation
+        </CardTitle>
+        <CardDescription>Check all service link SKUs against the Mobilesentrix API to find parts that no longer exist</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-3 flex-wrap">
+          <Button
+            onClick={startValidation}
+            disabled={isValidating}
+            data-testid="button-validate-skus"
+          >
+            {isValidating ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Validating...
+              </>
+            ) : (
+              <>
+                <Search className="h-4 w-4 mr-2" />
+                Validate All SKUs
+              </>
+            )}
+          </Button>
+          {progress && progress.total > 0 && (
+            <span className="text-sm text-muted-foreground">
+              {progress.checked} / {progress.total} SKUs checked ({progressPercent}%)
+            </span>
+          )}
+        </div>
+
+        {isValidating && progress && progress.total > 0 && (
+          <div className="w-full bg-muted rounded-full h-2">
+            <div
+              className="bg-primary h-2 rounded-full transition-all duration-500"
+              style={{ width: `${progressPercent}%` }}
+            />
+          </div>
+        )}
+
+        {progress && !isValidating && progress.total > 0 && (
+          <div className="space-y-3">
+            {progress.missing.length === 0 && progress.errors.length === 0 ? (
+              <div className="p-3 rounded-lg border bg-green-50 dark:bg-green-900/20">
+                <div className="flex items-center gap-2">
+                  <Check className="h-4 w-4 text-green-600 dark:text-green-400" />
+                  <p className="text-sm text-green-700 dark:text-green-400">
+                    All {progress.total} SKUs verified - every part exists on Mobilesentrix
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <>
+                {progress.missing.length > 0 && (
+                  <div className="border border-orange-500/50 bg-orange-500/5 rounded-md p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <AlertTriangle className="h-5 w-5 text-orange-600" />
+                      <h4 className="font-semibold text-orange-600">
+                        {progress.missing.length} SKU{progress.missing.length !== 1 ? "s" : ""} Not Found on Mobilesentrix
+                      </h4>
+                    </div>
+                    <div className="max-h-64 overflow-y-auto space-y-2">
+                      {progress.missing.map((item) => (
+                        <div key={item.sku} className="p-2 bg-background rounded border">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="font-mono text-xs">{item.sku}</Badge>
+                            {item.error && <span className="text-xs text-destructive">{item.error}</span>}
+                          </div>
+                          <div className="text-xs text-muted-foreground space-y-0.5">
+                            {item.affectedLinks.map((link) => (
+                              <div key={`${item.sku}-${link.id}`}>
+                                {link.brandName} {link.deviceName} / {link.serviceName}
+                                {!link.isPrimary && <span className="text-orange-600 ml-1">(alt part)</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {progress.errors.length > 0 && (
+                  <div className="p-3 rounded-lg border bg-destructive/5">
+                    <p className="text-sm font-medium text-destructive mb-1">API Errors:</p>
+                    {progress.errors.map((err, i) => (
+                      <p key={i} className="text-xs text-destructive">{err}</p>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+
+        {progress && !isValidating && progress.total === 0 && (
+          <div className="p-3 rounded-lg border bg-muted/50">
+            <p className="text-sm text-muted-foreground">No SKUs found in service links to validate.</p>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 function MobilesentrixApiTest() {
   const [testResult, setTestResult] = useState<{ success: boolean; message: string; responseTime?: number } | null>(null);
   const [isTesting, setIsTesting] = useState(false);
@@ -6722,6 +6907,8 @@ $\{servicePrice} plus taxes
             )}
           </CardContent>
         </Card>
+
+        {mobilesentrixStatus?.configured && <SkuValidationCard />}
       </TabsContent>
     </Tabs>
   );

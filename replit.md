@@ -107,6 +107,11 @@ The application's data model includes:
 - **Supplier Parts Table**: Stores parts uploaded from Excel with SKU, name, and original price. Custom parts remain separate.
 - **Excel File Format**: Product SKU (col 0), Product Name (col 1), Original Price (col 2) - supports ~47,500 parts
 - **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
+- **SKU Validation**: Settings → Mobilesentrix tab includes "Validate All SKUs" button that checks all service link SKUs (primary + alternative) against the API:
+  - Batches of 5 SKUs with 1.5s delays between batches to avoid API overload
+  - Real-time progress bar with polling
+  - Reports missing SKUs with affected device-service links
+  - Endpoints: `POST /api/mobilesentrix/validate-skus` (start), `GET /api/mobilesentrix/validate-skus/progress` (poll)
 - **API Status Testing**: Settings → Mobilesentrix tab includes "Test Connection" button to verify API connectivity with response time
 - **Error Notifications**: When Mobilesentrix API errors occur, an email notification is sent to the admin notification email address
 - **OAuth Authorization Flow**: 
