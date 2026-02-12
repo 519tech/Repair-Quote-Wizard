@@ -4568,7 +4568,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             <DialogTrigger asChild>
               <Button data-testid="button-add-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
             </DialogTrigger>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
               <DialogHeader>
                 <DialogTitle>Add Device-Service Link</DialogTitle>
@@ -4698,7 +4698,7 @@ function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
         </Dialog>
 
         <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setAdditionalPartSku(""); }}>
-          <DialogContent>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleEditSubmit}>
               <DialogHeader>
                 <DialogTitle>Edit Device-Service Link</DialogTitle>
