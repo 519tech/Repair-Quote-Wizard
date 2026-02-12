@@ -636,9 +636,7 @@ export default function Home() {
               <img 
                 src="https://519techservices.ca/cdn/shop/files/519_Tech_Services_Logo_2022_2k.png?v=1692217647&width=400" 
                 alt="519 Tech Services - Device Repair Specialists" 
-                className="h-16 mx-auto mb-2"
-                width={400}
-                height={400}
+                className="h-16 w-auto mx-auto mb-2"
               />
               <CardTitle className="text-lg text-pretty">Get a Repair Quote</CardTitle>
               <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
