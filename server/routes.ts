@@ -2101,6 +2101,22 @@ export async function registerRoutes(
           sendQuoteSms(quoteData).catch(err => console.error('SMS send error:', err));
         }
       }
+
+      // Always send admin notification regardless of opt-in
+      sendAdminNotificationEmail({
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        deviceName: deviceService.device.name,
+        services: [{
+          serviceName: service.name,
+          price: quotedPrice,
+          repairTime: service.repairTime || undefined,
+          warranty: service.warranty || undefined,
+        }],
+        grandTotal: quotedPrice,
+        notes: input.notes,
+      }).catch(err => console.error('Admin notification error:', err));
       
       res.status(201).json(quote);
     } catch (error: any) {
