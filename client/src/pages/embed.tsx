@@ -80,6 +80,8 @@ export default function Embed() {
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
   const [autoSentQuote, setAutoSentQuote] = useState(false);
+  const [contactCollectedEarly, setContactCollectedEarly] = useState(false);
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
   
   // Contact info
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
@@ -410,6 +412,35 @@ export default function Embed() {
     setView('quote');
   };
 
+  const handleEarlyContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactInfo.name || !contactInfo.email) return;
+    setContactCollectedEarly(true);
+    if (pendingCategoryId) {
+      setView('services');
+      proceedWithCategorySelect(pendingCategoryId);
+      setPendingCategoryId(null);
+    }
+  };
+
+  const handleContinueWithEarlyContact = () => {
+    if (!selectedDeviceId || selectedServices.size === 0) return;
+    setView('quote');
+    setAutoSentQuote(true);
+    const deviceServiceIds = deviceServices
+      .filter(ds => selectedServices.has(ds.service.id))
+      .map(ds => ds.id);
+    submitCombinedQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceIds,
+      notes: notes || undefined,
+      multiServiceDiscount: getMultiServiceDiscount(),
+    });
+  };
+
   const getSelectedQuotes = () => {
     return allQuotes.filter(q => selectedServices.has(q.serviceId));
   };
@@ -502,6 +533,8 @@ export default function Embed() {
     setSelectedServices(new Set());
     setCombinedQuoteSent(false);
     setAutoSentQuote(false);
+    setContactCollectedEarly(false);
+    setPendingCategoryId(null);
     setContactInfo({ name: "", email: "", phone: "" });
     setNotes("");
     setUnknownDeviceInfo({ name: "", email: "", phone: "", deviceDescription: "", issueDescription: "" });
@@ -523,13 +556,65 @@ export default function Embed() {
     return parseFloat(a.price) - parseFloat(b.price);
   });
 
+  const proceedWithCategorySelect = (catId: string) => {
+    const catQuotes = catId === "other" 
+      ? allQuotes.filter(q => !q.categoryId)
+      : allQuotes.filter(q => q.categoryId === catId);
+
+    setCategoryLoading(true);
+    
+    if (selectedDevice?.id) {
+      fetch('/api/prefetch-category-parts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          deviceId: selectedDevice.id, 
+          categoryId: catId !== "other" ? catId : null 
+        })
+      }).catch(err => console.log('Prefetch error (non-critical):', err));
+    }
+    
+    const allSkus = new Set<string>();
+    catQuotes.forEach(q => {
+      if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
+        q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
+      }
+      if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
+        q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
+      }
+    });
+    const skus = Array.from(allSkus);
+    
+    if (skus.length > 0) {
+      setStockLoading(true);
+      fetch('/api/repairdesk/stock-enabled')
+        .then(res => res.json())
+        .then(({ enabled }) => {
+          if (!enabled) return null;
+          return fetch('/api/repairdesk/check-stock', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skus }),
+          });
+        })
+        .then(res => res?.ok ? res.json() : {})
+        .then(stockInfo => stockInfo && setStockData(prev => ({ ...prev, ...stockInfo })))
+        .catch(() => console.log('Stock check not available'))
+        .finally(() => setStockLoading(false));
+    }
+    
+    setTimeout(() => {
+      setCategoryLoading(false);
+      setSelectedCategoryId(catId);
+    }, 5000);
+  };
+
   // Handler for category selection - checks if category has any priced services
   const handleCategorySelect = (catId: string) => {
     const catQuotes = catId === "other" 
       ? allQuotes.filter(q => !q.categoryId)
       : allQuotes.filter(q => q.categoryId === catId);
     
-    // If category has no services at all for this device, go directly to contact form
     if (catQuotes.length === 0) {
       const deviceName = selectedDevice?.name || "";
       const brandName = selectedDevice?.brand?.name || "";
@@ -557,59 +642,14 @@ export default function Embed() {
       setView('unknown');
       return;
     }
-    
-    // Show loading animation and start stock check immediately
-    setCategoryLoading(true);
-    
-    // Prefetch parts prices from API for this category (if using API mode)
-    // This runs in the background and caches prices for 24 hours
-    if (selectedDevice?.id) {
-      fetch('/api/prefetch-category-parts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          deviceId: selectedDevice.id, 
-          categoryId: catId !== "other" ? catId : null 
-        })
-      }).catch(err => console.log('Prefetch error (non-critical):', err));
+
+    if ((hidePricesUntilContact || hidePricesCompletely) && !contactCollectedEarly) {
+      setPendingCategoryId(catId);
+      setView('contact');
+      return;
     }
     
-    // Check stock only for parts in this category (runs immediately)
-    const allSkus = new Set<string>();
-    catQuotes.forEach(q => {
-      if (q.primaryPartSkus && q.primaryPartSkus.length > 0) {
-        q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
-      }
-      if (q.additionalPartSkus && q.additionalPartSkus.length > 0) {
-        q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
-      }
-    });
-    const skus = Array.from(allSkus);
-    
-    if (skus.length > 0) {
-      setStockLoading(true);
-      // Check if stock checking is enabled and fetch stock data
-      fetch('/api/repairdesk/stock-enabled')
-        .then(res => res.json())
-        .then(({ enabled }) => {
-          if (!enabled) return null;
-          return fetch('/api/repairdesk/check-stock', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ skus }),
-          });
-        })
-        .then(res => res?.ok ? res.json() : {})
-        .then(stockInfo => stockInfo && setStockData(prev => ({ ...prev, ...stockInfo })))
-        .catch(() => console.log('Stock check not available'))
-        .finally(() => setStockLoading(false));
-    }
-    
-    // Show loading animation for 5 seconds before displaying services
-    setTimeout(() => {
-      setCategoryLoading(false);
-      setSelectedCategoryId(catId);
-    }, 5000);
+    proceedWithCategorySelect(catId);
   };
 
   return (
@@ -1198,7 +1238,7 @@ export default function Embed() {
                                   </>
                                 )}
                               </div>
-                              <Button size="sm" className="sm:hidden" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
+                              <Button size="sm" className="sm:hidden" onClick={() => contactCollectedEarly ? handleContinueWithEarlyContact() : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
                                 <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
@@ -1213,7 +1253,7 @@ export default function Embed() {
                                 <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Add another service
                               </Button>
-                              <Button size="sm" className="hidden sm:inline-flex" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
+                              <Button size="sm" className="hidden sm:inline-flex" onClick={() => contactCollectedEarly ? handleContinueWithEarlyContact() : handleContinueToQuote()} data-testid="button-continue-quote">
                                 <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
@@ -1267,10 +1307,10 @@ export default function Embed() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView(hidePricesUntilContact ? 'contact' : 'services')}
+                onClick={() => setView('services')}
                 data-testid="button-back-services-quote"
               >
-                {hidePricesUntilContact ? "Edit contact info" : "Back to services"}
+                Back to services
               </Button>
 
               <div className="space-y-4">
@@ -1392,7 +1432,7 @@ export default function Embed() {
                       Start New Quote
                     </Button>
                   </div>
-                ) : hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
+                ) : contactCollectedEarly && contactInfo.name && contactInfo.email ? (
                   <Button
                     className="w-full"
                     onClick={() => handleSendCombinedQuote({ preventDefault: () => {} } as React.FormEvent)}
@@ -1443,11 +1483,24 @@ export default function Embed() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
-                  </p>
-                  <CardTitle className="text-lg text-pretty">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
-                  <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
+                  {pendingCategoryId ? (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {selectedDevice?.brand?.name && <span>{selectedDevice.brand.name} </span>}
+                        <span className="font-medium text-foreground">{selectedDevice?.name}</span>
+                      </p>
+                      <CardTitle className="text-lg text-pretty">Enter Your Details</CardTitle>
+                      <CardDescription className="text-xs">We need your contact info to prepare your quote</CardDescription>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
+                      </p>
+                      <CardTitle className="text-lg text-pretty">Send Your Quote</CardTitle>
+                      <CardDescription className="text-xs">Enter your contact details</CardDescription>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1456,13 +1509,20 @@ export default function Embed() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView(hidePricesUntilContact ? 'services' : 'quote')}
+                onClick={() => {
+                  if (pendingCategoryId) {
+                    setPendingCategoryId(null);
+                    setView('services');
+                  } else {
+                    setView('quote');
+                  }
+                }}
                 data-testid="button-back-quote"
               >
-                {hidePricesUntilContact ? "Back to services" : "Back to quote"}
+                {pendingCategoryId ? "Back to categories" : "Back to quote"}
               </Button>
 
-              <form onSubmit={hidePricesUntilContact ? handleViewAndSendQuote : handleSendCombinedQuote} className="space-y-3">
+              <form onSubmit={pendingCategoryId ? handleEarlyContactSubmit : handleSendCombinedQuote} className="space-y-3">
                 <div className="space-y-2">
                   <div className="space-y-1">
                     <Label htmlFor="quote-name" className="text-xs">Name *</Label>
@@ -1505,6 +1565,7 @@ export default function Embed() {
                       className="h-9"
                       name="phone"
                       autoComplete="tel"
+                      inputMode="tel"
                       data-testid="input-quote-phone"
                     />
                   </div>
@@ -1526,17 +1587,17 @@ export default function Embed() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={submitCombinedQuoteMutation.isPending}
+                  disabled={!pendingCategoryId && submitCombinedQuoteMutation.isPending}
                   data-testid="button-send-quote"
                 >
-                  {submitCombinedQuoteMutation.isPending ? (
+                  {!pendingCategoryId && submitCombinedQuoteMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : hidePricesUntilContact ? (
+                  ) : pendingCategoryId ? (
                     <ChevronRight className="h-4 w-4 mr-2" aria-hidden="true" />
                   ) : (
                     <Check className="h-4 w-4 mr-2" aria-hidden="true" />
                   )}
-                  {hidePricesUntilContact ? "View My Quote" : "Send My Quote"}
+                  {pendingCategoryId ? "View Repair Options" : "Send My Quote"}
                 </Button>
               </form>
             </CardContent>

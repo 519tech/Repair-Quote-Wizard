@@ -5901,9 +5901,14 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const updateHidePrices = useMutation({
     mutationFn: async (enabled: boolean) => {
       await apiRequest("POST", "/api/settings/hide-prices-until-contact", { enabled });
+      if (enabled) {
+        await apiRequest("POST", "/api/settings/hide-prices-completely", { enabled: false });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-until-contact"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-completely"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/quote-flow"] });
       toast({ title: "Setting updated" });
     },
   });
@@ -5916,9 +5921,14 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
   const updateHidePricesCompletely = useMutation({
     mutationFn: async (enabled: boolean) => {
       await apiRequest("POST", "/api/settings/hide-prices-completely", { enabled });
+      if (enabled) {
+        await apiRequest("POST", "/api/settings/hide-prices-until-contact", { enabled: false });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-completely"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/hide-prices-until-contact"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/quote-flow"] });
       toast({ title: "Setting updated" });
     },
   });
@@ -6326,7 +6336,7 @@ $\{servicePrice} plus taxes
               <Switch
                 checked={hidePricesSettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
-                disabled={updateHidePrices.isPending || (hidePricesCompletelySettings?.enabled ?? false)}
+                disabled={updateHidePrices.isPending}
                 data-testid="switch-hide-prices"
               />
             </div>

@@ -69,6 +69,8 @@ export default function Home() {
   const [selectedServices, setSelectedServices] = useState<Set<string>>(new Set());
   const [combinedQuoteSent, setCombinedQuoteSent] = useState(false);
   const [autoSentQuote, setAutoSentQuote] = useState(false);
+  const [contactCollectedEarly, setContactCollectedEarly] = useState(false);
+  const [pendingCategoryId, setPendingCategoryId] = useState<string | null>(null);
   
   // Contact info
   const [contactInfo, setContactInfo] = useState({ name: "", email: "", phone: "" });
@@ -407,6 +409,24 @@ export default function Home() {
     setView('quote');
   };
 
+  const handleContinueWithEarlyContact = () => {
+    if (!selectedDeviceId || selectedServices.size === 0) return;
+    setView('quote');
+    setAutoSentQuote(true);
+    const deviceServiceIds = deviceServices
+      .filter(ds => selectedServices.has(ds.service.id))
+      .map(ds => ds.id);
+    submitCombinedQuoteMutation.mutate({
+      customerName: contactInfo.name,
+      customerEmail: contactInfo.email,
+      customerPhone: contactInfo.phone || undefined,
+      deviceId: selectedDeviceId,
+      deviceServiceIds,
+      notes: notes || undefined,
+      multiServiceDiscount: getMultiServiceDiscount(),
+    });
+  };
+
   const getSelectedQuotes = () => {
     return allQuotes.filter(q => selectedServices.has(q.serviceId));
   };
@@ -501,6 +521,8 @@ export default function Home() {
     setSelectedServices(new Set());
     setCombinedQuoteSent(false);
     setAutoSentQuote(false);
+    setContactCollectedEarly(false);
+    setPendingCategoryId(null);
     setContactInfo({ name: "", email: "", phone: "" });
     setNotes("");
     setUnknownDeviceInfo({ name: "", email: "", phone: "", deviceDescription: "", issueDescription: "" });
@@ -523,47 +545,15 @@ export default function Home() {
   });
 
   // Handler for category selection - checks if category has any priced services
-  const handleCategorySelect = (catId: string) => {
+  const proceedWithCategorySelect = (catId: string) => {
     const catQuotes = catId === "other" 
       ? allQuotes.filter(q => !q.categoryId)
       : allQuotes.filter(q => q.categoryId === catId);
-    
-    // If category has no services at all for this device, go directly to contact form
-    if (catQuotes.length === 0) {
-      const deviceName = selectedDevice?.name || "";
-      const brandName = selectedDevice?.brand?.name || "";
-      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
-      const categoryName = serviceCategoriesData.find(c => c.id === catId)?.name || "Repair";
-      setUnknownDeviceInfo(prev => ({
-        ...prev,
-        deviceDescription: fullDeviceName,
-        issueDescription: `Interested in: ${categoryName}`
-      }));
-      setView('unknown');
-      return;
-    }
-    
-    // Check if any service in this category is available (has parts OR is labour-only)
-    const anyAvailable = catQuotes.some(q => q.isAvailable);
-    
-    if (!anyAvailable && catQuotes.length > 0) {
-      // No priced services in this category - pre-fill device info and go to manual quote form
-      const deviceName = selectedDevice?.name || catQuotes[0]?.deviceName || "";
-      const brandName = selectedDevice?.brand?.name || "";
-      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
-      setUnknownDeviceInfo(prev => ({
-        ...prev,
-        deviceDescription: fullDeviceName
-      }));
-      setView('unknown');
-      return;
-    }
-    
+
     // Show loading animation and start stock check immediately
     setCategoryLoading(true);
     
     // Prefetch parts prices from API for this category (if using API mode)
-    // This runs in the background and caches prices for 24 hours
     if (selectedDevice?.id) {
       fetch('/api/prefetch-category-parts', {
         method: 'POST',
@@ -589,7 +579,6 @@ export default function Home() {
     
     if (skus.length > 0) {
       setStockLoading(true);
-      // Check if stock checking is enabled and fetch stock data
       fetch('/api/repairdesk/stock-enabled')
         .then(res => res.json())
         .then(({ enabled }) => {
@@ -611,6 +600,63 @@ export default function Home() {
       setCategoryLoading(false);
       setSelectedCategoryId(catId);
     }, 5000);
+  };
+
+  const handleCategorySelect = (catId: string) => {
+    const catQuotes = catId === "other" 
+      ? allQuotes.filter(q => !q.categoryId)
+      : allQuotes.filter(q => q.categoryId === catId);
+    
+    // If category has no services at all for this device, go directly to contact form
+    if (catQuotes.length === 0) {
+      const deviceName = selectedDevice?.name || "";
+      const brandName = selectedDevice?.brand?.name || "";
+      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+      const categoryName = serviceCategoriesData.find(c => c.id === catId)?.name || "Repair";
+      setUnknownDeviceInfo(prev => ({
+        ...prev,
+        deviceDescription: fullDeviceName,
+        issueDescription: `Interested in: ${categoryName}`
+      }));
+      setView('unknown');
+      return;
+    }
+    
+    // Check if any service in this category is available (has parts OR is labour-only)
+    const anyAvailable = catQuotes.some(q => q.isAvailable);
+    
+    if (!anyAvailable && catQuotes.length > 0) {
+      const deviceName = selectedDevice?.name || catQuotes[0]?.deviceName || "";
+      const brandName = selectedDevice?.brand?.name || "";
+      const fullDeviceName = brandName ? `${brandName} ${deviceName}` : deviceName;
+      setUnknownDeviceInfo(prev => ({
+        ...prev,
+        deviceDescription: fullDeviceName
+      }));
+      setView('unknown');
+      return;
+    }
+
+    // When either pricing toggle is ON, collect contact info BEFORE showing services
+    if ((hidePricesUntilContact || hidePricesCompletely) && !contactCollectedEarly) {
+      setPendingCategoryId(catId);
+      setView('contact');
+      return;
+    }
+    
+    proceedWithCategorySelect(catId);
+  };
+
+  // Handle early contact form submission — proceed to show services after contact collected
+  const handleEarlyContactSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!contactInfo.name || !contactInfo.email) return;
+    setContactCollectedEarly(true);
+    if (pendingCategoryId) {
+      setView('services');
+      proceedWithCategorySelect(pendingCategoryId);
+      setPendingCategoryId(null);
+    }
   };
 
   return (
@@ -1213,7 +1259,7 @@ export default function Home() {
                                   </>
                                 )}
                               </div>
-                              <Button size="sm" className="sm:hidden" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
+                              <Button size="sm" className="sm:hidden" onClick={() => contactCollectedEarly ? handleContinueWithEarlyContact() : handleContinueToQuote()} data-testid="button-continue-quote-mobile">
                                 <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
@@ -1228,7 +1274,7 @@ export default function Home() {
                                 <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Add another service
                               </Button>
-                              <Button size="sm" className="hidden sm:inline-flex" onClick={() => hidePricesUntilContact ? setView('contact') : handleContinueToQuote()} data-testid="button-continue-quote">
+                              <Button size="sm" className="hidden sm:inline-flex" onClick={() => contactCollectedEarly ? handleContinueWithEarlyContact() : handleContinueToQuote()} data-testid="button-continue-quote">
                                 <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                                 Continue
                               </Button>
@@ -1281,10 +1327,10 @@ export default function Home() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView(hidePricesUntilContact ? 'contact' : 'services')}
+                onClick={() => setView('services')}
                 data-testid="button-back-services-quote"
               >
-                {hidePricesUntilContact ? "Edit contact info" : "Back to services"}
+                Back to services
               </Button>
 
               <div className="space-y-4">
@@ -1406,7 +1452,7 @@ export default function Home() {
                       Start New Quote
                     </Button>
                   </div>
-                ) : hidePricesUntilContact && contactInfo.name && contactInfo.email ? (
+                ) : contactCollectedEarly && contactInfo.name && contactInfo.email ? (
                   <Button
                     className="w-full"
                     onClick={() => handleSendCombinedQuote({ preventDefault: () => {} } as React.FormEvent)}
@@ -1456,11 +1502,24 @@ export default function Home() {
                   </div>
                 )}
                 <div className="flex-1 min-w-0">
-                  <p className="text-xs text-muted-foreground mb-1">
-                    {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
-                  </p>
-                  <CardTitle className="text-lg text-pretty">{hidePricesUntilContact ? "Enter Contact Details" : "Send Your Quote"}</CardTitle>
-                  <CardDescription className="text-xs">{hidePricesUntilContact ? "We'll prepare your quote" : "Enter your contact details"}</CardDescription>
+                  {pendingCategoryId ? (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {selectedDevice?.brand?.name && <span>{selectedDevice.brand.name} </span>}
+                        <span className="font-medium text-foreground">{selectedDevice?.name}</span>
+                      </p>
+                      <CardTitle className="text-lg text-pretty">Enter Your Details</CardTitle>
+                      <CardDescription className="text-xs">We need your contact info to prepare your quote</CardDescription>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-xs text-muted-foreground mb-1">
+                        {getSelectedQuotes().length} service{getSelectedQuotes().length > 1 ? 's' : ''}{!hidePricesUntilContact && !hidePricesCompletely && <> · <span className="font-semibold text-primary">${getGrandTotal().toFixed(2)}</span> plus taxes</>}
+                      </p>
+                      <CardTitle className="text-lg text-pretty">Send Your Quote</CardTitle>
+                      <CardDescription className="text-xs">Enter your contact details</CardDescription>
+                    </>
+                  )}
                 </div>
               </div>
             </CardHeader>
@@ -1469,13 +1528,20 @@ export default function Home() {
                 variant="secondary" 
                 size="sm"
                 className="mb-4" 
-                onClick={() => setView(hidePricesUntilContact ? 'services' : 'quote')}
+                onClick={() => {
+                  if (pendingCategoryId) {
+                    setPendingCategoryId(null);
+                    setView('services');
+                  } else {
+                    setView('quote');
+                  }
+                }}
                 data-testid="button-back-quote"
               >
-                {hidePricesUntilContact ? "Back to services" : "Back to quote"}
+                {pendingCategoryId ? "Back to categories" : "Back to quote"}
               </Button>
 
-              <form onSubmit={hidePricesUntilContact ? handleViewAndSendQuote : handleSendCombinedQuote} className="space-y-3">
+              <form onSubmit={pendingCategoryId ? handleEarlyContactSubmit : handleSendCombinedQuote} className="space-y-3">
                 <div className="space-y-2">
                   <div className="space-y-1">
                     <Label htmlFor="quote-name" className="text-xs">Name *</Label>
@@ -1485,7 +1551,7 @@ export default function Home() {
                       autoComplete="name"
                       value={contactInfo.name}
                       onChange={(e) => setContactInfo({ ...contactInfo, name: e.target.value })}
-                      placeholder="Your name"
+                      placeholder="Your name…"
                       required
                       className="h-9"
                       data-testid="input-quote-name"
@@ -1514,6 +1580,7 @@ export default function Home() {
                       type="tel"
                       name="phone"
                       autoComplete="tel"
+                      inputMode="tel"
                       value={contactInfo.phone}
                       onChange={(e) => setContactInfo({ ...contactInfo, phone: e.target.value })}
                       placeholder="e.g. 226-555-1234"
@@ -1539,17 +1606,17 @@ export default function Home() {
                 <Button
                   type="submit"
                   className="w-full"
-                  disabled={submitCombinedQuoteMutation.isPending}
+                  disabled={!pendingCategoryId && submitCombinedQuoteMutation.isPending}
                   data-testid="button-send-quote"
                 >
-                  {submitCombinedQuoteMutation.isPending ? (
+                  {!pendingCategoryId && submitCombinedQuoteMutation.isPending ? (
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : hidePricesUntilContact ? (
+                  ) : pendingCategoryId ? (
                     <ChevronRight className="h-4 w-4 mr-2" aria-hidden="true" />
                   ) : (
                     <Check className="h-4 w-4 mr-2" aria-hidden="true" />
                   )}
-                  {hidePricesUntilContact ? "View My Quote" : "Send My Quote"}
+                  {pendingCategoryId ? "View Repair Options" : "Send My Quote"}
                 </Button>
               </form>
             </CardContent>
