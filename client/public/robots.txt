@@ -5,4 +5,11 @@ Disallow: /admin
 Disallow: /internal
 Disallow: /api/
 
+User-agent: Googlebot
+Allow: /
+Allow: /embed
+Disallow: /admin
+Disallow: /internal
+Disallow: /api/
+
 Sitemap: https://quote.519techservices.ca/sitemap.xml

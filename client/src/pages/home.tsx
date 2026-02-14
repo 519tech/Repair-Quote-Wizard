@@ -638,7 +638,7 @@ export default function Home() {
                 alt="519 Tech Services - Device Repair Specialists" 
                 className="h-16 w-auto mx-auto mb-2"
               />
-              <CardTitle className="text-lg text-pretty">Get a Repair Quote</CardTitle>
+              <h1 className="text-lg font-semibold leading-none tracking-tight text-pretty">Get a Repair Quote</h1>
               <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
