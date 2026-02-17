@@ -106,6 +106,7 @@ export interface IStorage {
   getSupplierPartsPaginated(options: { page: number; limit: number; search?: string }): Promise<{ parts: SupplierPart[]; total: number }>;
   getSupplierPartBySku(sku: string): Promise<SupplierPart | undefined>;
   getSupplierPartCount(): Promise<number>;
+  clearAllSupplierParts(): Promise<void>;
   bulkReplaceSupplierParts(partsData: InsertSupplierPart[]): Promise<{ imported: number }>;
 
   // Service Categories
@@ -464,6 +465,10 @@ export class DatabaseStorage implements IStorage {
   async getSupplierPartCount(): Promise<number> {
     const [result] = await db.select({ count: sql<number>`count(*)::int` }).from(supplierParts);
     return result?.count || 0;
+  }
+
+  async clearAllSupplierParts(): Promise<void> {
+    await db.delete(supplierParts);
   }
 
   async bulkReplaceSupplierParts(partsData: InsertSupplierPart[]): Promise<{ imported: number }> {

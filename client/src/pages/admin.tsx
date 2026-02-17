@@ -3736,8 +3736,11 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const clearSupplierPartsMutation = useMutation({
     mutationFn: async () => { await apiRequest("DELETE", "/api/parts/supplier/all"); },
     onSuccess: () => {
-      queryClient.invalidateQueries({ predicate: (query) => String(query.queryKey[0]).startsWith('/api/parts') });
-      toast({ title: "All supplier parts cleared" });
+      queryClient.invalidateQueries({ predicate: (query) => {
+        const key = String(query.queryKey[0]);
+        return key.startsWith('/api/parts') || key.startsWith('/api/supplier-parts');
+      }});
+      toast({ title: "All uploaded supplier parts cleared" });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -3842,6 +3845,32 @@ function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
                   </span>
                 </Button>
               </label>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="outline" className="text-destructive" data-testid="button-clear-supplier-parts">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete All
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete all uploaded parts?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will remove all Excel-uploaded supplier parts. Custom parts will not be affected. You can re-upload the Excel file anytime.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => clearSupplierPartsMutation.mutate()}
+                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      data-testid="button-confirm-clear-supplier-parts"
+                    >
+                      Delete All Uploaded Parts
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           </CardHeader>
           <CardContent>
@@ -5859,6 +5888,24 @@ function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] })
     },
   });
 
+  // API Excel Fallback Setting
+  const { data: apiExcelFallbackSettings } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/settings/api-excel-fallback"],
+  });
+
+  const updateApiExcelFallback = useMutation({
+    mutationFn: async (enabled: boolean) => {
+      await apiRequest("POST", "/api/settings/api-excel-fallback", { enabled });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/api-excel-fallback"] });
+      toast({ title: "Excel fallback setting updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const { data: mobilesentrixAuthUrl } = useQuery<{ authUrl: string; callbackUrl: string }>({
     queryKey: ["/api/mobilesentrix/auth-url"],
     enabled: !!mobilesentrixStatus, // Always fetch when we have status (for reauthorization)
@@ -6303,6 +6350,19 @@ $\{servicePrice} plus taxes
             <p className="text-xs text-muted-foreground">
               Current source: <Badge variant="outline">{pricingSourceSettings?.source === "mobilesentrix_api" ? "Mobilesentrix API" : "Excel Upload"}</Badge>
             </p>
+            {pricingSourceSettings?.source === "mobilesentrix_api" && (
+              <div className="flex items-center justify-between p-3 rounded-lg border mt-2">
+                <div>
+                  <p className="font-medium text-sm">Excel Fallback</p>
+                  <p className="text-xs text-muted-foreground">When API is unavailable, fall back to Excel-uploaded prices</p>
+                </div>
+                <Switch
+                  data-testid="switch-api-excel-fallback"
+                  checked={apiExcelFallbackSettings?.enabled ?? true}
+                  onCheckedChange={(checked) => updateApiExcelFallback.mutate(checked)}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
 

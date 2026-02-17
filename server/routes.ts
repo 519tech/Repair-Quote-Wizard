@@ -882,6 +882,17 @@ export async function registerRoutes(
     }
   });
 
+  // Delete all supplier parts (Excel uploads only, keeps custom parts)
+  app.delete("/api/parts/supplier/all", requireAdmin, async (req, res) => {
+    try {
+      await storage.clearAllSupplierParts();
+      res.json({ success: true });
+    } catch (error: any) {
+      console.error("Error clearing supplier parts:", error);
+      res.status(500).json({ error: "Failed to clear supplier parts" });
+    }
+  });
+
   // Mobilesentrix API Integration (all supplier pricing comes from this API)
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
     const status = getMobilesentrixStatus();
@@ -1819,12 +1830,22 @@ export async function registerRoutes(
         });
         return { price: parseFloat(String(apiResult.price)) || 0, name: apiResult.name, found: true, source: 'api' };
       }
-      // SKU not found in Mobilesentrix API - fall back to custom parts
-      console.log(`SKU ${sku} not found in Mobilesentrix API, checking custom parts...`);
+      // SKU not found in Mobilesentrix API - fall back to custom parts, then Excel
+      console.log(`SKU ${sku} not found in Mobilesentrix API, checking fallback sources...`);
       const customPart = await storage.getPartBySku(sku);
       if (customPart) {
         console.log(`Found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
         return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
+      }
+      // Check Excel fallback setting
+      const fallbackSetting = templates.find(t => t.type === 'api_excel_fallback');
+      const excelFallbackEnabled = fallbackSetting ? fallbackSetting.content === 'true' : true;
+      if (excelFallbackEnabled) {
+        const supplierPart = await storage.getSupplierPartBySku(sku);
+        if (supplierPart) {
+          console.log(`Found Excel fallback for SKU ${sku}: ${supplierPart.name} @ $${supplierPart.price}`);
+          return { price: parseFloat(supplierPart.price), name: supplierPart.name, found: true, source: 'excel' };
+        }
       }
       return { price: 0, name: '', found: false, source: 'api' };
     } catch (error: any) {
@@ -1841,8 +1862,19 @@ export async function registerRoutes(
           console.log(`API error but found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
           return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
         }
+        // Check Excel fallback setting
+        const fallbackTemplates = await storage.getMessageTemplates();
+        const fallbackSetting = fallbackTemplates.find(t => t.type === 'api_excel_fallback');
+        const excelFallbackEnabled = fallbackSetting ? fallbackSetting.content === 'true' : true;
+        if (excelFallbackEnabled) {
+          const supplierPart = await storage.getSupplierPartBySku(sku);
+          if (supplierPart) {
+            console.log(`API error but found Excel fallback for SKU ${sku}: ${supplierPart.name} @ $${supplierPart.price}`);
+            return { price: parseFloat(supplierPart.price), name: supplierPart.name, found: true, source: 'excel' };
+          }
+        }
       } catch (dbError) {
-        console.error(`Error checking custom parts for SKU ${sku}:`, dbError);
+        console.error(`Error checking fallback parts for SKU ${sku}:`, dbError);
       }
       
       return { price: 0, name: '', found: false, source: 'api', apiError: errorMsg };
@@ -2791,6 +2823,31 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
       res.json({ success: true, source });
     } catch (error) {
       console.error('Pricing source setting error:', error);
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  // API Excel fallback setting
+  app.get("/api/settings/api-excel-fallback", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'api_excel_fallback');
+      res.json({ enabled: setting ? setting.content === 'true' : true });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get setting" });
+    }
+  });
+
+  app.post("/api/settings/api-excel-fallback", requireAdmin, async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      await storage.upsertMessageTemplate({
+        type: 'api_excel_fallback',
+        content: enabled ? 'true' : 'false'
+      });
+      res.json({ success: true, enabled });
+    } catch (error) {
+      console.error('API Excel fallback setting error:', error);
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
