@@ -1101,6 +1101,9 @@ export async function registerRoutes(
       }
 
       const allDeviceServices = await storage.getDeviceServices();
+      const allParts = await storage.getParts();
+      const customSkus = new Set(allParts.filter(p => p.isCustom).map(p => p.sku));
+
       const skuToLinks = new Map<string, Array<{ id: string; deviceName: string; brandName: string; serviceName: string; isPrimary: boolean }>>();
 
       for (const ds of allDeviceServices) {
@@ -1108,7 +1111,7 @@ export async function registerRoutes(
         const brandName = ds.device?.brand?.name || "";
         const serviceName = ds.service?.name || "Unknown";
 
-        if (ds.partSku) {
+        if (ds.partSku && !customSkus.has(ds.partSku)) {
           if (!skuToLinks.has(ds.partSku)) skuToLinks.set(ds.partSku, []);
           skuToLinks.get(ds.partSku)!.push({ id: ds.id, deviceName, brandName, serviceName, isPrimary: true });
         }
@@ -1116,7 +1119,7 @@ export async function registerRoutes(
         const altSkus = (ds as any).alternativePartSkus;
         if (Array.isArray(altSkus)) {
           for (const altSku of altSkus) {
-            if (altSku && altSku.trim()) {
+            if (altSku && altSku.trim() && !customSkus.has(altSku)) {
               if (!skuToLinks.has(altSku)) skuToLinks.set(altSku, []);
               skuToLinks.get(altSku)!.push({ id: ds.id, deviceName, brandName, serviceName, isPrimary: false });
             }
