@@ -77,7 +77,7 @@ function formatPhoneE164(phone: string): string {
   return `+${digits}`;
 }
 
-const OPENPHONE_FROM_NUMBER = '+12264449927';
+const OPENPHONE_FROM_NUMBER = process.env.OPENPHONE_FROM_NUMBER || '+12264449927';
 
 function getFromPhoneNumber(): string {
   return OPENPHONE_FROM_NUMBER;

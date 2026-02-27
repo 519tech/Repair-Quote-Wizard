@@ -38,6 +38,9 @@ if (process.env.NODE_ENV === "production") {
 }
 
 if (!process.env.SESSION_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("SESSION_SECRET environment variable must be set in production");
+  }
   console.error("WARNING: SESSION_SECRET not set - using a default for development only");
 }
 
