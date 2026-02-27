@@ -373,6 +373,81 @@ function MobilesentrixApiTest() {
   );
 }
 
+function MobilesentrixSkuLookup() {
+  const [sku, setSku] = useState("");
+  const [isSearching, setIsSearching] = useState(false);
+  const [result, setResult] = useState<{ found: boolean; sku?: string; name?: string; price?: number; inStock?: boolean; error?: string } | null>(null);
+
+  const handleLookup = async () => {
+    const trimmed = sku.trim();
+    if (!trimmed) return;
+    setIsSearching(true);
+    setResult(null);
+    try {
+      const response = await fetch(`/api/mobilesentrix/sku/${encodeURIComponent(trimmed)}`, { credentials: 'include' });
+      const data = await response.json();
+      if (response.ok) {
+        setResult(data);
+      } else {
+        setResult({ found: false, error: data.error || "Product not found" });
+      }
+    } catch {
+      setResult({ found: false, error: "Failed to connect to API" });
+    }
+    setIsSearching(false);
+  };
+
+  return (
+    <div className="p-3 rounded-lg border bg-muted/50 space-y-3">
+      <p className="text-sm font-medium">SKU Lookup</p>
+      <div className="flex gap-2">
+        <Input
+          placeholder="Enter SKU (e.g. 107182117424)"
+          value={sku}
+          onChange={(e) => setSku(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleLookup(); } }}
+          className="h-9"
+          data-testid="input-sku-lookup"
+        />
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={handleLookup}
+          disabled={isSearching || !sku.trim()}
+          className="shrink-0 h-9"
+          data-testid="button-sku-lookup"
+        >
+          {isSearching ? (
+            <Loader2 className="h-3 w-3 animate-spin" />
+          ) : (
+            <Search className="h-3 w-3" />
+          )}
+        </Button>
+      </div>
+
+      {result && (
+        result.found ? (
+          <div className="p-3 rounded border bg-background space-y-2">
+            <p className="text-sm font-medium">{result.name}</p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              <span>SKU: <code className="bg-muted px-1 py-0.5 rounded text-xs">{result.sku}</code></span>
+              <span>Price: <span className="font-semibold text-primary">${result.price?.toFixed(2)}</span></span>
+              <Badge variant={result.inStock ? "secondary" : "destructive"} className={result.inStock ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : ""}>
+                {result.inStock ? "In Stock" : "Out of Stock"}
+              </Badge>
+            </div>
+          </div>
+        ) : (
+          <div className="p-2 rounded text-sm bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 flex items-start gap-2">
+            <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+            <span>{result.error}</span>
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 export function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"] }) {
   const [emailSubject, setEmailSubject] = useState("");
   const [emailBody, setEmailBody] = useState("");
@@ -1532,6 +1607,9 @@ $\{servicePrice} plus taxes
                 
                 {/* API Status Test */}
                 <MobilesentrixApiTest />
+
+                {/* SKU Lookup */}
+                <MobilesentrixSkuLookup />
                 
                 {/* Reauthorize Button */}
                 {mobilesentrixAuthUrl?.authUrl && (
