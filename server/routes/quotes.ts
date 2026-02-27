@@ -145,6 +145,14 @@ export function registerQuoteRoutes(app: Express) {
       if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
         const overridePrice = parseFloat(manualPriceOverride);
         if (!isNaN(overridePrice)) {
+          const overridePrimarySkus: string[] = [];
+          const overridePrimarySku = (deviceService as any).partSku;
+          if (overridePrimarySku) overridePrimarySkus.push(overridePrimarySku);
+          const overrideAltSkus = (deviceService as any).alternativePartSkus || [];
+          if (overrideAltSkus.length > 0) overridePrimarySkus.push(...overrideAltSkus);
+          const overrideAdditionalParts = await storage.getDeviceServiceParts(deviceService.id);
+          const overrideAdditionalSkus = overrideAdditionalParts.filter(ap => !ap.isPrimary && ap.part?.sku).map(ap => ap.part!.sku);
+
           return res.json({
             deviceServiceId: deviceService.id,
             deviceName: deviceService.device.name,
@@ -156,11 +164,11 @@ export function registerQuoteRoutes(app: Express) {
             partsMarkup: "1.0",
             secondaryPartPercentage: 100,
             partCost: "0.00",
-            partSku: null,
+            partSku: overridePrimarySku || null,
             partName: null,
-            primaryPartSkus: [],
-            additionalPartSkus: [],
-            additionalPartsCount: 0,
+            primaryPartSkus: overridePrimarySkus,
+            additionalPartSkus: overrideAdditionalSkus,
+            additionalPartsCount: overrideAdditionalSkus.length,
             additionalPartsCost: "0.00",
             totalPartCost: "0.00",
             totalPrice: overridePrice.toFixed(2),
