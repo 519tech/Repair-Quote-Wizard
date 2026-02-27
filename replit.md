@@ -1,150 +1,60 @@
 # RepairQuote - Device Repair Estimate Application
 
 ## Overview
-
-RepairQuote is a full-stack web application designed to provide instant repair quotes for electronic devices, including smartphones, tablets, and laptops. It features a customer-facing quote wizard for generating estimates and an administrative panel for comprehensive management of device types, devices, services, parts, and pricing. The application aims to streamline the repair quoting process, improve customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, "I don't know my device" functionality, and an embeddable widget for external websites.
+RepairQuote is a full-stack web application for generating instant repair quotes for electronic devices (smartphones, tablets, laptops). It features a customer-facing quote wizard and a comprehensive administrative panel. The application aims to streamline the repair quoting process, enhance customer engagement, and provide efficient backend management for repair businesses. Key capabilities include multi-service quote selection, a "I don't know my device" functionality, and an embeddable widget for external websites. It also includes integrations for inventory and price syncing with third-party POS systems like RepairDesk and Mobilesentrix.
 
 ## User Preferences
-
 Preferred communication style: Simple, everyday language.
 
 ## System Architecture
-
 ### Frontend Architecture
-The frontend is built with **React 18** and **TypeScript**, using **Wouter** for routing and **TanStack React Query** for server state management. **shadcn/ui** provides UI components based on **Radix UI** primitives, and styling is managed with **Tailwind CSS**, supporting light/dark themes. The build process is handled by **Vite**. The architecture follows a pages-based structure with reusable components and uses path aliases for better organization. React.lazy() code splitting in App.tsx reduces customer quote page load by ~70%.
-
-**Admin Panel Components** (`client/src/components/admin/`): The admin panel is split into modular tab components:
-- `SubmissionsTab.tsx` — Past submissions history with search
-- `DeviceTypesTab.tsx` — Device types CRUD, brands CRUD, and brand-device-type links
-- `DevicesTab.tsx` — Device management with bulk import, release date detection, service links
-- `ServiceCategoriesTab.tsx` — Service categories CRUD and services list management
-- `PartsTab.tsx` — Parts management with supplier parts and Excel upload
-- `DeviceServicesTab.tsx` — Device-service links with bulk add, pricing, alerts
-- `SettingsTab.tsx` — All settings including Mobilesentrix, RepairDesk, messaging, SKU validation
-
-The main `client/src/pages/admin.tsx` handles authentication and tab navigation, importing the above components.
+The frontend is built with React 18 and TypeScript, utilizing Wouter for routing, TanStack React Query for state management, and shadcn/ui (based on Radix UI) for components. Styling is handled with Tailwind CSS, supporting light/dark themes. The build process uses Vite. A shared `useQuoteWizard()` hook centralizes quote logic, reducing code duplication. The admin panel is modular, with dedicated components for managing submissions, device types, devices, service categories, parts, device-service links, and global settings.
 
 ### Backend Architecture
-The backend is an **Express.js 5** application running on **Node.js** with **TypeScript** and ESM modules. It exposes **RESTful APIs** under the `/api/` prefix. Data persistence is managed using **Drizzle ORM** with a **PostgreSQL** dialect, and schema validation is enforced with **Zod** and `drizzle-zod`. A storage abstraction layer (`server/storage.ts`) facilitates database operations, promoting modularity.
-
-**Route Modules** (`server/routes/`): Backend routes are split into focused modules, each exporting a `register*Routes()` function:
-- `admin.ts` — Login/logout with rate limiting, session management, test email/SMS
-- `devices.ts` — Device types, brands, brand-device-types, devices CRUD, bulk import
-- `services.ts` — Service categories, services, device-services CRUD, dismissed alerts
-- `parts.ts` — Parts CRUD, supplier parts, Excel upload
-- `quotes.ts` — Quote calculation, quote requests, submissions search
-- `integrations.ts` — Mobilesentrix (OAuth, search, SKU validation, cache), RepairDesk (sync, stock)
-- `settings.ts` — Message templates, all settings endpoints
-
-The main `server/routes.ts` acts as an orchestrator (~75 lines) that sets up session middleware and registers all route modules. Shared middleware (`server/middleware.ts`) provides `requireAdmin`, `upload` (multer), and device search cache utilities.
+The backend is an Express.js 5 application on Node.js with TypeScript and ESM modules, exposing RESTful APIs. Data persistence uses Drizzle ORM with PostgreSQL, and schema validation is done with Zod. A storage abstraction layer manages database operations. Backend routes are organized into modules for admin, devices, services, parts, quotes, integrations, and settings. Shared middleware provides authentication and file upload utilities.
 
 ### Data Model
-The application's data model includes:
-- **Device Types**: Categories (e.g., smartphone, tablet).
-- **Devices**: Specific models linked to brands and device types.
-- **Service Categories**: Grouping of services (e.g., "Screen Replacement").
-- **Services**: Repair services, potentially grouped by category, with support for images and "labour-only" designation.
-- **Parts**: Inventory items with SKU, name, and price, supporting both supplier and custom parts.
-- **Device-Service Links**: Connects devices to services, defining pricing, repair time, and warranty, including part associations.
-- **Quote Requests**: Stores customer-submitted quote inquiries, including device details, selected services, and contact information.
+The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), and Quote Requests.
 
 ### Core Features
-- **Quote Generation**: Customers can search for devices, select multiple services from categorized options, and receive a combined, itemized quote.
-- **Admin Panel**: Comprehensive CRUD operations for managing all data entities (device types, brands, devices, services, parts, service categories). Includes features like bulk device and parts import (via Excel), image uploads, and service link management with error highlighting for missing parts.
-- **Embeddable Widget**: A simplified version of the quote wizard available at `/embed` for integration into external websites.
-- **"I Don't Know My Device" Flow**: Allows customers to describe their issue for a manual follow-up, supported by customizable email and SMS templates.
-- **Internal Counter Lookup**: A streamlined interface at `/internal` for staff to quickly look up service options and prices for devices.
-- **Multi-Service Selection**: Customers can select multiple services within a repair category or across categories, with a running total displayed.
-- **Pricing Logic**: Server-side quote calculation ensures accurate pricing. Services without parts can be marked as "Labour only" to display prices.
-- **Multi-Part Pricing**: Services can require multiple parts. Primary parts are charged at 100%, while additional parts are charged at the service's "Secondary Part %" (configurable, default 50%). Quote calculation sums: labor + (primary part cost × markup) + (sum of additional parts × secondary% × markup).
-- **Alternative Primary Parts**: Device-service links can specify multiple alternative primary parts via the `alternativePartSkus` array. The quote calculation automatically uses the cheapest available option for pricing. Stock status shows "In Stock" if ANY primary part is available, while ALL secondary parts must be in stock.
-- **Unique Constraints**: Database-level constraints prevent duplicate entries for devices, services, and device-service links.
+- **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.
+- **Admin Panel**: Provides comprehensive CRUD operations for all data entities, including bulk import (Excel), image uploads, and management of service links.
+- **Embeddable Widget**: A simplified quote wizard for external website integration.
+- **"I Don't Know My Device" Flow**: Allows customers to describe issues for manual follow-up, supported by customizable templates.
+- **Internal Counter Lookup**: A staff interface for quick service and price lookups.
+- **Multi-Service Selection**: Allows selection of multiple services with a running total.
+- **Pricing Logic**: Server-side calculation supports "Labour only" services, multi-part pricing (primary, secondary parts with configurable percentages), and alternative primary parts (choosing the cheapest available).
+- **Unique Constraints**: Database-level constraints ensure data integrity.
 
 ## External Dependencies
-
 ### Database
-- **PostgreSQL**: The primary relational database, accessed via `DATABASE_URL` and managed with Drizzle ORM.
+- **PostgreSQL**: Primary relational database, accessed via Drizzle ORM.
 
 ### Key NPM Packages
-- `@tanstack/react-query`: For client-side data fetching, caching, and synchronization.
-- `drizzle-orm` / `drizzle-zod`: For type-safe ORM operations and schema validation with PostgreSQL.
-- `express`: The foundational web framework for the backend.
-- `zod`: Used for runtime schema validation throughout the application.
-- `lucide-react`: An icon library for UI elements.
-- `Radix UI`: Provides accessible and unstyled UI components as building blocks.
-
-### Replit-Specific Integrations
-- `@replit/vite-plugin-runtime-error-modal`: Enhances development with an error overlay.
-- `@replit/vite-plugin-cartographer`: Development tooling.
-- `@replit/vite-plugin-dev-banner`: Displays development environment information.
+- `@tanstack/react-query`: Client-side data fetching and caching.
+- `drizzle-orm` / `drizzle-zod`: Type-safe ORM and schema validation.
+- `express`: Backend web framework.
+- `zod`: Runtime schema validation.
+- `lucide-react`: Icon library.
+- `Radix UI`: Accessible UI components.
 
 ### Authentication
-- **Username/Password Auth**: The admin panel uses simple username/password authentication. Sessions are stored in PostgreSQL and persist for 1 week. Login endpoint: `/api/admin/login`, logout: `/api/admin/logout`.
+- **Username/Password Auth**: Admin panel uses username/password with sessions stored in PostgreSQL.
 
 ### Quote Delivery Integrations
-- **Gmail**: Utilized for sending quote confirmation emails through the Replit Gmail connector.
-- **OpenPhone/Quo SMS**: Integrates directly with OpenPhone (Quo) API to send SMS notifications, configured via `OPENPHONE_API_KEY` environment variable. Automatically fetches available phone numbers from the account.
+- **Gmail**: For sending quote confirmation emails.
+- **OpenPhone/Quo SMS**: For sending SMS notifications via OpenPhone API.
 
 ### RepairDesk Integration
-- **API Key Authentication**: The application integrates with RepairDesk POS software using API key authentication.
-- **Inventory Checking**: When connected, the application queries RepairDesk's inventory API to check parts stock levels by SKU.
-- **Stock Status Display**: Services with parts in stock (quantity > 0) display a green "In Stock" badge in the quote flow.
-- **Admin Management**: Connection status is shown in the Settings tab. The API key is managed via the `REPAIRDESK_API_KEY` secret.
-- **API Endpoint**: Uses the RepairDesk Public API v1 (`https://api.repairdesk.co/api/web/v1/inventory`).
-
-### RepairDesk Price Sync
-- **Purpose**: Calculate service prices using the same logic as quotes for syncing to RepairDesk services.
-- **API Limitation**: The RepairDesk public API does not currently have a working endpoint for updating service prices. PUT requests to /problems/{id} are accepted but silently ignored. Contact support@repairdesk.co to request API access for price updates. Until enabled, use the "View Calculated Prices" feature to see prices for manual entry into RepairDesk.
-- **How it works**: 
-  1. Admin adds RepairDesk Service ID to device-service links via the admin panel (Edit link → "RepairDesk Service ID" field)
-  2. Price calculation uses the same logic as quotes: labor + (cheapest primary part × markup) + (secondary parts × secondary% × markup) + additional fee
-  3. Scheduled sync attempts run every 2 days automatically when the server starts
-  4. Manual sync available via Settings → RepairDesk → "Sync Prices Now" button
-  5. Even if sync fails, calculated prices are visible in admin for manual reference
-- **Database Schema**:
-  - `repairDeskServiceId` field added to `deviceServices` table (integer, nullable)
-  - `manualPriceOverride` field added to `deviceServices` table (decimal, nullable) - bypasses all calculations when set
-  - `repairDeskSyncHistory` table tracks all sync attempts with status, counts, and error details
-- **API Endpoints**:
-  - `GET /api/repairdesk/sync/status` - Returns sync configuration status and linked services count
-  - `POST /api/repairdesk/sync/trigger` - Triggers manual sync and returns results
-  - `GET /api/repairdesk/sync/history` - Returns recent sync history with results
-  - `GET /api/repairdesk/sync/broken-links` - Returns warnings about misconfigured links
-  - `GET /api/repairdesk/sync/calculated-prices` - Returns all calculated prices for linked services (for manual reference)
-- **Sync Module**: Located at `server/repairdesk-sync.ts` with price calculation logic
-- **Broken Link Detection**: Identifies device-service links with missing parts or invalid RepairDesk IDs
+- **API Key Authentication**: Integrates with RepairDesk POS for inventory checking.
+- **Inventory Checking**: Queries RepairDesk's inventory API for part stock levels.
+- **Price Sync**: Calculates service prices (labor + parts with markup) for syncing to RepairDesk services, though direct API price updates are currently limited by RepairDesk. Supports manual price overrides and tracks sync history.
 
 ### Mobilesentrix Integration
-- **OAuth1 Authentication**: The application integrates with Mobilesentrix POS API using OAuth 1.0a with PLAINTEXT signature method.
-- **Pricing Source Toggle**: Admin can choose between two pricing sources in Settings → Mobilesentrix tab:
-  1. **Excel Upload** (default): Prices fetched from the `supplierParts` database table, populated via Excel file upload. Always works as a reliable backup.
-  2. **Mobilesentrix API**: Prices fetched from the API with 24-hour caching
-- **24-Hour Parts Price Cache**: When using API mode, part prices are cached in memory for 24 hours to reduce API calls:
-  - Cache is populated when user selects a service category (prefetch all parts for that category)
-  - Individual SKU lookups also check cache first
-  - Cache expires after 24 hours and is refreshed on next request
-  - Admin can clear cache manually via Settings if needed
-- **Prefetch Endpoint**: `POST /api/prefetch-category-parts` - Called automatically when customer selects a category to pre-load all part prices for services in that category
-- **Cache Status Endpoint**: `GET /api/mobilesentrix/cache-status` - Shows cache count and age
-- **Supplier Parts Table**: Stores parts uploaded from Excel with SKU, name, and original price. Custom parts remain separate.
-- **Excel File Format**: Product SKU (col 0), Product Name (col 1), Original Price (col 2) - supports ~47,500 parts
-- **Admin Product Search**: The Parts tab includes a "Mobilesentrix" sub-tab for searching the supplier's product catalog directly.
-- **SKU Validation**: Settings → Mobilesentrix tab includes "Validate All SKUs" button that checks all service link SKUs (primary + alternative) against the API:
-  - Batches of 5 SKUs with 1.5s delays between batches to avoid API overload
-  - Real-time progress bar with polling
-  - Reports missing SKUs with affected device-service links
-  - Endpoints: `POST /api/mobilesentrix/validate-skus` (start), `GET /api/mobilesentrix/validate-skus/progress` (poll)
-- **API Status Testing**: Settings → Mobilesentrix tab includes "Test Connection" button to verify API connectivity with response time
-- **Error Notifications**: When Mobilesentrix API errors occur, an email notification is sent to the admin notification email address
-- **OAuth Authorization Flow**: 
-  1. Admin navigates to Settings → Mobilesentrix tab
-  2. Click "Authorize with Mobilesentrix" to start browser-based OAuth flow (uses customer authentication)
-  3. Authorization is fully automatic - tokens are saved to database and loaded on app restart
-  4. No manual secret management required for OAuth tokens
-- **Required Secrets**:
-  - `MOBILESENTRIX_CONSUMER_KEY`: Consumer key from Mobilesentrix
-  - `MOBILESENTRIX_CONSUMER_SECRET`: Consumer secret from Mobilesentrix  
-  - `MOBILESENTRIX_ACCESS_TOKEN`: Access token (obtained via OAuth flow)
-  - `MOBILESENTRIX_ACCESS_TOKEN_SECRET`: Access token secret (obtained via OAuth flow)
-- **API Base URL**: Uses `https://www.mobilesentrix.ca` for production (configurable via `MOBILESENTRIX_API_URL` env var).
-- **Endpoints Used**: `/api/rest/products` with filter parameters for SKU lookup.
+- **OAuth1 Authentication**: Integrates with Mobilesentrix POS API using OAuth 1.0a.
+- **Pricing Source Toggle**: Allows choice between Excel upload (default) or Mobilesentrix API for part prices.
+- **24-Hour Parts Price Cache**: Caches API-fetched part prices in memory for 24 hours to reduce API calls, with manual clear option.
+- **Admin Product Search**: Enables searching the Mobilesentrix product catalog from the admin panel.
+- **SKU Validation**: Validates service link SKUs against the API with batch processing and progress tracking.
+- **API Status Testing**: Provides connection testing and error notifications via email.
+- **OAuth Authorization Flow**: Browser-based OAuth for automatic token management.
