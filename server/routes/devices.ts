@@ -253,8 +253,8 @@ export function registerDeviceRoutes(app: Express) {
       const typeId = req.query.typeId as string | undefined;
 
       let devices;
-      if (brandId) {
-        devices = await storage.getDevicesByBrand(brandId);
+      if (brandId && typeId) {
+        devices = await storage.getDevicesByTypeAndBrand(typeId, brandId);
       } else if (typeId) {
         devices = await storage.getDevicesByType(typeId);
       } else {
