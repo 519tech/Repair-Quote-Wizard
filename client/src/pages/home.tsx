@@ -174,9 +174,6 @@ function SearchView({ w }: WizardProps) {
                   >
                     <div>
                       <div className="font-medium">{device.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
-                      </div>
                     </div>
                   </Button>
                 ))}
@@ -576,7 +573,7 @@ function ServicesList({ w, hidePricesUntilContact, hidePricesCompletely }: Wizar
               <div className="flex justify-between items-start gap-2">
                 <p className="font-medium text-sm">{quote.serviceName}</p>
                 {quote.isAvailable ? (
-                  !hidePricesUntilContact && !hidePricesCompletely && <span className="font-bold text-primary shrink-0">${quote.price}</span>
+                  (!hidePricesCompletely && (!hidePricesUntilContact || w.contactCollectedEarly)) && <span className="font-bold text-primary shrink-0">${quote.price}</span>
                 ) : (
                   <span className="text-xs text-muted-foreground shrink-0">Not Available</span>
                 )}
@@ -602,7 +599,7 @@ function ServicesList({ w, hidePricesUntilContact, hidePricesCompletely }: Wizar
                     <p className="text-sm text-muted-foreground">
                       {w.selectedServices.size} service{w.selectedServices.size > 1 ? 's' : ''} selected
                     </p>
-                    {!hidePricesUntilContact && !hidePricesCompletely && (
+                    {!hidePricesCompletely && (!hidePricesUntilContact || w.contactCollectedEarly) && (
                       <>
                         {w.getMultiServiceDiscount() > 0 && (
                           <p className="text-xs text-green-600 font-medium">Multi-service discount: -${w.getMultiServiceDiscount().toFixed(2)}</p>
