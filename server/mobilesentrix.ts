@@ -1,5 +1,9 @@
 import OAuth from 'oauth-1.0a';
 import crypto from 'crypto';
+import { db } from './db';
+import { partsPriceCache } from '@shared/schema';
+import { eq, inArray } from 'drizzle-orm';
+import { logger } from './logger';
 
 const MOBILESENTRIX_BASE_URL = process.env.MOBILESENTRIX_API_URL || 'https://www.mobilesentrix.ca';
 
@@ -95,30 +99,36 @@ interface CachedPart {
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 const partsCache = new Map<string, CachedPart>();
 
-export function getCacheStatus(): { count: number; oldestCacheTime: number | null; cacheAgeHours: number | null } {
-  if (partsCache.size === 0) {
-    return { count: 0, oldestCacheTime: null, cacheAgeHours: null };
-  }
-  
-  let oldestTime = Date.now();
-  const values = Array.from(partsCache.values());
-  for (const part of values) {
-    if (part.cachedAt < oldestTime) {
-      oldestTime = part.cachedAt;
+export async function getCacheStatus(): Promise<{ count: number; oldestCacheTime: number | null; cacheAgeHours: number | null }> {
+  try {
+    const rows = await db.select().from(partsPriceCache);
+    if (rows.length === 0) {
+      return { count: 0, oldestCacheTime: null, cacheAgeHours: null };
     }
+    let oldestTime = Date.now();
+    for (const row of rows) {
+      const t = new Date(row.cachedAt).getTime();
+      if (t < oldestTime) oldestTime = t;
+    }
+    const ageHours = (Date.now() - oldestTime) / (1000 * 60 * 60);
+    return {
+      count: rows.length,
+      oldestCacheTime: oldestTime,
+      cacheAgeHours: Math.round(ageHours * 10) / 10,
+    };
+  } catch {
+    return { count: partsCache.size, oldestCacheTime: null, cacheAgeHours: null };
   }
-  
-  const ageHours = (Date.now() - oldestTime) / (1000 * 60 * 60);
-  return { 
-    count: partsCache.size, 
-    oldestCacheTime: oldestTime, 
-    cacheAgeHours: Math.round(ageHours * 10) / 10 
-  };
 }
 
-export function clearPartsCache(): void {
+export async function clearPartsCache(): Promise<void> {
   partsCache.clear();
-  console.log('Parts cache cleared');
+  try {
+    await db.delete(partsPriceCache);
+  } catch (err) {
+    logger.error('Failed to clear DB parts cache', { error: String(err) });
+  }
+  logger.info('Parts cache cleared');
 }
 
 function isCacheValid(cachedPart: CachedPart): boolean {
@@ -130,18 +140,91 @@ export function getCachedPrice(sku: string): CachedPart | null {
   if (cached && isCacheValid(cached)) {
     return cached;
   }
-  // Remove stale entry
   if (cached) {
     partsCache.delete(sku);
   }
   return null;
 }
 
-export function setCachedPrice(sku: string, data: Omit<CachedPart, 'cachedAt'>): void {
-  partsCache.set(sku, {
-    ...data,
-    cachedAt: Date.now(),
-  });
+export async function getCachedPriceWithDb(sku: string): Promise<CachedPart | null> {
+  const memCached = getCachedPrice(sku);
+  if (memCached) return memCached;
+
+  try {
+    const [row] = await db.select().from(partsPriceCache).where(eq(partsPriceCache.sku, sku));
+    if (row) {
+      const cachedAt = new Date(row.cachedAt).getTime();
+      if ((Date.now() - cachedAt) < CACHE_DURATION_MS) {
+        const entry: CachedPart = {
+          sku: row.sku,
+          name: row.name,
+          price: Number(row.price),
+          inStock: row.inStock,
+          found: row.found,
+          cachedAt,
+        };
+        partsCache.set(sku, entry);
+        return entry;
+      }
+      await db.delete(partsPriceCache).where(eq(partsPriceCache.sku, sku));
+    }
+  } catch (err) {
+    logger.error('DB cache read failed', { sku, error: String(err) });
+  }
+  return null;
+}
+
+export async function setCachedPrice(sku: string, data: Omit<CachedPart, 'cachedAt'>): Promise<void> {
+  const now = Date.now();
+  partsCache.set(sku, { ...data, cachedAt: now });
+
+  try {
+    await db.insert(partsPriceCache).values({
+      sku: data.sku,
+      name: data.name,
+      price: String(data.price),
+      inStock: data.inStock,
+      found: data.found,
+      cachedAt: new Date(now),
+    }).onConflictDoUpdate({
+      target: partsPriceCache.sku,
+      set: {
+        name: data.name,
+        price: String(data.price),
+        inStock: data.inStock,
+        found: data.found,
+        cachedAt: new Date(now),
+      },
+    });
+  } catch (err) {
+    logger.error('DB cache write failed', { sku, error: String(err) });
+  }
+}
+
+export async function loadDbCacheIntoMemory(): Promise<void> {
+  try {
+    const rows = await db.select().from(partsPriceCache);
+    let loaded = 0;
+    for (const row of rows) {
+      const cachedAt = new Date(row.cachedAt).getTime();
+      if ((Date.now() - cachedAt) < CACHE_DURATION_MS) {
+        partsCache.set(row.sku, {
+          sku: row.sku,
+          name: row.name,
+          price: Number(row.price),
+          inStock: row.inStock,
+          found: row.found,
+          cachedAt,
+        });
+        loaded++;
+      }
+    }
+    if (loaded > 0) {
+      logger.info('Loaded parts cache from database', { count: loaded });
+    }
+  } catch (err) {
+    logger.error('Failed to load DB cache into memory', { error: String(err) });
+  }
 }
 
 export async function fetchAndCacheMultipleSkus(skus: string[]): Promise<Map<string, CachedPart>> {
@@ -151,9 +234,8 @@ export async function fetchAndCacheMultipleSkus(skus: string[]): Promise<Map<str
   const uniqueSkus = Array.from(new Set(skus.filter(sku => sku && sku.trim())));
   const skusToFetch: string[] = [];
   
-  // Check cache first
   for (const sku of uniqueSkus) {
-    const cached = getCachedPrice(sku);
+    const cached = await getCachedPriceWithDb(sku);
     if (cached) {
       results.set(sku, cached);
     } else {
@@ -162,11 +244,11 @@ export async function fetchAndCacheMultipleSkus(skus: string[]): Promise<Map<str
   }
   
   if (skusToFetch.length === 0) {
-    console.log(`All ${uniqueSkus.length} SKUs found in cache`);
+    logger.info(`All ${uniqueSkus.length} SKUs found in cache`);
     return results;
   }
   
-  console.log(`Fetching ${skusToFetch.length} SKUs from API (${results.size} from cache)`);
+  logger.info(`Fetching ${skusToFetch.length} SKUs from API (${results.size} from cache)`);
   
   // Batch fetch in groups of 10 to avoid overwhelming the API
   const batchSize = 10;
@@ -187,14 +269,13 @@ export async function fetchAndCacheMultipleSkus(skus: string[]): Promise<Map<str
             found: result.found,
             cachedAt: Date.now(),
           };
-          setCachedPrice(sku, cached);
+          await setCachedPrice(sku, cached);
           return { sku, cached };
         } else {
-          // Don't cache not-found results - might be temporary
           return { sku, cached: { sku, name: '', price: 0, inStock: false, found: false, cachedAt: 0 } };
         }
       } catch (error) {
-        console.error(`Failed to fetch SKU ${sku}:`, error);
+        logger.error(`Failed to fetch SKU ${sku}`, { error: String(error) });
         // Don't cache errors - might be temporary API issues
         return { sku, cached: { sku, name: '', price: 0, inStock: false, found: false, cachedAt: 0 } };
       }
@@ -248,7 +329,7 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
 
   const authHeader = oauth.toHeader(oauth.authorize(requestData, token));
 
-  console.log(`Mobilesentrix API request: ${method} ${url}`);
+  logger.debug('Mobilesentrix API request', { method, url });
   
   const response = await fetch(url, {
     method,
@@ -262,7 +343,7 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
   if (!response.ok) {
     const errorText = await response.text();
     const errorMessage = `Mobilesentrix API error (${response.status}): ${errorText.substring(0, 200)}`;
-    console.error(errorMessage);
+    logger.error(errorMessage);
     
     // Send error notification
     if (errorNotificationCallback) {
@@ -356,7 +437,7 @@ export async function getProductBySku(sku: string): Promise<MobilesentrixPriceRe
       }
     }
     
-    console.log(`SKU ${sku} not found in Mobilesentrix API`);
+    logger.info('SKU not found in Mobilesentrix API', { sku });
     return {
       sku,
       name: '',
@@ -461,7 +542,7 @@ export async function exchangeTokens(oauthToken: string, oauthVerifier: string):
   
   if (!response.ok) {
     const errorText = await response.text();
-    console.error('Token exchange error:', errorText);
+    logger.error('Token exchange error', { error: errorText });
     throw new MobilesentrixApiError(`Failed to exchange tokens: ${errorText}`, response.status);
   }
   

@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as XLSX from "xlsx";
 import { storage } from "../storage";
 import { requireAdmin, upload, getDeviceSearchData, invalidateDeviceSearchCache } from "../middleware";
+import { logger } from "../logger";
 import {
   insertDeviceTypeSchema,
   insertDeviceSchema,
@@ -342,7 +343,7 @@ Do not include any other text.`;
 
       res.json({ releaseDate: null, message: "Could not parse release date" });
     } catch (error: any) {
-      console.error('Release date detection error:', error);
+      logger.error('Release date detection error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to detect release date" });
     }
   });
@@ -406,7 +407,7 @@ ${deviceDescriptions}`;
       invalidateDeviceSearchCache();
       res.json({ results });
     } catch (error: any) {
-      console.error('Bulk release date detection error:', error);
+      logger.error('Bulk release date detection error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to detect release dates" });
     }
   });
@@ -426,7 +427,7 @@ ${deviceDescriptions}`;
       res.setHeader('Content-Disposition', 'attachment; filename="device-import-template.xlsx"');
       res.send(Buffer.from(buffer));
     } catch (error: any) {
-      console.error('Template generation error:', error);
+      logger.error('Template generation error', { error: String(error) });
       res.status(500).json({ error: "Failed to generate template" });
     }
   });
@@ -502,7 +503,7 @@ ${deviceDescriptions}`;
       invalidateDeviceSearchCache();
       res.json({ created, skipped, errors: errors.slice(0, 10), totalRows: rows.length - 1 });
     } catch (error: any) {
-      console.error('Bulk import error:', error);
+      logger.error('Bulk import error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to import devices" });
     }
   });

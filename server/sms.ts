@@ -1,6 +1,7 @@
 import { storage } from './storage';
 import { replaceMacros, replaceCombinedMacros } from './template-utils';
 import type { QuoteData, CombinedQuoteData } from './template-utils';
+import { logger } from './logger';
 
 const OPENPHONE_API_BASE = 'https://api.openphone.com/v1';
 
@@ -47,7 +48,7 @@ async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean
   const apiKey = process.env.OPENPHONE_API_KEY;
   
   if (!apiKey) {
-    console.log('OPENPHONE_API_KEY not configured - SMS not sent');
+    logger.info('OPENPHONE_API_KEY not configured - SMS not sent');
     return false;
   }
   
@@ -70,15 +71,15 @@ async function sendSmsViaOpenPhone(to: string, message: string): Promise<boolean
     });
     
     if (response.ok || response.status === 202) {
-      console.log(`SMS sent via OpenPhone to ${formattedTo}`);
+      logger.info('SMS sent via OpenPhone', { to: formattedTo });
       return true;
     } else {
       const errorText = await response.text();
-      console.error('OpenPhone API error:', response.status, errorText);
+      logger.error('OpenPhone API error', { status: response.status, error: errorText });
       return false;
     }
   } catch (error) {
-    console.error('Failed to send SMS via OpenPhone:', error);
+    logger.error('Failed to send SMS via OpenPhone', { error: String(error) });
     return false;
   }
 }
@@ -87,7 +88,7 @@ const defaultSmsTemplate = "Hi {customerName}! Your RepairQuote: {serviceName} f
 
 export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
   if (!data.customerPhone) {
-    console.log('No phone number provided - SMS not sent');
+    logger.info('No phone number provided - SMS not sent');
     return false;
   }
 
@@ -96,7 +97,7 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
     const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data, 'sms');
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to send quote SMS:', error);
+    logger.error('Failed to send quote SMS', { error: String(error) });
     return false;
   }
 }
@@ -106,7 +107,7 @@ const defaultSmsServiceItemTemplate = "{serviceName} (${servicePrice})";
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
   if (!data.customerPhone) {
-    console.log('No phone number provided - SMS not sent');
+    logger.info('No phone number provided - SMS not sent');
     return false;
   }
 
@@ -115,14 +116,14 @@ export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<
     const message = await replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data, 'sms_service_item_template', defaultSmsServiceItemTemplate, 'sms');
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to send combined quote SMS:', error);
+    logger.error('Failed to send combined quote SMS', { error: String(error) });
     return false;
   }
 }
 
 export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Promise<boolean> {
   if (!data.customerPhone) {
-    console.log('No phone number provided - SMS not sent');
+    logger.info('No phone number provided - SMS not sent');
     return false;
   }
 
@@ -138,7 +139,7 @@ export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Pro
 
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
-    console.error('Failed to send unknown device SMS:', error);
+    logger.error('Failed to send unknown device SMS', { error: String(error) });
     return false;
   }
 }
@@ -167,6 +168,6 @@ export async function sendTestSms(recipientPhone: string): Promise<boolean> {
     grandTotal: '$389.98'
   };
 
-  console.log(`Sending test SMS to ${recipientPhone}...`);
+  logger.info('Sending test SMS', { to: recipientPhone });
   return await sendCombinedQuoteSms(testData);
 }

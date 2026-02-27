@@ -4,6 +4,7 @@ import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
 import { sendTestEmail } from "../gmail";
 import { sendTestSms } from "../sms";
+import { logger } from "../logger";
 
 const loginAttempts = new Map<string, { count: number; firstAttempt: number }>();
 const LOGIN_MAX_ATTEMPTS = 5;
@@ -51,7 +52,7 @@ export function registerAdminRoutes(app: Express) {
 
       res.json({ success: true, username: user.username });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error('Login error', { error: String(error) });
       res.status(500).json({ error: "Login failed" });
     }
   });
@@ -87,7 +88,7 @@ export function registerAdminRoutes(app: Express) {
         res.status(500).json({ error: "Failed to send test email" });
       }
     } catch (error: any) {
-      console.error('Test email error:', error);
+      logger.error('Test email error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to send test email" });
     }
   });
@@ -106,7 +107,7 @@ export function registerAdminRoutes(app: Express) {
         res.status(500).json({ error: "Failed to send test SMS" });
       }
     } catch (error: any) {
-      console.error('Test SMS error:', error);
+      logger.error('Test SMS error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to send test SMS" });
     }
   });

@@ -11,10 +11,10 @@ Preferred communication style: Simple, everyday language.
 The frontend is built with React 18 and TypeScript, utilizing Wouter for routing, TanStack React Query for state management, and shadcn/ui (based on Radix UI) for components. Styling is handled with Tailwind CSS, supporting light/dark themes. The build process uses Vite. A shared `useQuoteWizard()` hook centralizes quote logic, reducing code duplication. The admin panel is modular, with dedicated components for managing submissions, device types, devices, service categories, parts, device-service links, and global settings.
 
 ### Backend Architecture
-The backend is an Express.js 5 application on Node.js with TypeScript and ESM modules, exposing RESTful APIs. Data persistence uses Drizzle ORM with PostgreSQL, and schema validation is done with Zod. A storage abstraction layer manages database operations. Backend routes are organized into modules for admin, devices, services, parts, quotes, integrations, and settings. Shared middleware provides authentication and file upload utilities.
+The backend is an Express.js 5 application on Node.js with TypeScript and ESM modules, exposing RESTful APIs. Data persistence uses Drizzle ORM with PostgreSQL, and schema validation is done with Zod. A storage abstraction layer manages database operations. Backend routes are organized into modules for admin, devices, services, parts, quotes, integrations, and settings. Shared middleware provides authentication and file upload utilities. Structured logging via `server/logger.ts` outputs JSON-formatted log entries with timestamps and levels to stdout/stderr, replacing raw console.log/error calls across all server files.
 
 ### Data Model
-The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), and Quote Requests.
+The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), Quote Requests, and Parts Price Cache (for persisting Mobilesentrix API prices). Database indexes exist on devices (name, brandId, deviceTypeId), device_services (deviceId, serviceId, repairDeskServiceId), and parts/supplier_parts (sku via unique constraint).
 
 ### Core Features
 - **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.
@@ -53,7 +53,7 @@ The application's data model includes Device Types, Devices, Service Categories,
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: Integrates with Mobilesentrix POS API using OAuth 1.0a.
 - **Pricing Source Toggle**: Allows choice between Excel upload (default) or Mobilesentrix API for part prices.
-- **24-Hour Parts Price Cache**: Caches API-fetched part prices in memory for 24 hours to reduce API calls, with manual clear option.
+- **24-Hour Parts Price Cache**: Two-level cache — in-memory Map as L1 + `parts_price_cache` PostgreSQL table as L2. Survives server restarts. DB cache loaded into memory on startup via `loadDbCacheIntoMemory()`. Manual clear option clears both levels.
 - **Admin Product Search**: Enables searching the Mobilesentrix product catalog from the admin panel.
 - **SKU Validation**: Validates service link SKUs against the API with batch processing and progress tracking.
 - **API Status Testing**: Provides connection testing and error notifications via email.

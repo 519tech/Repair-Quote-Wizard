@@ -4,8 +4,9 @@ import { storage } from "./storage";
 import session from "express-session";
 import connectPg from "connect-pg-simple";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
-import { setDatabaseTokens, setErrorNotificationCallback } from "./mobilesentrix";
+import { setDatabaseTokens, setErrorNotificationCallback, loadDbCacheIntoMemory } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
+import { logger } from "./logger";
 import "./middleware";
 
 import { registerAdminRoutes } from "./routes/admin";
@@ -47,15 +48,15 @@ export async function registerRoutes(
     const accessTokenSecret = await storage.getMessageTemplate('mobilesentrix_access_token_secret');
     if (accessToken?.content && accessTokenSecret?.content) {
       setDatabaseTokens(accessToken.content, accessTokenSecret.content);
-      console.log('Mobilesentrix tokens loaded from database');
     }
   } catch (error) {
-    console.log('No Mobilesentrix tokens found in database, will use environment variables if available');
   }
+
+  await loadDbCacheIntoMemory();
 
   setErrorNotificationCallback((errorMessage, endpoint) => {
     sendApiErrorNotification('Mobilesentrix API', errorMessage, endpoint).catch(err => {
-      console.error('Failed to send API error notification:', err);
+      logger.error('Failed to send API error notification', { error: String(err) });
     });
   });
 

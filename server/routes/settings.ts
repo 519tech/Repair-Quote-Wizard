@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
 import { insertMessageTemplateSchema } from "@shared/schema";
+import { logger } from "../logger";
 
 export function registerSettingsRoutes(app: Express) {
   app.get("/api/message-templates", async (req, res) => {
@@ -86,7 +87,7 @@ export function registerSettingsRoutes(app: Express) {
 
       res.json({ success: true, enabled, amount });
     } catch (error) {
-      console.error('Multi-discount settings error:', error);
+      logger.error('Multi-discount settings error', { error: String(error) });
       res.status(500).json({ error: "Failed to update settings" });
     }
   });
@@ -110,7 +111,7 @@ export function registerSettingsRoutes(app: Express) {
       });
       res.json({ success: true, enabled });
     } catch (error) {
-      console.error('Hide prices setting error:', error);
+      logger.error('Hide prices setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
@@ -134,7 +135,7 @@ export function registerSettingsRoutes(app: Express) {
       });
       res.json({ success: true, enabled });
     } catch (error) {
-      console.error('Hide prices completely setting error:', error);
+      logger.error('Hide prices completely setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
@@ -158,7 +159,7 @@ export function registerSettingsRoutes(app: Express) {
       });
       res.json({ success: true, enabled });
     } catch (error) {
-      console.error('RepairDesk leads setting error:', error);
+      logger.error('RepairDesk leads setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
@@ -207,7 +208,7 @@ export function registerSettingsRoutes(app: Express) {
 
       res.json({ success: true });
     } catch (error) {
-      console.error('Price rounding setting error:', error);
+      logger.error('Price rounding setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
@@ -240,7 +241,7 @@ export function registerSettingsRoutes(app: Express) {
 
       res.json({ success: true, source });
     } catch (error) {
-      console.error('Pricing source setting error:', error);
+      logger.error('Pricing source setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
@@ -264,7 +265,7 @@ export function registerSettingsRoutes(app: Express) {
       });
       res.json({ success: true, enabled });
     } catch (error) {
-      console.error('API Excel fallback setting error:', error);
+      logger.error('API Excel fallback setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });

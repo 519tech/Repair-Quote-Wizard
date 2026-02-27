@@ -5,7 +5,8 @@ import { requireAdmin } from "../middleware";
 import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "../gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "../sms";
 import { createLead } from "../repairdesk";
-import { isMobilesentrixConfigured, getProductBySku, MobilesentrixApiError, getCachedPrice, setCachedPrice } from "../mobilesentrix";
+import { isMobilesentrixConfigured, getProductBySku, MobilesentrixApiError, getCachedPriceWithDb, setCachedPrice } from "../mobilesentrix";
+import { logger } from "../logger";
 
 async function roundPrice(price: number, bypassRounding: boolean = false): Promise<number> {
   if (bypassRounding) {
@@ -45,15 +46,15 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
       if (part) {
         return { price: parseFloat(part.price), name: part.name, found: true, source: 'excel' };
       }
-      console.log(`SKU ${sku} not found in uploaded supplier parts`);
+      logger.info("SKU not found in supplier parts", { sku });
       return { price: 0, name: '', found: false, source: 'excel' };
     } catch (error: any) {
-      console.error(`Error fetching SKU ${sku} from database:`, error.message);
+      logger.error("Error fetching SKU from database", { sku, error: error.message });
       return { price: 0, name: '', found: false, source: 'excel', apiError: error.message };
     }
   }
 
-  const cached = getCachedPrice(sku);
+  const cached = await getCachedPriceWithDb(sku);
   if (cached) {
     return {
       price: parseFloat(String(cached.price)) || 0,
@@ -65,7 +66,7 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
   }
 
   if (!isMobilesentrixConfigured()) {
-    console.error('Mobilesentrix API not configured - cannot fetch prices');
+    logger.error('Mobilesentrix API not configured');
     return { price: 0, name: '', found: false, source: 'api', apiError: 'API not configured' };
   }
 
@@ -73,7 +74,7 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
     const apiResult = await getProductBySku(sku);
 
     if (apiResult.found) {
-      setCachedPrice(sku, {
+      await setCachedPrice(sku, {
         sku: apiResult.sku || sku,
         name: apiResult.name,
         price: apiResult.price,
@@ -82,10 +83,10 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
       });
       return { price: parseFloat(String(apiResult.price)) || 0, name: apiResult.name, found: true, source: 'api' };
     }
-    console.log(`SKU ${sku} not found in Mobilesentrix API, checking fallback sources...`);
+    logger.info("SKU not found in API, checking fallbacks", { sku });
     const customPart = await storage.getPartBySku(sku);
     if (customPart) {
-      console.log(`Found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
+      logger.info('Found custom part fallback', { sku, name: customPart.name, price: customPart.price });
       return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
     }
     const fallbackSetting = templates.find(t => t.type === 'api_excel_fallback');
@@ -93,7 +94,7 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
     if (excelFallbackEnabled) {
       const supplierPart = await storage.getSupplierPartBySku(sku);
       if (supplierPart) {
-        console.log(`Found Excel fallback for SKU ${sku}: ${supplierPart.name} @ $${supplierPart.price}`);
+        logger.info('Found Excel fallback', { sku, name: supplierPart.name, price: supplierPart.price });
         return { price: parseFloat(supplierPart.price), name: supplierPart.name, found: true, source: 'excel' };
       }
     }
@@ -102,12 +103,12 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
     const errorMsg = error instanceof MobilesentrixApiError
       ? `API error ${error.statusCode}: ${error.message}`
       : error.message || 'Unknown API error';
-    console.error(`Mobilesentrix API error for SKU ${sku}:`, errorMsg);
+    logger.error("Mobilesentrix API error", { sku, error: errorMsg });
 
     try {
       const customPart = await storage.getPartBySku(sku);
       if (customPart) {
-        console.log(`API error but found custom part for SKU ${sku}: ${customPart.name} @ $${customPart.price}`);
+        logger.info('API error but found custom part', { sku, name: customPart.name, price: customPart.price });
         return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
       }
       const fallbackTemplates = await storage.getMessageTemplates();
@@ -116,12 +117,12 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
       if (excelFallbackEnabled) {
         const supplierPart = await storage.getSupplierPartBySku(sku);
         if (supplierPart) {
-          console.log(`API error but found Excel fallback for SKU ${sku}: ${supplierPart.name} @ $${supplierPart.price}`);
+          logger.info('API error but found Excel fallback', { sku, name: supplierPart.name, price: supplierPart.price });
           return { price: parseFloat(supplierPart.price), name: supplierPart.name, found: true, source: 'excel' };
         }
       }
     } catch (dbError) {
-      console.error(`Error checking fallback parts for SKU ${sku}:`, dbError);
+      logger.error("Error checking fallback parts", { sku, error: String(dbError) });
     }
 
     return { price: 0, name: '', found: false, source: 'api', apiError: errorMsg };
@@ -262,7 +263,7 @@ export function registerQuoteRoutes(app: Express) {
         bypassMultiDiscount: service.bypassMultiDiscount || false,
       });
     } catch (error: any) {
-      console.error('Calculate quote error:', error.message || error);
+      logger.error('Calculate quote error', { error: String(error.message || error) });
       res.status(500).json({ error: "Failed to calculate quote", details: error.message });
     }
   });
@@ -358,10 +359,10 @@ export function registerQuoteRoutes(app: Express) {
           warranty: service.warranty || undefined,
         };
 
-        sendQuoteEmail(quoteData).catch(err => console.error('Email send error:', err));
+        sendQuoteEmail(quoteData).catch(err => logger.error('Email send error', { error: String(err) }));
 
         if (input.customerPhone) {
-          sendQuoteSms(quoteData).catch(err => console.error('SMS send error:', err));
+          sendQuoteSms(quoteData).catch(err => logger.error('SMS send error', { error: String(err) }));
         }
       }
 
@@ -378,7 +379,7 @@ export function registerQuoteRoutes(app: Express) {
         }],
         grandTotal: quotedPrice,
         notes: input.notes,
-      }).catch(err => console.error('Admin notification error:', err));
+      }).catch(err => logger.error('Admin notification error', { error: String(err) }));
 
       res.status(201).json(quote);
     } catch (error: any) {
@@ -489,7 +490,7 @@ export function registerQuoteRoutes(app: Express) {
         services: servicesData,
         grandTotal: finalTotal.toFixed(2),
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
-      }).catch(err => console.error('Combined email send error:', err));
+      }).catch(err => logger.error('Combined email send error', { error: String(err) }));
 
       if (input.customerPhone) {
         sendCombinedQuoteSms({
@@ -499,7 +500,7 @@ export function registerQuoteRoutes(app: Express) {
           services: servicesData,
           grandTotal: finalTotal.toFixed(2),
           multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
-        }).catch(err => console.error('Combined SMS send error:', err));
+        }).catch(err => logger.error('Combined SMS send error', { error: String(err) }));
       }
 
       sendAdminNotificationEmail({
@@ -511,7 +512,7 @@ export function registerQuoteRoutes(app: Express) {
         grandTotal: finalTotal.toFixed(2),
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         notes: input.notes,
-      }).catch(err => console.error('Admin notification error:', err));
+      }).catch(err => logger.error('Admin notification error', { error: String(err) }));
 
       const templates = await storage.getMessageTemplates();
       const rdLeadSetting = templates.find(t => t.type === 'repairdesk_leads_enabled');
@@ -557,7 +558,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
             additionalProblem: servicesData.map(s => s.serviceName).join(', '),
             customerNotes: leadNotes,
           }],
-        }).catch(err => console.error('RepairDesk lead creation error:', err));
+        }).catch(err => logger.error('RepairDesk lead creation error', { error: String(err) }));
       }
 
       res.status(201).json({
@@ -595,7 +596,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
         customerEmail: input.customerEmail,
         deviceDescription: input.deviceDescription,
         issueDescription: input.issueDescription,
-      }).catch(err => console.error('Unknown device email error:', err));
+      }).catch(err => logger.error('Unknown device email error', { error: String(err) }));
 
       if (input.customerPhone) {
         sendUnknownDeviceQuoteSms({
@@ -603,7 +604,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
           customerPhone: input.customerPhone,
           deviceDescription: input.deviceDescription,
           issueDescription: input.issueDescription,
-        }).catch(err => console.error('Unknown device SMS error:', err));
+        }).catch(err => logger.error('Unknown device SMS error', { error: String(err) }));
       }
 
       sendUnknownDeviceAdminNotification({
@@ -612,7 +613,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
         customerPhone: input.customerPhone,
         deviceDescription: input.deviceDescription,
         issueDescription: input.issueDescription,
-      }).catch(err => console.error('Unknown device admin notification error:', err));
+      }).catch(err => logger.error('Unknown device admin notification error', { error: String(err) }));
 
       res.status(201).json({ success: true });
     } catch (error: any) {
@@ -680,7 +681,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
 
       res.json(filtered);
     } catch (error) {
-      console.error('Search submissions error:', error);
+      logger.error('Search submissions error', { error: String(error) });
       res.status(500).json({ error: "Failed to search submissions" });
     }
   });

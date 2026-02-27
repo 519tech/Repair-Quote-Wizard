@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
 import { insertPartSchema } from "@shared/schema";
+import { logger } from "../logger";
 
 export function registerPartRoutes(app: Express) {
   app.get("/api/parts", async (req, res) => {
@@ -133,7 +134,7 @@ export function registerPartRoutes(app: Express) {
 
       res.json({ success: true, ...result });
     } catch (error: any) {
-      console.error("Supplier parts upload error:", error);
+      logger.error('Supplier parts upload error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to upload supplier parts" });
     }
   });
@@ -143,7 +144,7 @@ export function registerPartRoutes(app: Express) {
       await storage.clearAllSupplierParts();
       res.json({ success: true });
     } catch (error: any) {
-      console.error("Error clearing supplier parts:", error);
+      logger.error('Error clearing supplier parts', { error: String(error) });
       res.status(500).json({ error: "Failed to clear supplier parts" });
     }
   });

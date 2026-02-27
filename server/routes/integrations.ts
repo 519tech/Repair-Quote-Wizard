@@ -4,6 +4,7 @@ import { requireAdmin } from "../middleware";
 import { isRepairDeskConnected, checkInventoryBySku } from "../repairdesk";
 import { syncAllPricesToRepairDesk, getSyncHistory, getLastSyncTime, getBrokenLinks, getLinkedServicesCount, isRepairDeskSyncConfigured, startScheduledSync } from "../repairdesk-sync";
 import { searchProducts, getProductBySku, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, testConnection, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "../mobilesentrix";
+import { logger } from "../logger";
 
 let skuValidationInProgress = false;
 let skuValidationProgress = { checked: 0, total: 0, missing: [] as any[], errors: [] as string[] };
@@ -152,7 +153,7 @@ export function registerIntegrationRoutes(app: Express) {
         limit,
       });
     } catch (error: any) {
-      console.error('Mobilesentrix search error:', error);
+      logger.error('Mobilesentrix search error', { error: String(error) });
       if (error instanceof MobilesentrixApiError) {
         return res.status(error.statusCode).json({ error: error.message });
       }
@@ -172,14 +173,14 @@ export function registerIntegrationRoutes(app: Express) {
       }
       res.json(result);
     } catch (error: any) {
-      console.error('Mobilesentrix SKU lookup error:', error);
+      logger.error('Mobilesentrix SKU lookup error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to lookup product" });
     }
   });
 
   app.get("/api/mobilesentrix/cache-status", async (req, res) => {
     try {
-      const status = getCacheStatus();
+      const status = await getCacheStatus();
       res.json(status);
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to get cache status" });
@@ -188,7 +189,7 @@ export function registerIntegrationRoutes(app: Express) {
 
   app.post("/api/mobilesentrix/clear-cache", requireAdmin, async (req, res) => {
     try {
-      clearPartsCache();
+      await clearPartsCache();
       res.json({ success: true, message: "Cache cleared" });
     } catch (error: any) {
       res.status(500).json({ error: error.message || "Failed to clear cache" });
@@ -289,11 +290,11 @@ export function registerIntegrationRoutes(app: Express) {
       }
 
       skuValidationInProgress = false;
-      console.log(`SKU validation complete: ${skuValidationProgress.checked} checked, ${skuValidationProgress.missing.length} missing`);
+      logger.info('SKU validation complete', { checked: skuValidationProgress.checked, missing: skuValidationProgress.missing.length });
     } catch (error: any) {
       skuValidationInProgress = false;
       skuValidationProgress.errors.push(error.message);
-      console.error("SKU validation error:", error);
+      logger.error("SKU validation error", { error: String(error) });
     }
   });
 
@@ -371,7 +372,7 @@ export function registerIntegrationRoutes(app: Express) {
         });
       }
 
-      console.log(`Prefetching ${uniqueSkus.length} SKUs for device ${deviceId}${categoryId ? ` category ${categoryId}` : ''}`);
+      logger.info('Prefetching SKUs', { count: uniqueSkus.length, deviceId, categoryId });
       const results = await fetchAndCacheMultipleSkus(uniqueSkus);
 
       const foundCount = Array.from(results.values()).filter(r => r.found).length;
@@ -382,10 +383,10 @@ export function registerIntegrationRoutes(app: Express) {
         source: 'api',
         skusFetched: results.size,
         skusFound: foundCount,
-        cacheStatus: getCacheStatus()
+        cacheStatus: await getCacheStatus()
       });
     } catch (error: any) {
-      console.error('Prefetch error:', error);
+      logger.error('Prefetch error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to prefetch parts" });
     }
   });
@@ -471,7 +472,7 @@ export function registerIntegrationRoutes(app: Express) {
         lastSyncTime,
       });
     } catch (error) {
-      console.error("Failed to get RepairDesk sync status:", error);
+      logger.error("Failed to get RepairDesk sync status", { error: String(error) });
       res.status(500).json({ error: "Failed to get sync status" });
     }
   });
@@ -481,7 +482,7 @@ export function registerIntegrationRoutes(app: Express) {
       const result = await syncAllPricesToRepairDesk("manual");
       res.json(result);
     } catch (error) {
-      console.error("Failed to trigger RepairDesk sync:", error);
+      logger.error("Failed to trigger RepairDesk sync", { error: String(error) });
       res.status(500).json({ error: "Failed to trigger sync" });
     }
   });
@@ -492,7 +493,7 @@ export function registerIntegrationRoutes(app: Express) {
       const history = await getSyncHistory(limit);
       res.json(history);
     } catch (error) {
-      console.error("Failed to get sync history:", error);
+      logger.error("Failed to get sync history", { error: String(error) });
       res.status(500).json({ error: "Failed to get sync history" });
     }
   });
@@ -502,7 +503,7 @@ export function registerIntegrationRoutes(app: Express) {
       const brokenLinks = await getBrokenLinks();
       res.json(brokenLinks);
     } catch (error) {
-      console.error("Failed to get broken links:", error);
+      logger.error("Failed to get broken links", { error: String(error) });
       res.status(500).json({ error: "Failed to get broken links" });
     }
   });
@@ -513,7 +514,7 @@ export function registerIntegrationRoutes(app: Express) {
       const prices = await getCalculatedPrices();
       res.json(prices);
     } catch (error) {
-      console.error("Failed to get calculated prices:", error);
+      logger.error("Failed to get calculated prices", { error: String(error) });
       res.status(500).json({ error: "Failed to get calculated prices" });
     }
   });

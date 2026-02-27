@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, decimal, unique, boolean, integer, real } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, decimal, unique, boolean, integer, real, timestamp, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -71,6 +71,9 @@ export const devices = pgTable("devices", {
   releaseDate: text("release_date"),
 }, (table) => [
   unique("devices_name_brand_type_unique").on(table.name, table.brandId, table.deviceTypeId),
+  index("devices_name_idx").on(table.name),
+  index("devices_brand_id_idx").on(table.brandId),
+  index("devices_device_type_id_idx").on(table.deviceTypeId),
 ]);
 
 export const devicesRelations = relations(devices, ({ one, many }) => ({
@@ -202,6 +205,9 @@ export const deviceServices = pgTable("device_services", {
   manualPriceOverride: decimal("manual_price_override", { precision: 10, scale: 2 }), // If set, bypasses all pricing calculations
 }, (table) => [
   unique("device_services_device_service_unique").on(table.deviceId, table.serviceId),
+  index("ds_device_id_idx").on(table.deviceId),
+  index("ds_service_id_idx").on(table.serviceId),
+  index("ds_repairdesk_id_idx").on(table.repairDeskServiceId),
 ]);
 
 export const deviceServicesRelations = relations(deviceServices, ({ one }) => ({
@@ -355,6 +361,18 @@ export type DeviceServiceWithRelations = DeviceService & {
   part: Part | null;
   additionalParts?: DeviceServicePartWithPart[];
 };
+
+// Mobilesentrix parts price cache (persisted to survive server restarts)
+export const partsPriceCache = pgTable("parts_price_cache", {
+  sku: text("sku").primaryKey(),
+  name: text("name").notNull(),
+  price: numeric("price").notNull(),
+  inStock: boolean("in_stock").notNull().default(false),
+  found: boolean("found").notNull().default(true),
+  cachedAt: timestamp("cached_at").notNull().defaultNow(),
+});
+
+export type PartsPriceCacheEntry = typeof partsPriceCache.$inferSelect;
 
 // Auth models
 export * from "./models/auth";

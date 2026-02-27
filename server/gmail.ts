@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { storage } from './storage';
 import { replaceMacros, replaceCombinedMacros } from './template-utils';
 import type { QuoteData, CombinedQuoteData } from './template-utils';
+import { logger } from './logger';
 
 let cachedConnectionSettings: any = null;
 
@@ -44,7 +45,7 @@ async function getAccessToken() {
   const accessToken = cachedConnectionSettings?.settings?.access_token || cachedConnectionSettings?.settings?.oauth?.credentials?.access_token;
 
   if (!cachedConnectionSettings || !accessToken) {
-    console.error('Gmail connector response (no token found):', JSON.stringify(data, null, 2));
+    logger.error('Gmail connector response - no token found');
     throw new Error('Gmail not connected - no access token in connector response');
   }
   return accessToken;
@@ -65,7 +66,7 @@ async function getGmailClientWithRetry() {
   try {
     return await getGmailClient();
   } catch (tokenErr) {
-    console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+    logger.error('Gmail token error, clearing cache and retrying', { error: String(tokenErr) });
     cachedConnectionSettings = null;
     return await getGmailClient();
   }
@@ -126,10 +127,10 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
       requestBody: { raw: encodeEmailMessage(message) }
     });
 
-    console.log(`Quote email sent to ${data.customerEmail}`);
+    logger.info('Quote email sent', { to: data.customerEmail });
     return true;
   } catch (error) {
-    console.error('Failed to send quote email:', error);
+    logger.error('Failed to send quote email', { error: String(error) });
     return false;
   }
 }
@@ -186,10 +187,10 @@ The RepairQuote Team`;
       requestBody: { raw: encodeEmailMessage(message) }
     });
 
-    console.log(`Combined quote email sent to ${data.customerEmail}`);
+    logger.info('Combined quote email sent', { to: data.customerEmail });
     return true;
   } catch (error) {
-    console.error('Failed to send combined quote email:', error);
+    logger.error('Failed to send combined quote email', { error: String(error) });
     return false;
   }
 }
@@ -214,7 +215,7 @@ export async function sendAdminNotificationEmail(data: AdminNotificationData): P
   try {
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
     if (!adminEmailSetting?.content) {
-      console.log('Admin notification email not configured');
+      logger.info('Admin notification email not configured');
       return false;
     }
 
@@ -262,10 +263,10 @@ This is an automated notification from RepairQuote.`;
       requestBody: { raw: encodeEmailMessage(message) }
     });
 
-    console.log(`Admin notification email sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
+    logger.info('Admin notification email sent', { to: adminEmailSetting.content, replyTo: data.customerEmail });
     return true;
   } catch (error) {
-    console.error('Failed to send admin notification email:', error);
+    logger.error('Failed to send admin notification email', { error: String(error) });
     return false;
   }
 }
@@ -321,10 +322,10 @@ The RepairQuote Team`;
       requestBody: { raw: encodeEmailMessage(message) }
     });
 
-    console.log(`Unknown device quote email sent to ${data.customerEmail}`);
+    logger.info('Unknown device quote email sent', { to: data.customerEmail });
     return true;
   } catch (error) {
-    console.error('Failed to send unknown device quote email:', error);
+    logger.error('Failed to send unknown device quote email', { error: String(error) });
     return false;
   }
 }
@@ -333,7 +334,7 @@ export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuot
   try {
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
     if (!adminEmailSetting?.content) {
-      console.log('Admin notification email not configured');
+      logger.info('Admin notification email not configured');
       return false;
     }
 
@@ -374,10 +375,10 @@ This is an automated notification from RepairQuote.`;
       requestBody: { raw: encodeEmailMessage(message) }
     });
 
-    console.log(`Unknown device admin notification sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
+    logger.info('Unknown device admin notification sent', { to: adminEmailSetting.content, replyTo: data.customerEmail });
     return true;
   } catch (error) {
-    console.error('Failed to send unknown device admin notification:', error);
+    logger.error('Failed to send unknown device admin notification', { error: String(error) });
     return false;
   }
 }
@@ -406,7 +407,7 @@ export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
     grandTotal: '$389.98'
   };
 
-  console.log(`Sending test email to ${recipientEmail}...`);
+  logger.info('Sending test email', { to: recipientEmail });
   return await sendCombinedQuoteEmail(testData);
 }
 
@@ -414,7 +415,7 @@ export async function sendApiErrorNotification(serviceName: string, errorMessage
   try {
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
     if (!adminEmailSetting?.content) {
-      console.log('Admin notification email not configured - skipping API error notification');
+      logger.info('Admin notification email not configured - skipping API error notification');
       return false;
     }
 
@@ -448,10 +449,10 @@ Please check the integration settings and connection status.`;
       requestBody: { raw: encodeEmailMessage(message) },
     });
 
-    console.log(`API error notification sent to ${adminEmailSetting.content}`);
+    logger.info('API error notification sent', { to: adminEmailSetting.content });
     return true;
   } catch (error) {
-    console.error('Failed to send API error notification:', error);
+    logger.error('Failed to send API error notification', { error: String(error) });
     return false;
   }
 }

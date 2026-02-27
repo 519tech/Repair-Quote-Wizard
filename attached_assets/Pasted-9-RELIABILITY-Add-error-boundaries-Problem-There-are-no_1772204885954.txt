@@ -1,0 +1,80 @@
+9. RELIABILITY: Add error boundaries
+Problem: There are no React error boundaries. If any component throws during render, the entire app crashes with a white screen.
+
+Changes:
+
+Create client/src/components/ErrorBoundary.tsx — a class component that catches render errors and shows a friendly "Something went wrong" message with a "Try Again" button.
+
+Wrap each route's lazy-loaded component with this error boundary in App.tsx.
+
+10. RELIABILITY: The Mobilesentrix cache is in-memory only
+Problem: In server/mobilesentrix.ts, the 24-hour parts price cache (partsCache) is stored in a Map in process memory. Every server restart loses all cached prices, triggering a flood of API calls.
+
+Change: Persist the cache to the database. Add a parts_price_cache table to the schema:
+
+sql
+CREATE TABLE parts_price_cache (
+  sku TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  price NUMERIC NOT NULL,
+  in_stock BOOLEAN NOT NULL DEFAULT false,
+  cached_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+Add this table to shared/schema.ts using Drizzle ORM syntax.
+
+Update getCachedPrice() and setCachedPrice() in mobilesentrix.ts to read/write from this table.
+
+Keep the in-memory Map as a first-level cache (check memory first, then DB, then API).
+
+Run the migration with npx drizzle-kit push.
+
+11. OBSERVABILITY: Add structured logging
+Problem: The app uses raw console.log and console.error everywhere, making it hard to search and filter logs in production.
+
+Change: Create a simple server/logger.ts wrapper:
+
+typescript
+type LogLevel = 'info' | 'warn' | 'error' | 'debug';
+
+function log(level: LogLevel, message: string, meta?: Record<string, any>) {
+  const entry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    ...meta,
+  };
+  if (level === 'error') {
+    console.error(JSON.stringify(entry));
+  } else {
+    console.log(JSON.stringify(entry));
+  }
+}
+
+export const logger = {
+  info: (msg: string, meta?: Record<string, any>) => log('info', msg, meta),
+  warn: (msg: string, meta?: Record<string, any>) => log('warn', msg, meta),
+  error: (msg: string, meta?: Record<string, any>) => log('error', msg, meta),
+  debug: (msg: string, meta?: Record<string, any>) => log('debug', msg, meta),
+};
+Then progressively replace console.log/console.error calls in the server files with logger.info/logger.error, starting with routes.ts, gmail.ts, sms.ts, and mobilesentrix.ts.
+
+12. DATABASE: Add indexes for common queries
+Problem: The schema in shared/schema.ts likely has no explicit indexes beyond primary keys. Common queries like searching devices by brand, filtering services by device, and looking up parts by SKU will be doing full table scans.
+
+Changes — add these indexes to shared/schema.ts:
+
+typescript
+// In the devices table or after it:
+export const devicesNameIdx = index('devices_name_idx').on(devices.name);
+export const devicesBrandIdx = index('devices_brand_id_idx').on(devices.brandId);
+export const devicesTypeIdx = index('devices_device_type_id_idx').on(devices.deviceTypeId);
+
+// For device_services:
+export const dsDeviceIdx = index('ds_device_id_idx').on(deviceServices.deviceId);
+export const dsServiceIdx = index('ds_service_id_idx').on(deviceServices.serviceId);
+export const dsRepairDeskIdx = index('ds_repairdesk_id_idx').on(deviceServices.repairDeskServiceId);
+
+// For parts/supplier_parts:
+export const partsSkuIdx = index('parts_sku_idx').on(parts.sku);
+export const supplierPartsSkuIdx = index('supplier_parts_sku_idx').on(supplierParts.sku);
+Then run npx drizzle-kit push to apply.
