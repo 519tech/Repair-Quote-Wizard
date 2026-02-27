@@ -465,7 +465,7 @@ function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }: Wizar
                         </span>
                       </div>
                       {cat.description && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{cat.description}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{cat.description}</p>
                       )}
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
