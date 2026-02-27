@@ -1,33 +1,15 @@
-// SMS integration via OpenPhone/Quo API
-// Configure OPENPHONE_API_KEY environment variable
 import { storage } from './storage';
+import { replaceMacros, replaceCombinedMacros } from './template-utils';
+import type { QuoteData, CombinedQuoteData } from './template-utils';
 
 const OPENPHONE_API_BASE = 'https://api.openphone.com/v1';
 
-interface QuoteSmsData {
-  customerName: string;
+interface QuoteSmsData extends QuoteData {
   customerPhone: string;
-  deviceName: string;
-  serviceName: string;
-  serviceDescription?: string;
-  price: string;
-  repairTime?: string;
-  warranty?: string;
 }
 
-interface CombinedQuoteSmsData {
-  customerName: string;
+interface CombinedQuoteSmsData extends CombinedQuoteData {
   customerPhone: string;
-  deviceName: string;
-  services: Array<{
-    serviceName: string;
-    serviceDescription?: string;
-    price: string;
-    repairTime?: string;
-    warranty?: string;
-  }>;
-  grandTotal: string;
-  multiServiceDiscount?: string;
 }
 
 interface UnknownDeviceSmsData {
@@ -42,28 +24,6 @@ interface OpenPhoneNumber {
   phoneNumber: string;
   name?: string;
   userId?: string;
-}
-
-function cleanupSingleServicePlaceholders(text: string): string {
-  return text
-    .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/[^\S\n]{2,}/g, ' ')
-    .replace(/\.\s*\./g, '.')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function replaceMacros(template: string, data: QuoteSmsData): string {
-  const result = template
-    .replace(/\{customerName\}/g, data.customerName)
-    .replace(/\{deviceName\}/g, data.deviceName)
-    .replace(/\{serviceName\}/g, data.serviceName)
-    .replace(/\{serviceDescription\}/g, data.serviceDescription || '')
-    .replace(/\{price\}/g, data.price)
-    .replace(/\{repairTime\}/g, data.repairTime || '')
-    .replace(/\{warranty\}/g, data.warranty || '');
-  
-  return cleanupSingleServicePlaceholders(result);
 }
 
 function formatPhoneE164(phone: string): string {
@@ -133,7 +93,7 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
 
   try {
     const smsTemplate = await storage.getMessageTemplate('sms');
-    const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data);
+    const message = replaceMacros(smsTemplate?.content || defaultSmsTemplate, data, 'sms');
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
     console.error('Failed to send quote SMS:', error);
@@ -142,51 +102,7 @@ export async function sendQuoteSms(data: QuoteSmsData): Promise<boolean> {
 }
 
 const defaultCombinedSmsTemplate = "Hi {customerName}! Your RepairQuote for {deviceName}: {servicesList}. Total: ${price} plus taxes. Reply for questions!";
-
 const defaultSmsServiceItemTemplate = "{serviceName} (${servicePrice})";
-
-function buildSmsServicesList(services: CombinedQuoteSmsData['services'], serviceItemTemplate: string): string {
-  return services.map(s => {
-    return serviceItemTemplate
-      .replace(/\{serviceName\}/g, s.serviceName)
-      .replace(/\{servicePrice\}/g, s.price)
-      .replace(/\{repairTime\}/g, s.repairTime || '')
-      .replace(/\{warranty\}/g, s.warranty || '')
-      .replace(/\{serviceDescription\}/g, s.serviceDescription || '');
-  }).join('\n\n');
-}
-
-function cleanupEmptyPlaceholders(text: string): string {
-  return text
-    .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/[^\S\n]{2,}/g, ' ')
-    .replace(/\.\s*\./g, '.')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-async function replaceCombinedMacros(template: string, data: CombinedQuoteSmsData): Promise<string> {
-  const serviceNames = data.services.map(s => s.serviceName).join(', ');
-  const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
-  const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
-  const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
-  
-  const serviceItemTemplate = await storage.getMessageTemplate('sms_service_item_template');
-  const servicesList = buildSmsServicesList(data.services, serviceItemTemplate?.content || defaultSmsServiceItemTemplate);
-  
-  const result = template
-    .replace(/\{customerName\}/g, data.customerName)
-    .replace(/\{deviceName\}/g, data.deviceName)
-    .replace(/\{serviceName\}/g, serviceNames)
-    .replace(/\{serviceDescription\}/g, serviceDescriptions)
-    .replace(/\{price\}/g, data.grandTotal)
-    .replace(/\{repairTime\}/g, repairTimes)
-    .replace(/\{warranty\}/g, warranties)
-    .replace(/\{servicesList\}/g, servicesList)
-    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '');
-  
-  return cleanupEmptyPlaceholders(result);
-}
 
 export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<boolean> {
   if (!data.customerPhone) {
@@ -196,7 +112,7 @@ export async function sendCombinedQuoteSms(data: CombinedQuoteSmsData): Promise<
 
   try {
     const smsTemplate = await storage.getMessageTemplate('sms');
-    const message = await replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data);
+    const message = await replaceCombinedMacros(smsTemplate?.content || defaultCombinedSmsTemplate, data, 'sms_service_item_template', defaultSmsServiceItemTemplate, 'sms');
     return await sendSmsViaOpenPhone(data.customerPhone, message);
   } catch (error) {
     console.error('Failed to send combined quote SMS:', error);
@@ -227,7 +143,6 @@ export async function sendUnknownDeviceQuoteSms(data: UnknownDeviceSmsData): Pro
   }
 }
 
-// Test SMS function - sends a test SMS with sample data
 export async function sendTestSms(recipientPhone: string): Promise<boolean> {
   const testData = {
     customerName: 'Test Customer',

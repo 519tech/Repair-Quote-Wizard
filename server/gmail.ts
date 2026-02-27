@@ -1,7 +1,7 @@
-// Gmail integration for sending quote emails
-// Using Replit's Gmail connector (connection:conn_google-mail)
 import { google } from 'googleapis';
 import { storage } from './storage';
+import { replaceMacros, replaceCombinedMacros } from './template-utils';
+import type { QuoteData, CombinedQuoteData } from './template-utils';
 
 let cachedConnectionSettings: any = null;
 
@@ -61,36 +61,26 @@ async function getGmailClient() {
   return google.gmail({ version: 'v1', auth: oauth2Client });
 }
 
-interface QuoteEmailData {
-  customerName: string;
+async function getGmailClientWithRetry() {
+  try {
+    return await getGmailClient();
+  } catch (tokenErr) {
+    console.error('Gmail token error, clearing cache and retrying:', tokenErr);
+    cachedConnectionSettings = null;
+    return await getGmailClient();
+  }
+}
+
+function encodeEmailMessage(rawMessage: string): string {
+  return Buffer.from(rawMessage)
+    .toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+interface QuoteEmailData extends QuoteData {
   customerEmail: string;
-  deviceName: string;
-  serviceName: string;
-  serviceDescription?: string;
-  price: string;
-  repairTime?: string;
-  warranty?: string;
-}
-
-function cleanupSingleServicePlaceholders(text: string): string {
-  return text
-    .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/^\s*[\r\n]/gm, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-function replaceMacros(template: string, data: QuoteEmailData): string {
-  const result = template
-    .replace(/\{customerName\}/g, data.customerName)
-    .replace(/\{deviceName\}/g, data.deviceName)
-    .replace(/\{serviceName\}/g, data.serviceName)
-    .replace(/\{serviceDescription\}/g, data.serviceDescription || '')
-    .replace(/\{price\}/g, data.price)
-    .replace(/\{repairTime\}/g, data.repairTime ? `Repair Time: ${data.repairTime}` : '')
-    .replace(/\{warranty\}/g, data.warranty ? `Warranty: ${data.warranty}` : '');
-  
-  return cleanupSingleServicePlaceholders(result);
 }
 
 const defaultEmailSubject = "Your Repair Quote: {serviceName} - ${price} plus taxes";
@@ -102,7 +92,7 @@ Here are your quote details:
 
 Device: {deviceName}
 Service: {serviceName}
-Estimated Price: ${"{price}"} plus taxes
+Estimated Price: $\{price} plus taxes
 {repairTime}
 {warranty}
 
@@ -115,22 +105,14 @@ The RepairQuote Team`;
 
 export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
   try {
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
-    
-    // Fetch custom templates from database
+    const gmail = await getGmailClientWithRetry();
+
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
     const bodyTemplate = await storage.getMessageTemplate('email_body');
-    
-    const subject = replaceMacros(subjectTemplate?.content || defaultEmailSubject, data);
-    const emailBody = replaceMacros(bodyTemplate?.content || defaultEmailBody, data).trim();
-    
+
+    const subject = replaceMacros(subjectTemplate?.content || defaultEmailSubject, data, 'email');
+    const emailBody = replaceMacros(bodyTemplate?.content || defaultEmailBody, data, 'email').trim();
+
     const message = [
       `To: ${data.customerEmail}`,
       `Subject: ${subject}`,
@@ -139,17 +121,9 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
       emailBody
     ].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedMessage
-      }
+      requestBody: { raw: encodeEmailMessage(message) }
     });
 
     console.log(`Quote email sent to ${data.customerEmail}`);
@@ -160,20 +134,8 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
   }
 }
 
-// Combined multi-service quote email
-interface CombinedQuoteEmailData {
-  customerName: string;
+interface CombinedQuoteEmailData extends CombinedQuoteData {
   customerEmail: string;
-  deviceName: string;
-  services: Array<{
-    serviceName: string;
-    serviceDescription?: string;
-    price: string;
-    repairTime?: string;
-    warranty?: string;
-  }>;
-  grandTotal: string;
-  multiServiceDiscount?: string;
 }
 
 const defaultServiceItemTemplate = `{serviceName}
@@ -181,62 +143,13 @@ $\{servicePrice} plus taxes
 {repairTime}
 {warranty}`;
 
-function buildServicesList(services: CombinedQuoteEmailData['services'], serviceItemTemplate: string): string {
-  return services.map(s => {
-    return serviceItemTemplate
-      .replace(/\{serviceName\}/g, s.serviceName)
-      .replace(/\{servicePrice\}/g, s.price)
-      .replace(/\{repairTime\}/g, s.repairTime || '')
-      .replace(/\{warranty\}/g, s.warranty || '')
-      .replace(/\{serviceDescription\}/g, s.serviceDescription || '');
-  }).join('\n\n');
-}
-
-function cleanupEmptyPlaceholders(text: string): string {
-  return text
-    .replace(/\{[a-zA-Z]+\}/g, '')
-    .replace(/^\s*[\r\n]/gm, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
-
-async function replaceCombinedEmailMacros(template: string, data: CombinedQuoteEmailData): Promise<string> {
-  const serviceNames = data.services.map(s => s.serviceName).join(', ');
-  const serviceDescriptions = data.services.map(s => s.serviceDescription).filter(Boolean).join('; ');
-  const repairTimes = data.services.map(s => s.repairTime).filter(Boolean).join(', ');
-  const warranties = data.services.map(s => s.warranty).filter(Boolean).join(', ');
-  
-  const serviceItemTemplate = await storage.getMessageTemplate('service_item_template');
-  const servicesList = buildServicesList(data.services, serviceItemTemplate?.content || defaultServiceItemTemplate);
-  
-  const result = template
-    .replace(/\{customerName\}/g, data.customerName)
-    .replace(/\{deviceName\}/g, data.deviceName)
-    .replace(/\{serviceName\}/g, serviceNames)
-    .replace(/\{serviceDescription\}/g, serviceDescriptions)
-    .replace(/\{price\}/g, data.grandTotal)
-    .replace(/\{repairTime\}/g, repairTimes)
-    .replace(/\{warranty\}/g, warranties)
-    .replace(/\{servicesList\}/g, servicesList)
-    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '');
-  
-  return cleanupEmptyPlaceholders(result);
-}
-
 export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
   try {
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
-    
+    const gmail = await getGmailClientWithRetry();
+
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
     const bodyTemplate = await storage.getMessageTemplate('email_body');
-    
+
     const defaultSubject = "Your Repair Quote: {serviceName} - ${price} plus taxes";
     const defaultBody = `Dear {customerName},
 
@@ -257,8 +170,8 @@ Thank you for choosing RepairQuote!
 Best regards,
 The RepairQuote Team`;
 
-    const subject = await replaceCombinedEmailMacros(subjectTemplate?.content || defaultSubject, data);
-    const emailBody = await replaceCombinedEmailMacros(bodyTemplate?.content || defaultBody, data);
+    const subject = await replaceCombinedMacros(subjectTemplate?.content || defaultSubject, data, 'service_item_template', defaultServiceItemTemplate, 'email');
+    const emailBody = await replaceCombinedMacros(bodyTemplate?.content || defaultBody, data, 'service_item_template', defaultServiceItemTemplate, 'email');
 
     const message = [
       `To: ${data.customerEmail}`,
@@ -268,17 +181,9 @@ The RepairQuote Team`;
       emailBody
     ].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedMessage
-      }
+      requestBody: { raw: encodeEmailMessage(message) }
     });
 
     console.log(`Combined quote email sent to ${data.customerEmail}`);
@@ -289,7 +194,6 @@ The RepairQuote Team`;
   }
 }
 
-// Admin notification email for quote submissions
 interface AdminNotificationData {
   customerName: string;
   customerEmail: string;
@@ -313,16 +217,9 @@ export async function sendAdminNotificationEmail(data: AdminNotificationData): P
       console.log('Admin notification email not configured');
       return false;
     }
-    
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
-    
+
+    const gmail = await getGmailClientWithRetry();
+
     const servicesList = data.services.map(s => 
       `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
     ).join('\n');
@@ -351,26 +248,18 @@ This is an automated notification from RepairQuote.`;
       `To: ${adminEmailSetting.content}`,
       `Subject: ${subject}`,
     ];
-    
+
     if (data.customerEmail) {
       messageHeaders.push(`Reply-To: ${data.customerEmail}`);
     }
-    
-    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
-    
-    const message = [...messageHeaders, '', emailBody].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
+
+    const message = [...messageHeaders, '', emailBody].join('\n');
 
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedMessage
-      }
+      requestBody: { raw: encodeEmailMessage(message) }
     });
 
     console.log(`Admin notification email sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
@@ -381,7 +270,6 @@ This is an automated notification from RepairQuote.`;
   }
 }
 
-// Unknown device quote email
 interface UnknownDeviceQuoteEmailData {
   customerName: string;
   customerEmail: string;
@@ -391,18 +279,10 @@ interface UnknownDeviceQuoteEmailData {
 
 export async function sendUnknownDeviceQuoteEmail(data: UnknownDeviceQuoteEmailData): Promise<boolean> {
   try {
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
-    
-    // Fetch custom template from database
+    const gmail = await getGmailClientWithRetry();
+
     const bodyTemplate = await storage.getMessageTemplate('unknown_device_email');
-    
+
     const defaultBody = `Dear ${data.customerName},
 
 Thank you for contacting RepairQuote!
@@ -436,17 +316,9 @@ The RepairQuote Team`;
       emailBody.trim()
     ].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
-
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedMessage
-      }
+      requestBody: { raw: encodeEmailMessage(message) }
     });
 
     console.log(`Unknown device quote email sent to ${data.customerEmail}`);
@@ -457,7 +329,6 @@ The RepairQuote Team`;
   }
 }
 
-// Admin notification for unknown device quotes
 export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuoteEmailData & { customerPhone?: string }): Promise<boolean> {
   try {
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
@@ -465,15 +336,8 @@ export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuot
       console.log('Admin notification email not configured');
       return false;
     }
-    
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
+
+    const gmail = await getGmailClientWithRetry();
 
     const subject = `New Unknown Device Quote Request - ${data.customerName}`;
     const emailBody = `New Unknown Device Quote Request Received
@@ -496,26 +360,18 @@ This is an automated notification from RepairQuote.`;
       `To: ${adminEmailSetting.content}`,
       `Subject: ${subject}`,
     ];
-    
+
     if (data.customerEmail) {
       messageHeaders.push(`Reply-To: ${data.customerEmail}`);
     }
-    
-    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
-    
-    const message = [...messageHeaders, '', emailBody].join('\n');
 
-    const encodedMessage = Buffer.from(message)
-      .toString('base64')
-      .replace(/\+/g, '-')
-      .replace(/\//g, '_')
-      .replace(/=+$/, '');
+    messageHeaders.push('Content-Type: text/plain; charset=utf-8');
+
+    const message = [...messageHeaders, '', emailBody].join('\n');
 
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: {
-        raw: encodedMessage
-      }
+      requestBody: { raw: encodeEmailMessage(message) }
     });
 
     console.log(`Unknown device admin notification sent to ${adminEmailSetting.content} (reply-to: ${data.customerEmail || 'none'})`);
@@ -526,7 +382,6 @@ This is an automated notification from RepairQuote.`;
   }
 }
 
-// Test email function - sends a test email with sample data
 export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
   const testData = {
     customerName: 'Test Customer',
@@ -555,7 +410,6 @@ export async function sendTestEmail(recipientEmail: string): Promise<boolean> {
   return await sendCombinedQuoteEmail(testData);
 }
 
-// Send API error notification to admin
 export async function sendApiErrorNotification(serviceName: string, errorMessage: string, endpoint?: string): Promise<boolean> {
   try {
     const adminEmailSetting = await storage.getMessageTemplate('admin_notification_email');
@@ -563,16 +417,9 @@ export async function sendApiErrorNotification(serviceName: string, errorMessage
       console.log('Admin notification email not configured - skipping API error notification');
       return false;
     }
-    
-    let gmail;
-    try {
-      gmail = await getGmailClient();
-    } catch (tokenErr) {
-      console.error('Gmail token error, clearing cache and retrying:', tokenErr);
-      cachedConnectionSettings = null;
-      gmail = await getGmailClient();
-    }
-    
+
+    const gmail = await getGmailClientWithRetry();
+
     const subject = `⚠️ API Error: ${serviceName}`;
     const emailBody = `API Error Notification
 
@@ -595,11 +442,10 @@ Please check the integration settings and connection status.`;
     ].join('\r\n');
 
     const message = `${messageHeaders}\r\n\r\n${emailBody}`;
-    const encodedMessage = Buffer.from(message).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 
     await gmail.users.messages.send({
       userId: 'me',
-      requestBody: { raw: encodedMessage },
+      requestBody: { raw: encodeEmailMessage(message) },
     });
 
     console.log(`API error notification sent to ${adminEmailSetting.content}`);
