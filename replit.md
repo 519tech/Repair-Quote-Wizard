@@ -11,10 +11,32 @@ Preferred communication style: Simple, everyday language.
 ## System Architecture
 
 ### Frontend Architecture
-The frontend is built with **React 18** and **TypeScript**, using **Wouter** for routing and **TanStack React Query** for server state management. **shadcn/ui** provides UI components based on **Radix UI** primitives, and styling is managed with **Tailwind CSS**, supporting light/dark themes. The build process is handled by **Vite**. The architecture follows a pages-based structure with reusable components and uses path aliases for better organization.
+The frontend is built with **React 18** and **TypeScript**, using **Wouter** for routing and **TanStack React Query** for server state management. **shadcn/ui** provides UI components based on **Radix UI** primitives, and styling is managed with **Tailwind CSS**, supporting light/dark themes. The build process is handled by **Vite**. The architecture follows a pages-based structure with reusable components and uses path aliases for better organization. React.lazy() code splitting in App.tsx reduces customer quote page load by ~70%.
+
+**Admin Panel Components** (`client/src/components/admin/`): The admin panel is split into modular tab components:
+- `SubmissionsTab.tsx` — Past submissions history with search
+- `DeviceTypesTab.tsx` — Device types CRUD, brands CRUD, and brand-device-type links
+- `DevicesTab.tsx` — Device management with bulk import, release date detection, service links
+- `ServiceCategoriesTab.tsx` — Service categories CRUD and services list management
+- `PartsTab.tsx` — Parts management with supplier parts and Excel upload
+- `DeviceServicesTab.tsx` — Device-service links with bulk add, pricing, alerts
+- `SettingsTab.tsx` — All settings including Mobilesentrix, RepairDesk, messaging, SKU validation
+
+The main `client/src/pages/admin.tsx` handles authentication and tab navigation, importing the above components.
 
 ### Backend Architecture
 The backend is an **Express.js 5** application running on **Node.js** with **TypeScript** and ESM modules. It exposes **RESTful APIs** under the `/api/` prefix. Data persistence is managed using **Drizzle ORM** with a **PostgreSQL** dialect, and schema validation is enforced with **Zod** and `drizzle-zod`. A storage abstraction layer (`server/storage.ts`) facilitates database operations, promoting modularity.
+
+**Route Modules** (`server/routes/`): Backend routes are split into focused modules, each exporting a `register*Routes()` function:
+- `admin.ts` — Login/logout with rate limiting, session management, test email/SMS
+- `devices.ts` — Device types, brands, brand-device-types, devices CRUD, bulk import
+- `services.ts` — Service categories, services, device-services CRUD, dismissed alerts
+- `parts.ts` — Parts CRUD, supplier parts, Excel upload
+- `quotes.ts` — Quote calculation, quote requests, submissions search
+- `integrations.ts` — Mobilesentrix (OAuth, search, SKU validation, cache), RepairDesk (sync, stock)
+- `settings.ts` — Message templates, all settings endpoints
+
+The main `server/routes.ts` acts as an orchestrator (~75 lines) that sets up session middleware and registers all route modules. Shared middleware (`server/middleware.ts`) provides `requireAdmin`, `upload` (multer), and device search cache utilities.
 
 ### Data Model
 The application's data model includes:
