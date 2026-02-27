@@ -34,6 +34,11 @@ export default function Embed() {
   });
   const pricingSource = pricingSourceSettings?.source ?? "excel_upload";
 
+  const { data: quoteValidDaysSettings } = useQuery<{ days: number }>({
+    queryKey: ["/api/settings/quote-valid-days"],
+  });
+  const quoteValidDays = quoteValidDaysSettings?.days ?? 30;
+
   const w = useQuoteWizard({
     multiDiscountSettings,
     hidePricesUntilContact,
@@ -55,7 +60,7 @@ export default function Embed() {
         )}
 
         {w.view === 'quote' && (
-          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} />
+          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} quoteValidDays={quoteValidDays} />
         )}
 
         {w.view === 'contact' && (
@@ -672,7 +677,7 @@ function StockBadge({ quote, stockLoading, stockData }: { quote: ReturnType<type
   );
 }
 
-function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact }: WizardProps & { hidePricesCompletely: boolean; hidePricesUntilContact: boolean }) {
+function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact, quoteValidDays }: WizardProps & { hidePricesCompletely: boolean; hidePricesUntilContact: boolean; quoteValidDays: number }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -775,6 +780,9 @@ function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact }: WizardPr
                 </div>
               </div>
             )}
+            <p className="text-xs text-muted-foreground text-center pt-2" data-testid="text-quote-validity">
+              This quote is valid for {quoteValidDays} days
+            </p>
           </div>
 
           {w.autoSentQuote ? (

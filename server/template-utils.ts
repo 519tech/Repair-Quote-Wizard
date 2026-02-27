@@ -16,6 +16,7 @@ export interface QuoteData {
   price: string;
   repairTime?: string;
   warranty?: string;
+  quoteValidDays?: number;
 }
 
 export interface CombinedQuoteData {
@@ -24,6 +25,13 @@ export interface CombinedQuoteData {
   services: ServiceData[];
   grandTotal: string;
   multiServiceDiscount?: string;
+  quoteValidDays?: number;
+}
+
+function formatValidDate(days: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
 }
 
 export function cleanupPlaceholders(text: string, mode: 'email' | 'sms' = 'email'): string {
@@ -41,6 +49,7 @@ export function cleanupPlaceholders(text: string, mode: 'email' | 'sms' = 'email
 }
 
 export function replaceMacros(template: string, data: QuoteData, mode: 'email' | 'sms' = 'email'): string {
+  const validDays = data.quoteValidDays || 30;
   const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
@@ -48,7 +57,9 @@ export function replaceMacros(template: string, data: QuoteData, mode: 'email' |
     .replace(/\{serviceDescription\}/g, data.serviceDescription || '')
     .replace(/\{price\}/g, data.price)
     .replace(/\{repairTime\}/g, mode === 'email' && data.repairTime ? `Repair Time: ${data.repairTime}` : (data.repairTime || ''))
-    .replace(/\{warranty\}/g, mode === 'email' && data.warranty ? `Warranty: ${data.warranty}` : (data.warranty || ''));
+    .replace(/\{warranty\}/g, mode === 'email' && data.warranty ? `Warranty: ${data.warranty}` : (data.warranty || ''))
+    .replace(/\{quoteValidDate\}/g, formatValidDate(validDays))
+    .replace(/\{quoteValidDays\}/g, String(validDays));
 
   return cleanupPlaceholders(result, mode);
 }
@@ -79,6 +90,7 @@ export async function replaceCombinedMacros(
   const serviceItemTemplate = await storage.getMessageTemplate(serviceItemTemplateKey);
   const servicesList = buildServicesList(data.services, serviceItemTemplate?.content || defaultServiceItemTemplate);
 
+  const validDays = data.quoteValidDays || 30;
   const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
@@ -88,7 +100,9 @@ export async function replaceCombinedMacros(
     .replace(/\{repairTime\}/g, repairTimes)
     .replace(/\{warranty\}/g, warranties)
     .replace(/\{servicesList\}/g, servicesList)
-    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '');
+    .replace(/\{multiServiceDiscount\}/g, data.multiServiceDiscount ? `Multi-Service Discount: $${data.multiServiceDiscount}` : '')
+    .replace(/\{quoteValidDate\}/g, formatValidDate(validDays))
+    .replace(/\{quoteValidDays\}/g, String(validDays));
 
   return cleanupPlaceholders(result, mode);
 }

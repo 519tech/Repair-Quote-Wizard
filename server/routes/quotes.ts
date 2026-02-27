@@ -348,6 +348,8 @@ export function registerQuoteRoutes(app: Express) {
       });
 
       if (input.optIn) {
+        const singleTemplates = await storage.getMessageTemplates();
+        const validSetting = singleTemplates.find(t => t.type === 'quote_valid_days');
         const quoteData = {
           customerName: input.customerName,
           customerEmail: input.customerEmail,
@@ -357,6 +359,7 @@ export function registerQuoteRoutes(app: Express) {
           price: quotedPrice,
           repairTime: service.repairTime || undefined,
           warranty: service.warranty || undefined,
+          quoteValidDays: validSetting ? parseInt(validSetting.content) : 30,
         };
 
         sendQuoteEmail(quoteData).catch(err => logger.error('Email send error', { error: String(err) }));
@@ -483,6 +486,10 @@ export function registerQuoteRoutes(app: Express) {
       const discountAmount = input.multiServiceDiscount || 0;
       const finalTotal = grandTotal - discountAmount;
 
+      const allTemplates = await storage.getMessageTemplates();
+      const validDaysSetting = allTemplates.find(t => t.type === 'quote_valid_days');
+      const quoteValidDays = validDaysSetting ? parseInt(validDaysSetting.content) : 30;
+
       sendCombinedQuoteEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
@@ -490,6 +497,7 @@ export function registerQuoteRoutes(app: Express) {
         services: servicesData,
         grandTotal: finalTotal.toFixed(2),
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
+        quoteValidDays,
       }).catch(err => logger.error('Combined email send error', { error: String(err) }));
 
       if (input.customerPhone) {
@@ -500,6 +508,7 @@ export function registerQuoteRoutes(app: Express) {
           services: servicesData,
           grandTotal: finalTotal.toFixed(2),
           multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
+          quoteValidDays,
         }).catch(err => logger.error('Combined SMS send error', { error: String(err) }));
       }
 

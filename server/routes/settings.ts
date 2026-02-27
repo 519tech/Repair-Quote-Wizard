@@ -41,6 +41,8 @@ export function registerSettingsRoutes(app: Express) {
       const templates = await storage.getMessageTemplates();
       const get = (type: string) => templates.find(t => t.type === type);
 
+      const quoteValidDays = get('quote_valid_days');
+
       res.json({
         multiDiscount: {
           enabled: get('multi_discount_enabled')?.content === 'true',
@@ -50,6 +52,7 @@ export function registerSettingsRoutes(app: Express) {
         hidePricesCompletely: get('hide_prices_completely')?.content === 'true',
         pricingSource: get('pricing_source')?.content || 'excel_upload',
         partsLastUpdated: get('parts_last_updated') || null,
+        quoteValidDays: quoteValidDays ? parseInt(quoteValidDays.content) : 30,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to get quote settings" });
@@ -266,6 +269,31 @@ export function registerSettingsRoutes(app: Express) {
       res.json({ success: true, enabled });
     } catch (error) {
       logger.error('API Excel fallback setting error', { error: String(error) });
+      res.status(500).json({ error: "Failed to update setting" });
+    }
+  });
+
+  app.get("/api/settings/quote-valid-days", async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const setting = templates.find(t => t.type === 'quote_valid_days');
+      res.json({ days: setting ? parseInt(setting.content) : 30 });
+    } catch (error) {
+      res.json({ days: 30 });
+    }
+  });
+
+  app.post("/api/settings/quote-valid-days", requireAdmin, async (req, res) => {
+    try {
+      const { days } = req.body;
+      const value = Math.max(1, Math.min(365, parseInt(days) || 30));
+      await storage.upsertMessageTemplate({
+        type: 'quote_valid_days',
+        content: String(value)
+      });
+      res.json({ success: true, days: value });
+    } catch (error) {
+      logger.error('Quote valid days setting error', { error: String(error) });
       res.status(500).json({ error: "Failed to update setting" });
     }
   });

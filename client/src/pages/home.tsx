@@ -22,6 +22,7 @@ export default function Home() {
     hidePricesCompletely: boolean;
     pricingSource: string;
     partsLastUpdated: MessageTemplate | null;
+    quoteValidDays: number;
   }>({
     queryKey: ["/api/settings/quote-flow"],
   });
@@ -64,7 +65,7 @@ export default function Home() {
         )}
 
         {w.view === 'quote' && (
-          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} />
+          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} quoteValidDays={quoteFlowSettings?.quoteValidDays ?? 30} />
         )}
 
         {w.view === 'contact' && (
@@ -681,7 +682,7 @@ function StockBadge({ quote, stockLoading, stockData }: { quote: ReturnType<type
   );
 }
 
-function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact }: WizardProps & { hidePricesCompletely: boolean; hidePricesUntilContact: boolean }) {
+function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact, quoteValidDays }: WizardProps & { hidePricesCompletely: boolean; hidePricesUntilContact: boolean; quoteValidDays: number }) {
   return (
     <Card>
       <CardHeader className="pb-3">
@@ -779,6 +780,9 @@ function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact }: WizardPr
                 </div>
               </div>
             )}
+            <p className="text-xs text-muted-foreground text-center pt-2" data-testid="text-quote-validity">
+              This quote is valid for {quoteValidDays} days
+            </p>
           </div>
 
           {w.autoSentQuote ? (
