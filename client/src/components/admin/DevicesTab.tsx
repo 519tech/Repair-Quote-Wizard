@@ -574,18 +574,18 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
   return (
     <Card>
       <CardHeader className="flex flex-col gap-4 space-y-0 pb-4">
-        <div className="flex flex-row items-center justify-between gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <CardTitle>Devices</CardTitle>
             <CardDescription>Manage specific device models</CardDescription>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleBulkLinkOpen} data-testid="button-bulk-add-links">
-              <Layers className="h-4 w-4 mr-2" />Bulk Add Links
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={handleBulkLinkOpen} data-testid="button-bulk-add-links">
+              <Layers className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Bulk Add </span>Links
             </Button>
             <Dialog open={bulkOpen} onOpenChange={(o) => { setBulkOpen(o); if (!o) setBulkResults(null); }}>
               <DialogTrigger asChild>
-                <Button variant="outline" data-testid="button-bulk-import-device"><Upload className="h-4 w-4 mr-2" />Bulk Import</Button>
+                <Button variant="outline" size="sm" data-testid="button-bulk-import-device"><Upload className="h-4 w-4 mr-1" /><span className="hidden sm:inline">Bulk </span>Import</Button>
               </DialogTrigger>
               <DialogContent>
                 <DialogHeader>
@@ -638,6 +638,7 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             </Dialog>
             <Button
               variant="outline"
+              size="sm"
               disabled={bulkDetecting}
               data-testid="button-bulk-detect-dates"
               onClick={async () => {
@@ -666,12 +667,12 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                 }
               }}
             >
-              {bulkDetecting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Calendar className="h-4 w-4 mr-2" />}
-              {bulkDetecting ? "Detecting..." : "Auto-Detect Dates"}
+              {bulkDetecting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Calendar className="h-4 w-4 mr-1" />}
+              {bulkDetecting ? "Detecting..." : <><span className="hidden sm:inline">Auto-Detect </span>Dates</>}
             </Button>
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
-                <Button data-testid="button-add-device"><Plus className="h-4 w-4 mr-2" />Add Device</Button>
+                <Button size="sm" data-testid="button-add-device"><Plus className="h-4 w-4 mr-1" />Add</Button>
               </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
@@ -879,19 +880,19 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             </form>
           </DialogContent>
         </Dialog>
-        <div className="flex flex-wrap gap-4 items-center">
-          <div className="relative">
+        <div className="flex flex-wrap gap-2 sm:gap-4 items-center">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search devices..."
               value={deviceSearch}
               onChange={(e) => setDeviceSearch(e.target.value)}
-              className="pl-8 w-[200px]"
+              className="pl-8 w-full sm:w-[200px]"
               data-testid="input-device-search"
             />
           </div>
           <Select value={filterTypeId} onValueChange={setFilterTypeId}>
-            <SelectTrigger className="w-[180px]" data-testid="select-filter-type">
+            <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[180px]" data-testid="select-filter-type">
               <SelectValue placeholder="Filter by type" />
             </SelectTrigger>
             <SelectContent>
@@ -900,7 +901,7 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
             </SelectContent>
           </Select>
           <Select value={filterBrandId} onValueChange={setFilterBrandId}>
-            <SelectTrigger className="w-[180px]" data-testid="select-filter-brand">
+            <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[180px]" data-testid="select-filter-brand">
               <SelectValue placeholder="Filter by brand" />
             </SelectTrigger>
             <SelectContent>
