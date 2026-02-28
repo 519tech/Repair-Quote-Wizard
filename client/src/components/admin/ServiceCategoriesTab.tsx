@@ -194,14 +194,14 @@ export function ServiceCategoriesTab({ toast }: { toast: ReturnType<typeof useTo
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Service Categories</CardTitle>
           <CardDescription>Group services by category (e.g., Battery Replacement, Screen Replacement)</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-category"><Plus className="h-4 w-4 mr-2" />Add Category</Button>
+            <Button size="sm" className="self-end sm:self-auto" data-testid="button-add-category"><Plus className="h-4 w-4 mr-1" />Add Category</Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
@@ -542,14 +542,14 @@ export function ServicesListTab({ toast }: { toast: ReturnType<typeof useToast>[
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Services</CardTitle>
           <CardDescription>Manage repair service types with pricing</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-service"><Plus className="h-4 w-4 mr-2" />Add Service</Button>
+            <Button size="sm" className="self-end sm:self-auto" data-testid="button-add-service"><Plus className="h-4 w-4 mr-1" />Add Service</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
@@ -751,9 +751,9 @@ export function ServicesListTab({ toast }: { toast: ReturnType<typeof useToast>[
             </form>
           </DialogContent>
         </Dialog>
-        <div className="flex flex-wrap gap-4">
+        <div className="flex flex-wrap gap-2 sm:gap-4">
           <Select value={filterCategoryId} onValueChange={setFilterCategoryId}>
-            <SelectTrigger className="w-[180px]" data-testid="select-filter-category">
+            <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[180px]" data-testid="select-filter-category">
               <SelectValue placeholder="Filter by category" />
             </SelectTrigger>
             <SelectContent>
@@ -763,7 +763,7 @@ export function ServicesListTab({ toast }: { toast: ReturnType<typeof useToast>[
             </SelectContent>
           </Select>
           <Select value={filterBrandId} onValueChange={setFilterBrandId}>
-            <SelectTrigger className="w-[180px]" data-testid="select-filter-brand">
+            <SelectTrigger className="w-[calc(50%-0.25rem)] sm:w-[180px]" data-testid="select-filter-brand">
               <SelectValue placeholder="Filter by brand" />
             </SelectTrigger>
             <SelectContent>

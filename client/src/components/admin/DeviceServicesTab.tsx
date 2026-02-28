@@ -496,15 +496,15 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Device-Service Links</CardTitle>
           <CardDescription>Link devices to services with optional parts. Labor and markup come from the Service.</CardDescription>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>
-              <Button data-testid="button-add-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
+              <Button size="sm" data-testid="button-add-link"><Plus className="h-4 w-4 mr-1" />Add Link</Button>
             </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <form onSubmit={handleSubmit}>
@@ -1010,25 +1010,25 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
         </div>
       </CardHeader>
       <CardContent>
-        <div className="flex flex-wrap gap-3 mb-4 items-end">
-          <div className="relative">
+        <div className="flex flex-wrap gap-2 sm:gap-3 mb-4 items-end">
+          <div className="relative w-full sm:w-auto">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               placeholder="Search service links..."
               value={serviceLinkSearch}
               onChange={(e) => setServiceLinkSearch(e.target.value)}
-              className="pl-8 w-[200px]"
+              className="pl-8 w-full sm:w-[200px]"
               data-testid="input-service-link-search"
             />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="hidden sm:flex items-center gap-2">
             <Filter className="h-4 w-4 text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Filters:</span>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 w-[calc(33%-0.375rem)] sm:w-auto">
             <Label className="text-xs">Brand</Label>
             <Select value={filterBrand} onValueChange={setFilterBrand}>
-              <SelectTrigger className="w-[140px]" data-testid="filter-brand">
+              <SelectTrigger className="w-full sm:w-[140px]" data-testid="filter-brand">
                 <SelectValue placeholder="All Brands" />
               </SelectTrigger>
               <SelectContent>
@@ -1039,10 +1039,10 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 w-[calc(33%-0.375rem)] sm:w-auto">
             <Label className="text-xs">Device</Label>
             <Select value={filterDevice} onValueChange={setFilterDevice}>
-              <SelectTrigger className="w-[160px]" data-testid="filter-device">
+              <SelectTrigger className="w-full sm:w-[160px]" data-testid="filter-device">
                 <SelectValue placeholder="All Devices" />
               </SelectTrigger>
               <SelectContent>
@@ -1053,10 +1053,10 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 w-[calc(33%-0.375rem)] sm:w-auto">
             <Label className="text-xs">Service</Label>
             <Select value={filterService} onValueChange={setFilterService}>
-              <SelectTrigger className="w-[180px]" data-testid="filter-service">
+              <SelectTrigger className="w-full sm:w-[180px]" data-testid="filter-service">
                 <SelectValue placeholder="All Services" />
               </SelectTrigger>
               <SelectContent>

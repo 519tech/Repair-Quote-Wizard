@@ -247,38 +247,40 @@ export function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"
       <div className="flex gap-2 border-b pb-2">
         <Button
           variant={activeSubTab === "supplier" ? "default" : "ghost"}
+          size="sm"
           onClick={() => setActiveSubTab("supplier")}
           data-testid="button-supplier-parts-tab"
         >
-          Supplier Parts
-          {totalSupplierParts > 0 && <Badge variant="secondary" className="ml-2">{totalSupplierParts.toLocaleString()}</Badge>}
+          Supplier
+          {totalSupplierParts > 0 && <Badge variant="secondary" className="ml-1 text-[10px]">{totalSupplierParts.toLocaleString()}</Badge>}
         </Button>
         <Button
           variant={activeSubTab === "custom" ? "default" : "ghost"}
+          size="sm"
           onClick={() => setActiveSubTab("custom")}
           data-testid="button-custom-parts-tab"
         >
-          Custom Parts
-          {totalCustomParts > 0 && <Badge variant="secondary" className="ml-2">{totalCustomParts.toLocaleString()}</Badge>}
+          Custom
+          {totalCustomParts > 0 && <Badge variant="secondary" className="ml-1 text-[10px]">{totalCustomParts.toLocaleString()}</Badge>}
         </Button>
       </div>
 
       {/* Supplier Parts Tab - Excel Upload */}
       {activeSubTab === "supplier" && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+          <CardHeader className="flex flex-col gap-3 space-y-0 pb-4">
             <div>
               <CardTitle>Supplier Parts (Excel Upload)</CardTitle>
               <CardDescription>Upload parts pricing from Mobilesentrix Excel export. Use the Settings tab to toggle between API and Excel pricing.</CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative">
+              <div className="relative flex-1 min-w-0 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Search SKU or name..." 
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 w-[250px]"
+                  className="pl-9 w-full sm:w-[250px]"
                   data-testid="input-search-parts"
                 />
                 {isFetching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />}
@@ -292,17 +294,17 @@ export function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"
                   disabled={uploading}
                   data-testid="input-upload-supplier-parts"
                 />
-                <Button asChild variant="outline" disabled={uploading}>
+                <Button asChild variant="outline" size="sm" disabled={uploading}>
                   <span>
-                    {uploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
-                    {uploading ? "Uploading..." : "Upload Excel"}
+                    {uploading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Upload className="h-4 w-4 mr-1" />}
+                    {uploading ? "Uploading..." : "Upload"}
                   </span>
                 </Button>
               </label>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" className="text-destructive" data-testid="button-clear-supplier-parts">
-                    <Trash2 className="h-4 w-4 mr-2" />
+                  <Button variant="outline" size="sm" className="text-destructive" data-testid="button-clear-supplier-parts">
+                    <Trash2 className="h-4 w-4 mr-1" />
                     Delete All
                   </Button>
                 </AlertDialogTrigger>
@@ -400,25 +402,25 @@ export function PartsTab({ toast }: { toast: ReturnType<typeof useToast>["toast"
       {/* Custom Parts Tab */}
       {activeSubTab === "custom" && (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 flex-wrap space-y-0 pb-4">
+          <CardHeader className="flex flex-col gap-3 space-y-0 pb-4">
             <div>
               <CardTitle>Custom Parts</CardTitle>
               <CardDescription>Parts you add here are preserved when bulk uploading from Excel</CardDescription>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
-              <div className="relative">
+              <div className="relative flex-1 min-w-0 sm:flex-none">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input 
                   placeholder="Search SKU or name..." 
                   value={customSearchQuery}
                   onChange={(e) => setCustomSearchQuery(e.target.value)}
-                  className="pl-9 w-[200px]"
+                  className="pl-9 w-full sm:w-[200px]"
                   data-testid="input-search-custom-parts"
                 />
               </div>
               <Dialog open={customOpen} onOpenChange={setCustomOpen}>
                 <DialogTrigger asChild>
-                  <Button data-testid="button-add-custom-part"><Plus className="h-4 w-4 mr-2" />Add Custom Part</Button>
+                  <Button size="sm" data-testid="button-add-custom-part"><Plus className="h-4 w-4 mr-1" />Add Part</Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader><DialogTitle>Add Custom Part</DialogTitle></DialogHeader>

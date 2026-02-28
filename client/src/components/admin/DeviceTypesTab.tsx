@@ -119,15 +119,15 @@ export function DeviceTypesTab({ toast }: { toast: ReturnType<typeof useToast>["
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Device Types</CardTitle>
           <CardDescription>Manage categories like Smartphone, Tablet, Laptop</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-device-type">
-              <Plus className="h-4 w-4 mr-2" />
+            <Button size="sm" className="self-end sm:self-auto" data-testid="button-add-device-type">
+              <Plus className="h-4 w-4 mr-1" />
               Add Type
             </Button>
           </DialogTrigger>
@@ -455,14 +455,14 @@ export function BrandsTab({ toast }: { toast: ReturnType<typeof useToast>["toast
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Brands</CardTitle>
           <CardDescription>Manage device brands like Apple, Samsung, Dell</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-brand"><Plus className="h-4 w-4 mr-2" />Add Brand</Button>
+            <Button size="sm" className="self-end sm:self-auto" data-testid="button-add-brand"><Plus className="h-4 w-4 mr-1" />Add Brand</Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>
@@ -742,14 +742,14 @@ export function BrandDeviceTypeLinksTab({ toast }: { toast: ReturnType<typeof us
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0 pb-4">
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
           <CardTitle>Brand-Type Links</CardTitle>
           <CardDescription>Link brands to device types (e.g., Apple makes Smartphones and Laptops)</CardDescription>
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button data-testid="button-add-brand-link"><Plus className="h-4 w-4 mr-2" />Add Link</Button>
+            <Button size="sm" className="self-end sm:self-auto" data-testid="button-add-brand-link"><Plus className="h-4 w-4 mr-1" />Add Link</Button>
           </DialogTrigger>
           <DialogContent>
             <form onSubmit={handleSubmit}>

@@ -179,7 +179,7 @@ export default function Admin() {
 
       <main className="container mx-auto px-2 sm:px-4 py-4 sm:py-8">
         <Tabs defaultValue="device-types" className="space-y-4 sm:space-y-6">
-          <TabsList className="grid grid-cols-4 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
+          <TabsList className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
             <TabsTrigger value="device-types" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-device-types">Types</TabsTrigger>
             <TabsTrigger value="brands" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-brands">Brands</TabsTrigger>
             <TabsTrigger value="devices" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="tab-devices">Devices</TabsTrigger>
