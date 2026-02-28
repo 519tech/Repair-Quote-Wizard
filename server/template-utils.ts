@@ -49,7 +49,7 @@ export function cleanupPlaceholders(text: string, mode: 'email' | 'sms' = 'email
 }
 
 export function replaceMacros(template: string, data: QuoteData, mode: 'email' | 'sms' = 'email'): string {
-  const validDays = data.quoteValidDays || 30;
+  const validDays = data.quoteValidDays || 7;
   const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)
@@ -90,7 +90,7 @@ export async function replaceCombinedMacros(
   const serviceItemTemplate = await storage.getMessageTemplate(serviceItemTemplateKey);
   const servicesList = buildServicesList(data.services, serviceItemTemplate?.content || defaultServiceItemTemplate);
 
-  const validDays = data.quoteValidDays || 30;
+  const validDays = data.quoteValidDays || 7;
   const result = template
     .replace(/\{customerName\}/g, data.customerName)
     .replace(/\{deviceName\}/g, data.deviceName)

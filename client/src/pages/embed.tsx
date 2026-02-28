@@ -37,7 +37,7 @@ export default function Embed() {
   const { data: quoteValidDaysSettings } = useQuery<{ days: number }>({
     queryKey: ["/api/settings/quote-valid-days"],
   });
-  const quoteValidDays = quoteValidDaysSettings?.days ?? 30;
+  const quoteValidDays = quoteValidDaysSettings?.days ?? 7;
 
   const w = useQuoteWizard({
     multiDiscountSettings,

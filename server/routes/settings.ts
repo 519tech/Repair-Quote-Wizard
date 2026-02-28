@@ -52,7 +52,7 @@ export function registerSettingsRoutes(app: Express) {
         hidePricesCompletely: get('hide_prices_completely')?.content === 'true',
         pricingSource: get('pricing_source')?.content || 'excel_upload',
         partsLastUpdated: get('parts_last_updated') || null,
-        quoteValidDays: quoteValidDays ? parseInt(quoteValidDays.content) : 30,
+        quoteValidDays: quoteValidDays ? parseInt(quoteValidDays.content) : 7,
       });
     } catch (error) {
       res.status(500).json({ error: "Failed to get quote settings" });
@@ -277,16 +277,16 @@ export function registerSettingsRoutes(app: Express) {
     try {
       const templates = await storage.getMessageTemplates();
       const setting = templates.find(t => t.type === 'quote_valid_days');
-      res.json({ days: setting ? parseInt(setting.content) : 30 });
+      res.json({ days: setting ? parseInt(setting.content) : 7 });
     } catch (error) {
-      res.json({ days: 30 });
+      res.json({ days: 7 });
     }
   });
 
   app.post("/api/settings/quote-valid-days", requireAdmin, async (req, res) => {
     try {
       const { days } = req.body;
-      const value = Math.max(1, Math.min(365, parseInt(days) || 30));
+      const value = Math.max(1, Math.min(365, parseInt(days) || 7));
       await storage.upsertMessageTemplate({
         type: 'quote_valid_days',
         content: String(value)

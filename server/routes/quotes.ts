@@ -367,7 +367,7 @@ export function registerQuoteRoutes(app: Express) {
           price: quotedPrice,
           repairTime: service.repairTime || undefined,
           warranty: service.warranty || undefined,
-          quoteValidDays: validSetting ? parseInt(validSetting.content) : 30,
+          quoteValidDays: validSetting ? parseInt(validSetting.content) : 7,
         };
 
         sendQuoteEmail(quoteData).catch(err => logger.error('Email send error', { error: String(err) }));
@@ -496,7 +496,7 @@ export function registerQuoteRoutes(app: Express) {
 
       const allTemplates = await storage.getMessageTemplates();
       const validDaysSetting = allTemplates.find(t => t.type === 'quote_valid_days');
-      const quoteValidDays = validDaysSetting ? parseInt(validDaysSetting.content) : 30;
+      const quoteValidDays = validDaysSetting ? parseInt(validDaysSetting.content) : 7;
 
       sendCombinedQuoteEmail({
         customerName: input.customerName,

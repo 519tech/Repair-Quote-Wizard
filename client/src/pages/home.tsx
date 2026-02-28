@@ -65,7 +65,7 @@ export default function Home() {
         )}
 
         {w.view === 'quote' && (
-          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} quoteValidDays={quoteFlowSettings?.quoteValidDays ?? 30} />
+          <QuoteView w={w} hidePricesCompletely={hidePricesCompletely} hidePricesUntilContact={hidePricesUntilContact} quoteValidDays={quoteFlowSettings?.quoteValidDays ?? 7} />
         )}
 
         {w.view === 'contact' && (
