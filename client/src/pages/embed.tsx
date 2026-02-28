@@ -111,87 +111,93 @@ function SearchView({ w }: WizardProps) {
         <CardDescription className="text-xs">Search for your device to get instant pricing</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="relative" role="search">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
-          <Input
-            placeholder="Search your device model…"
-            value={w.searchQuery}
-            onChange={(e) => { w.setSearchQuery(e.target.value); w.setShowSearch(true); }}
-            onFocus={() => w.setShowSearch(true)}
-            className="pl-9 pr-10 h-12 text-base"
-            name="device-search"
-            autoComplete="off"
-            data-testid="input-device-search"
-            aria-label="Search for your device model"
-          />
-          {w.searchQuery && (
-            <div className="absolute right-0 top-0 h-full flex items-center pr-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                onClick={w.clearSearch}
-                aria-label="Clear search"
-                data-testid="button-clear-search"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {w.showSearch && w.searchQuery.length >= 2 && (
-          <div className="border rounded-md max-h-64 overflow-y-auto">
-            {w.searchLoading ? (
-              <div className="flex justify-center py-4">
-                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
-              </div>
-            ) : w.searchResults.length === 0 ? (
-              <div className="text-center py-4">
-                <button
-                  type="button"
-                  onClick={() => { w.setShowSearch(false); w.setView('unknown'); }}
-                  className="text-sm text-primary hover:underline"
-                  data-testid="link-device-not-listed"
-                >
-                  Your device not listed?
-                </button>
-              </div>
-            ) : (
-              <div className="p-1 space-y-1">
-                {w.searchResults.map(device => (
+        {!w.pickerTypeId && (
+          <>
+            <div className="relative" role="search">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" aria-hidden="true" />
+              <Input
+                placeholder="Search your device model…"
+                value={w.searchQuery}
+                onChange={(e) => { w.setSearchQuery(e.target.value); w.setShowSearch(true); }}
+                onFocus={() => w.setShowSearch(true)}
+                className="pl-9 pr-10 h-12 text-base"
+                name="device-search"
+                autoComplete="off"
+                data-testid="input-device-search"
+                aria-label="Search for your device model"
+              />
+              {w.searchQuery && (
+                <div className="absolute right-0 top-0 h-full flex items-center pr-1">
                   <Button
-                    key={device.id}
+                    type="button"
                     variant="ghost"
-                    className="w-full justify-start text-left h-auto py-3 hover-elevate"
-                    onClick={() => w.handleSelectDevice(device)}
-                    data-testid={`device-result-${device.id}`}
+                    size="icon"
+                    onClick={w.clearSearch}
+                    aria-label="Clear search"
+                    data-testid="button-clear-search"
                   >
-                    <div>
-                      <div className="font-medium">{device.name}</div>
-                    </div>
+                    <X className="h-4 w-4" />
                   </Button>
-                ))}
+                </div>
+              )}
+            </div>
+
+            {w.showSearch && w.searchQuery.length >= 2 && (
+              <div className="border rounded-md max-h-64 overflow-y-auto">
+                {w.searchLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" aria-hidden="true" />
+                  </div>
+                ) : w.searchResults.length === 0 ? (
+                  <div className="text-center py-4">
+                    <button
+                      type="button"
+                      onClick={() => { w.setShowSearch(false); w.setView('unknown'); }}
+                      className="text-sm text-primary hover:underline"
+                      data-testid="link-device-not-listed"
+                    >
+                      Your device not listed?
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-1 space-y-1">
+                    {w.searchResults.map(device => (
+                      <Button
+                        key={device.id}
+                        variant="ghost"
+                        className="w-full justify-start text-left h-auto py-3 hover-elevate"
+                        onClick={() => w.handleSelectDevice(device)}
+                        data-testid={`device-result-${device.id}`}
+                      >
+                        <div>
+                          <div className="font-medium">{device.name}</div>
+                        </div>
+                      </Button>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
 
         {!(w.showSearch && w.searchQuery.length >= 2) && (
           <PickerFlow w={w} />
         )}
 
-        <div className="pt-4 border-t">
-          <Button
-            variant="default"
-            className="w-full"
-            onClick={() => w.setView('unknown')}
-            data-testid="button-unknown-device"
-          >
-            <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />
-            I don't know what device I have
-          </Button>
-        </div>
+        {!w.pickerTypeId && (
+          <div className="pt-4 border-t">
+            <Button
+              variant="default"
+              className="w-full"
+              onClick={() => w.setView('unknown')}
+              data-testid="button-unknown-device"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />
+              I don't know what device I have
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );
