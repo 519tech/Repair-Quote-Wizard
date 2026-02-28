@@ -435,6 +435,8 @@ function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }: Wizar
             {w.categories.map(cat => {
               const catQuotes = w.allQuotes.filter(q => q.categoryId === cat.id);
               const hasServices = catQuotes.length > 0;
+              const availableQuotes = catQuotes.filter(q => q.isAvailable);
+              const lowestPrice = availableQuotes.length > 0 ? Math.min(...availableQuotes.map(q => parseFloat(q.price))) : null;
               return (
                 <div
                   key={cat.id}
@@ -467,6 +469,9 @@ function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }: Wizar
                       </div>
                       {cat.description && (
                         <p className="text-xs text-muted-foreground mt-1">{cat.description}</p>
+                      )}
+                      {lowestPrice !== null && (
+                        <p className="text-xs text-primary font-medium mt-1" data-testid={`text-starting-price-${cat.id}`}>Starting from ${lowestPrice.toFixed(2)}</p>
                       )}
                     </div>
                     <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" aria-hidden="true" />
