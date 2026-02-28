@@ -97,18 +97,19 @@ function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>[
             {alertsWithInfo.map((alert) => (
               <div 
                 key={alert.id} 
-                className="flex items-center justify-between text-sm py-2 px-3 bg-muted/50 rounded-md border gap-2"
+                className="flex flex-col sm:flex-row sm:items-center justify-between text-sm py-2 px-3 bg-muted/50 rounded-md border gap-2"
                 data-testid={`dismissed-alert-${alert.deviceServiceId}`}
               >
-                <span className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0">
                   <span className="font-medium">{alert.deviceName}</span>
                   <span className="text-muted-foreground"> ({alert.brandName})</span>
-                  <span className="mx-2">→</span>
+                  <span className="mx-1 sm:mx-2">→</span>
                   <span>{alert.serviceName}</span>
-                </span>
+                </div>
                 <Button 
                   variant="outline" 
                   size="sm"
+                  className="self-end sm:self-auto shrink-0"
                   onClick={() => undismissMutation.mutate(alert.deviceServiceId)}
                   disabled={undismissMutation.isPending}
                   data-testid={`button-restore-alert-${alert.deviceServiceId}`}
@@ -825,7 +826,7 @@ $\{servicePrice} plus taxes
 
   return (
     <Tabs defaultValue="quote-settings" className="space-y-4">
-      <TabsList className="grid grid-cols-3 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
+      <TabsList className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
         <TabsTrigger value="quote-settings" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-settings">Settings</TabsTrigger>
         <TabsTrigger value="quote-templates" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-templates">Templates</TabsTrigger>
         <TabsTrigger value="repairdesk" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-repairdesk">RepairDesk</TabsTrigger>
@@ -844,12 +845,13 @@ $\{servicePrice} plus taxes
             <CardDescription>Automatic discount when customers select multiple services</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Enable Multi-Service Discount</p>
                 <p className="text-xs text-muted-foreground">Apply discount when 2+ eligible services are selected</p>
               </div>
               <Switch
+                className="shrink-0"
                 checked={multiDiscountSettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateMultiDiscount.mutate({ enabled: checked })}
                 disabled={updateMultiDiscount.isPending}
@@ -1000,12 +1002,13 @@ $\{servicePrice} plus taxes
               Current source: <Badge variant="outline">{pricingSourceSettings?.source === "mobilesentrix_api" ? "Mobilesentrix API" : "Excel Upload"}</Badge>
             </p>
             {pricingSourceSettings?.source === "mobilesentrix_api" && (
-              <div className="flex items-center justify-between p-3 rounded-lg border mt-2">
-                <div>
+              <div className="flex items-center justify-between gap-4 p-3 rounded-lg border mt-2">
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">Excel Fallback</p>
                   <p className="text-xs text-muted-foreground">When API is unavailable, fall back to Excel-uploaded prices</p>
                 </div>
                 <Switch
+                  className="shrink-0"
                   data-testid="switch-api-excel-fallback"
                   checked={apiExcelFallbackSettings?.enabled ?? true}
                   onCheckedChange={(checked) => updateApiExcelFallback.mutate(checked)}
@@ -1025,24 +1028,26 @@ $\{servicePrice} plus taxes
             <CardDescription>Control when customers see pricing information</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Hide Prices Completely</p>
                 <p className="text-xs text-muted-foreground">Prices are hidden on the website but shown in the SMS/email sent to customers</p>
               </div>
               <Switch
+                className="shrink-0"
                 checked={hidePricesCompletelySettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateHidePricesCompletely.mutate(checked)}
                 disabled={updateHidePricesCompletely.isPending}
                 data-testid="switch-hide-prices-completely"
               />
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Require Contact Info Before Showing Prices</p>
                 <p className="text-xs text-muted-foreground">When enabled, customers must enter their contact details before seeing prices</p>
               </div>
               <Switch
+                className="shrink-0"
                 checked={hidePricesSettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateHidePrices.mutate(checked)}
                 disabled={updateHidePrices.isPending}
@@ -1092,11 +1097,12 @@ $\{servicePrice} plus taxes
             <CardDescription>Use these placeholders in your message templates</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {macros.map((macro) => (
-                <Badge key={macro.name} variant="secondary" className="text-sm" data-testid={`macro-${macro.name}`}>
-                  {macro.name} - {macro.description}
-                </Badge>
+                <div key={macro.name} className="text-xs" data-testid={`macro-${macro.name}`}>
+                  <code className="bg-muted px-1 py-0.5 rounded font-semibold">{macro.name}</code>
+                  <span className="text-muted-foreground ml-1">{macro.description}</span>
+                </div>
               ))}
             </div>
           </CardContent>
@@ -1110,11 +1116,12 @@ $\{servicePrice} plus taxes
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-4">
               {serviceItemMacros.map((macro) => (
-                <Badge key={macro.name} variant="outline" className="text-sm">
-                  {macro.name} - {macro.description}
-                </Badge>
+                <div key={macro.name} className="text-xs">
+                  <code className="bg-muted px-1 py-0.5 rounded font-semibold">{macro.name}</code>
+                  <span className="text-muted-foreground ml-1">{macro.description}</span>
+                </div>
               ))}
             </div>
             <Textarea 
@@ -1139,11 +1146,12 @@ $\{servicePrice} plus taxes
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-4">
               {serviceItemMacros.map((macro) => (
-                <Badge key={macro.name} variant="outline" className="text-sm">
-                  {macro.name} - {macro.description}
-                </Badge>
+                <div key={macro.name} className="text-xs">
+                  <code className="bg-muted px-1 py-0.5 rounded font-semibold">{macro.name}</code>
+                  <span className="text-muted-foreground ml-1">{macro.description}</span>
+                </div>
               ))}
             </div>
             <Textarea 
@@ -1228,11 +1236,12 @@ $\{servicePrice} plus taxes
             <CardDescription>Email sent to customers who submit unknown device quote requests</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-4">
               {unknownDeviceMacros.map((macro) => (
-                <Badge key={macro.name} variant="secondary" className="text-xs">
-                  {macro.name} - {macro.description}
-                </Badge>
+                <div key={macro.name} className="text-xs">
+                  <code className="bg-muted px-1 py-0.5 rounded font-semibold">{macro.name}</code>
+                  <span className="text-muted-foreground ml-1">{macro.description}</span>
+                </div>
               ))}
             </div>
             <Textarea 
@@ -1255,11 +1264,12 @@ $\{servicePrice} plus taxes
             <CardDescription>SMS sent to customers who submit unknown device quote requests</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 mb-4">
               {unknownDeviceMacros.map((macro) => (
-                <Badge key={macro.name} variant="secondary" className="text-xs">
-                  {macro.name} - {macro.description}
-                </Badge>
+                <div key={macro.name} className="text-xs">
+                  <code className="bg-muted px-1 py-0.5 rounded font-semibold">{macro.name}</code>
+                  <span className="text-muted-foreground ml-1">{macro.description}</span>
+                </div>
               ))}
             </div>
             <Textarea 
@@ -1288,7 +1298,7 @@ $\{servicePrice} plus taxes
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="test-email">Test Email Address</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input 
                     id="test-email"
                     type="email"
@@ -1301,19 +1311,20 @@ $\{servicePrice} plus taxes
                     onClick={handleSendTestEmail} 
                     disabled={testEmailMutation.isPending}
                     variant="outline"
+                    className="shrink-0"
                     data-testid="button-send-test-email"
                   >
                     {testEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Mail className="h-4 w-4 mr-2" />}
                     Send Test
                   </Button>
                 </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   Send a test email with sample quote data to verify your email templates.
                 </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="test-phone">Test Phone Number</Label>
-                <div className="flex gap-2">
+                <div className="flex flex-col sm:flex-row gap-2">
                   <Input 
                     id="test-phone"
                     type="tel"
@@ -1326,6 +1337,7 @@ $\{servicePrice} plus taxes
                     onClick={handleSendTestSms} 
                     disabled={testSmsMutation.isPending}
                     variant="outline"
+                    className="shrink-0"
                     data-testid="button-send-test-sms"
                   >
                     {testSmsMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <MessageSquare className="h-4 w-4 mr-2" />}
@@ -1376,12 +1388,13 @@ $\{servicePrice} plus taxes
             </div>
             
             {repairDeskStatus?.connected && (
-              <div className="flex items-center justify-between p-3 rounded-lg border">
-                <div>
+              <div className="flex items-center justify-between gap-4 p-3 rounded-lg border">
+                <div className="flex-1 min-w-0">
                   <p className="font-medium text-sm">Show Stock Status</p>
                   <p className="text-xs text-muted-foreground">Display "In Stock" / "Parts order may be required" on quotes</p>
                 </div>
                 <Switch
+                  className="shrink-0"
                   checked={repairDeskStatus?.stockCheckEnabled ?? true}
                   onCheckedChange={(checked) => toggleStockCheck.mutate(checked)}
                   disabled={toggleStockCheck.isPending}
@@ -1401,12 +1414,13 @@ $\{servicePrice} plus taxes
             <CardDescription>Automatically create leads in RepairDesk when customers request quotes</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
+            <div className="flex items-center justify-between gap-4 p-3 rounded-lg border">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Create Lead on Quote Request</p>
                 <p className="text-xs text-muted-foreground">When enabled, a lead will be created in RepairDesk for each quote submitted</p>
               </div>
               <Switch
+                className="shrink-0"
                 checked={rdLeadsSettings?.enabled ?? false}
                 onCheckedChange={(checked) => updateRdLeads.mutate(checked)}
                 disabled={updateRdLeads.isPending}
@@ -1428,14 +1442,14 @@ $\{servicePrice} plus taxes
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Connection Status */}
-            <div className="flex items-center justify-between p-3 rounded-lg border">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-lg border">
+              <div className="flex-1 min-w-0">
                 <p className="font-medium text-sm">Sync Status</p>
                 <p className="text-xs text-muted-foreground">
                   {repairDeskSyncStatus?.linkedServicesCount || 0} device-service links configured with RepairDesk IDs
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 shrink-0">
                 {repairDeskSyncStatus?.connected ? (
                   <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
                     <Check className="h-3 w-3 mr-1" />
@@ -1509,15 +1523,15 @@ $\{servicePrice} plus taxes
                 <p className="font-medium text-sm">Recent Sync History</p>
                 <div className="space-y-1 max-h-40 overflow-y-auto">
                   {repairDeskSyncHistory.slice(0, 5).map((sync) => (
-                    <div key={sync.id} className="flex items-center justify-between p-2 text-xs border rounded">
-                      <div className="flex items-center gap-2">
+                    <div key={sync.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2 text-xs border rounded gap-1">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <Badge variant={sync.status === "success" ? "secondary" : sync.status === "partial" ? "outline" : "destructive"} className="text-[10px]">
                           {sync.status}
                         </Badge>
                         <span>{sync.syncedServices}/{sync.totalServices} synced</span>
                         <span className="text-muted-foreground">({sync.syncType})</span>
                       </div>
-                      <span className="text-muted-foreground">
+                      <span className="text-muted-foreground shrink-0">
                         {new Date(sync.startedAt).toLocaleDateString()}
                       </span>
                     </div>
@@ -1544,7 +1558,7 @@ $\{servicePrice} plus taxes
             <CardDescription>OAuth connection for real-time parts pricing from Mobilesentrix Canada</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {mobilesentrixStatus?.configured ? (
                 <>
                   <Badge variant="secondary" className="bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
@@ -1560,7 +1574,7 @@ $\{servicePrice} plus taxes
                   <Badge variant="secondary" className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
                     Setup Required
                   </Badge>
-                  <span className="text-sm text-muted-foreground">
+                  <span className="text-xs sm:text-sm text-muted-foreground">
                     {mobilesentrixStatus?.missingCredentials?.length === 4 
                       ? "No credentials configured" 
                       : `Missing: ${mobilesentrixStatus?.missingCredentials?.join(", ")}`}
