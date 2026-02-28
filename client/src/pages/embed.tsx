@@ -1013,6 +1013,7 @@ function ContactView({ w, hidePricesUntilContact, hidePricesCompletely }: Wizard
               />
             </div>
           </div>
+          <p className="text-xs text-muted-foreground" data-testid="text-contact-consent">By continuing, you agree to receive SMS or email communication from 519 Tech Services for the purpose of delivering your repair quote.</p>
           <Button
             type="submit"
             className="w-full"
@@ -1141,6 +1142,7 @@ function UnknownDeviceView({ w }: WizardProps) {
             </div>
           </div>
 
+          <p className="text-xs text-muted-foreground" data-testid="text-contact-consent">By continuing, you agree to receive SMS or email communication from 519 Tech Services for the purpose of delivering your repair quote.</p>
           <Button
             type="submit"
             size="sm"
