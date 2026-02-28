@@ -185,7 +185,7 @@ function SearchView({ w }: WizardProps) {
           <PickerFlow w={w} />
         )}
 
-        {!w.pickerTypeId && (
+        {!w.selectedDevice && (
           <div className="pt-4 border-t">
             <Button
               variant="default"
