@@ -454,13 +454,33 @@ export function registerServiceRoutes(app: Express) {
   app.post("/api/dismissed-alerts", requireAdmin, async (req, res) => {
     try {
       const { deviceServiceId, dismissType } = req.body;
-      if (!deviceServiceId || !dismissType || !["1month", "indefinite"].includes(dismissType)) {
+      if (!deviceServiceId || !dismissType || !["1month", "3months", "indefinite"].includes(dismissType)) {
         return res.status(400).json({ error: "Invalid request body" });
       }
       const alert = await storage.dismissAlert(deviceServiceId, dismissType);
       res.json(alert);
     } catch (error) {
       res.status(500).json({ error: "Failed to dismiss alert" });
+    }
+  });
+
+  app.post("/api/dismissed-alerts/bulk", requireAdmin, async (req, res) => {
+    try {
+      const { deviceServiceIds, dismissType } = req.body;
+      if (!Array.isArray(deviceServiceIds) || deviceServiceIds.length === 0) {
+        return res.status(400).json({ error: "deviceServiceIds array is required" });
+      }
+      if (!dismissType || !["1month", "3months", "indefinite"].includes(dismissType)) {
+        return res.status(400).json({ error: "Invalid dismissType" });
+      }
+      const results = [];
+      for (const id of deviceServiceIds) {
+        const alert = await storage.dismissAlert(id, dismissType);
+        results.push(alert);
+      }
+      res.json({ success: true, count: results.length });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to bulk dismiss alerts" });
     }
   });
 

@@ -18,7 +18,7 @@ The application's data model includes Device Types, Devices, Service Categories,
 
 ### Core Features
 - **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.
-- **Admin Panel**: Provides comprehensive CRUD operations for all data entities, including bulk import (Excel), image uploads, and management of service links.
+- **Admin Panel**: Provides comprehensive CRUD operations for all data entities, including bulk import (Excel), image uploads, and management of service links. The Links tab uses subtabs: "Service Links" (main table) and "Missing Parts" (dedicated view with multi-select, bulk dismiss, brand/service filters). Dismiss durations: 1 month, 3 months, or indefinite.
 - **Embeddable Widget**: A simplified quote wizard for external website integration.
 - **"I Don't Know My Device" Flow**: Allows customers to describe issues for manual follow-up, supported by customizable templates.
 - **Internal Counter Lookup**: A staff interface for quick service and price lookups.

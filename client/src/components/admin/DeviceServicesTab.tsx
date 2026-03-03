@@ -11,7 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Plus, Trash2, Loader2, Pencil, Search, Filter, Link2, Layers, AlertTriangle, DollarSign, ExternalLink, X, Clock, EyeOff, Check } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, Trash2, Loader2, Pencil, Search, Filter, Link2, Layers, AlertTriangle, DollarSign, ExternalLink, X, Clock, EyeOff, Check, Calendar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceType, Device, Part, Service, DeviceServiceWithRelations, Brand } from "@shared/schema";
@@ -98,8 +100,14 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   const { data: brands = [] } = useQuery<Brand[]>({ queryKey: ["/api/brands"] });
   const { data: dismissedAlertIds = [] } = useQuery<string[]>({ queryKey: ["/api/dismissed-alerts/active-ids"] });
 
+  const [selectedAlertIds, setSelectedAlertIds] = useState<Set<string>>(new Set());
+  const [missingPartsFilterBrand, setMissingPartsFilterBrand_] = useState("all");
+  const [missingPartsFilterService, setMissingPartsFilterService_] = useState("all");
+  const setMissingPartsFilterBrand = (v: string) => { setMissingPartsFilterBrand_(v); setSelectedAlertIds(new Set()); };
+  const setMissingPartsFilterService = (v: string) => { setMissingPartsFilterService_(v); setSelectedAlertIds(new Set()); };
+
   const dismissAlertMutation = useMutation({
-    mutationFn: async ({ deviceServiceId, dismissType }: { deviceServiceId: string; dismissType: "1month" | "indefinite" }) => {
+    mutationFn: async ({ deviceServiceId, dismissType }: { deviceServiceId: string; dismissType: "1month" | "3months" | "indefinite" }) => {
       return apiRequest("POST", "/api/dismissed-alerts", { deviceServiceId, dismissType });
     },
     onSuccess: () => {
@@ -108,6 +116,20 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
     },
     onError: () => {
       toast({ title: "Failed to dismiss alert", variant: "destructive" });
+    },
+  });
+
+  const bulkDismissMutation = useMutation({
+    mutationFn: async ({ deviceServiceIds, dismissType }: { deviceServiceIds: string[]; dismissType: "1month" | "3months" | "indefinite" }) => {
+      return apiRequest("POST", "/api/dismissed-alerts/bulk", { deviceServiceIds, dismissType });
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/dismissed-alerts/active-ids"] });
+      setSelectedAlertIds(new Set());
+      toast({ title: `${variables.deviceServiceIds.length} alert(s) dismissed` });
+    },
+    onError: () => {
+      toast({ title: "Failed to bulk dismiss alerts", variant: "destructive" });
     },
   });
 
@@ -255,6 +277,63 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
       return !hasPart && !isLabourOnly && !ds.partSku && !dismissedAlertIds.includes(ds.id);
     });
   }, [deviceServices, dismissedAlertIds]);
+
+  const totalMissingCount = orphanedSkuLinks.length + missingPartLinks.length;
+
+  const filteredOrphanedSkuLinks = useMemo(() => {
+    return orphanedSkuLinks.filter(ds => {
+      if (missingPartsFilterBrand !== "all" && ds.device?.brand?.name !== missingPartsFilterBrand) return false;
+      if (missingPartsFilterService !== "all" && ds.service?.name !== missingPartsFilterService) return false;
+      return true;
+    });
+  }, [orphanedSkuLinks, missingPartsFilterBrand, missingPartsFilterService]);
+
+  const filteredMissingPartLinks = useMemo(() => {
+    return missingPartLinks.filter(ds => {
+      if (missingPartsFilterBrand !== "all" && ds.device?.brand?.name !== missingPartsFilterBrand) return false;
+      if (missingPartsFilterService !== "all" && ds.service?.name !== missingPartsFilterService) return false;
+      return true;
+    });
+  }, [missingPartLinks, missingPartsFilterBrand, missingPartsFilterService]);
+
+  const missingPartsBrands = useMemo(() => {
+    const all = [...orphanedSkuLinks, ...missingPartLinks];
+    return [...new Set(all.map(ds => ds.device?.brand?.name).filter(Boolean))] as string[];
+  }, [orphanedSkuLinks, missingPartLinks]);
+
+  const missingPartsServices = useMemo(() => {
+    const all = [...orphanedSkuLinks, ...missingPartLinks];
+    return [...new Set(all.map(ds => ds.service?.name).filter(Boolean))] as string[];
+  }, [orphanedSkuLinks, missingPartLinks]);
+
+  const toggleAlertSelection = (id: string) => {
+    setSelectedAlertIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllInSection = (items: DeviceServiceWithRelations[]) => {
+    const ids = items.map(ds => ds.id);
+    const allSelected = ids.every(id => selectedAlertIds.has(id));
+    setSelectedAlertIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) {
+        ids.forEach(id => next.delete(id));
+      } else {
+        ids.forEach(id => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkDismiss = (dismissType: "1month" | "3months" | "indefinite") => {
+    const ids = Array.from(selectedAlertIds);
+    if (ids.length === 0) return;
+    bulkDismissMutation.mutate({ deviceServiceIds: ids, dismissType });
+  };
 
   const { data: editSkuPartData } = useQuery<Part | null>({
     queryKey: [`/api/parts/sku/${encodeURIComponent(editPartSku)}`],
@@ -495,6 +574,18 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   });
 
   return (
+    <Tabs defaultValue="service-links" className="space-y-4">
+      <TabsList className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
+        <TabsTrigger value="service-links" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-service-links">Service Links</TabsTrigger>
+        <TabsTrigger value="missing-parts" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-missing-parts">
+          Missing Parts
+          {totalMissingCount > 0 && (
+            <span className="ml-1.5 inline-flex items-center justify-center h-5 min-w-5 px-1 text-xs font-medium rounded-full bg-destructive text-destructive-foreground" data-testid="badge-missing-parts-count">{totalMissingCount}</span>
+          )}
+        </TabsTrigger>
+      </TabsList>
+
+      <TabsContent value="service-links">
     <Card>
       <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 space-y-0 pb-4">
         <div>
@@ -1080,123 +1171,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
           )}
         </div>
 
-        {/* Error section for orphaned SKUs (part was deleted but SKU is preserved) */}
-        {orphanedSkuLinks.length > 0 && (
-          <div className="mb-4 border border-orange-500/50 bg-orange-500/5 rounded-md p-4" data-testid="section-orphaned-sku-links">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-5 w-5 text-orange-600" />
-              <h4 className="font-semibold text-orange-600">
-                {orphanedSkuLinks.length} Service Link{orphanedSkuLinks.length !== 1 ? "s" : ""} with Missing Parts (SKU Preserved)
-              </h4>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">
-              These service links have a saved SKU but the part no longer exists in your parts list. Re-upload parts or assign a new part to fix.
-            </p>
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {orphanedSkuLinks.map((ds) => (
-                <div 
-                  key={ds.id} 
-                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border gap-2"
-                  data-testid={`orphaned-link-${ds.id}`}
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="font-medium">{ds.device?.name || "Unknown"}</span>
-                    <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
-                    <span className="mx-2">→</span>
-                    <span>{ds.service?.name || "Unknown"}</span>
-                  </span>
-                  <Badge variant="outline" className="font-mono text-xs shrink-0">{ds.partSku}</Badge>
-                  <div className="flex gap-1 shrink-0">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleEdit(ds)}
-                      data-testid={`button-fix-orphaned-${ds.id}`}
-                    >
-                      Reassign Part
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-orphaned-${ds.id}`}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-${ds.id}`}>
-                          <Clock className="h-4 w-4 mr-2" />
-                          Dismiss for 1 month
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-${ds.id}`}>
-                          <EyeOff className="h-4 w-4 mr-2" />
-                          Dismiss indefinitely
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Error section for service links with missing parts (no SKU at all) */}
-        {missingPartLinks.length > 0 && (
-          <div className="mb-4 border border-destructive/50 bg-destructive/5 rounded-md p-4" data-testid="section-missing-part-links">
-            <div className="flex items-center gap-2 mb-3">
-              <AlertTriangle className="h-5 w-5 text-destructive" />
-              <h4 className="font-semibold text-destructive">
-                {missingPartLinks.length} Service Link{missingPartLinks.length !== 1 ? "s" : ""} Missing Parts
-              </h4>
-            </div>
-            <p className="text-sm text-muted-foreground mb-3">
-              These service links have no part assigned and the service is not marked as "Labour only". They will show as "Not Available" in the quote widget.
-            </p>
-            <div className="max-h-48 overflow-y-auto space-y-1">
-              {missingPartLinks.map((ds) => (
-                <div 
-                  key={ds.id} 
-                  className="flex items-center justify-between text-sm py-1.5 px-2 bg-background rounded border gap-2"
-                  data-testid={`error-link-${ds.id}`}
-                >
-                  <span className="flex-1 min-w-0">
-                    <span className="font-medium">{ds.device?.name || "Unknown"}</span>
-                    <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
-                    <span className="mx-2">→</span>
-                    <span>{ds.service?.name || "Unknown"}</span>
-                  </span>
-                  <div className="flex gap-1 shrink-0">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleEdit(ds)}
-                      data-testid={`button-fix-link-${ds.id}`}
-                    >
-                      Assign Part
-                    </Button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-link-${ds.id}`}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-link-${ds.id}`}>
-                          <Clock className="h-4 w-4 mr-2" />
-                          Dismiss for 1 month
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-link-${ds.id}`}>
-                          <EyeOff className="h-4 w-4 mr-2" />
-                          Dismiss indefinitely
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
         ) : deviceServices.length === 0 ? (
@@ -1344,6 +1318,211 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
         )}
       </CardContent>
     </Card>
+      </TabsContent>
+
+      <TabsContent value="missing-parts">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Missing Parts ({totalMissingCount})
+            </CardTitle>
+            <CardDescription>Service links that need parts assigned or have orphaned SKUs. Fix these to show accurate pricing in the quote widget.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {totalMissingCount === 0 ? (
+              <div className="text-center py-8 text-muted-foreground" data-testid="text-no-missing-parts">
+                All service links have valid parts assigned. Nothing to fix.
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col sm:flex-row gap-2" data-testid="section-missing-parts-filters">
+                  <Select value={missingPartsFilterBrand} onValueChange={setMissingPartsFilterBrand}>
+                    <SelectTrigger className="w-full sm:w-48" data-testid="select-missing-filter-brand">
+                      <SelectValue placeholder="Filter by brand" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Brands</SelectItem>
+                      {missingPartsBrands.map(b => (
+                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select value={missingPartsFilterService} onValueChange={setMissingPartsFilterService}>
+                    <SelectTrigger className="w-full sm:w-48" data-testid="select-missing-filter-service">
+                      <SelectValue placeholder="Filter by service" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Services</SelectItem>
+                      {missingPartsServices.map(s => (
+                        <SelectItem key={s} value={s}>{s}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {(missingPartsFilterBrand !== "all" || missingPartsFilterService !== "all") && (
+                    <Button variant="ghost" size="sm" onClick={() => { setMissingPartsFilterBrand("all"); setMissingPartsFilterService("all"); }} data-testid="button-clear-missing-filters">
+                      <X className="h-4 w-4 mr-1" /> Clear
+                    </Button>
+                  )}
+                </div>
+
+                {selectedAlertIds.size > 0 && (
+                  <div className="sticky top-0 z-10 flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 rounded-lg border bg-card shadow-sm" data-testid="section-bulk-actions">
+                    <span className="text-sm font-medium shrink-0">{selectedAlertIds.size} selected</span>
+                    <div className="flex flex-wrap gap-2">
+                      <Button size="sm" variant="outline" onClick={() => handleBulkDismiss("1month")} disabled={bulkDismissMutation.isPending} data-testid="button-bulk-dismiss-1month">
+                        <Clock className="h-3.5 w-3.5 mr-1" /> Dismiss 1 month
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkDismiss("3months")} disabled={bulkDismissMutation.isPending} data-testid="button-bulk-dismiss-3months">
+                        <Calendar className="h-3.5 w-3.5 mr-1" /> Dismiss 3 months
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleBulkDismiss("indefinite")} disabled={bulkDismissMutation.isPending} data-testid="button-bulk-dismiss-indefinite">
+                        <EyeOff className="h-3.5 w-3.5 mr-1" /> Dismiss permanently
+                      </Button>
+                      <Button size="sm" variant="ghost" onClick={() => setSelectedAlertIds(new Set())} data-testid="button-clear-selection">
+                        <X className="h-3.5 w-3.5 mr-1" /> Clear
+                      </Button>
+                    </div>
+                    {bulkDismissMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+                  </div>
+                )}
+
+                {filteredOrphanedSkuLinks.length > 0 && (
+                  <div className="border border-orange-500/50 bg-orange-500/5 rounded-md p-4" data-testid="section-orphaned-sku-links">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Checkbox
+                        checked={filteredOrphanedSkuLinks.every(ds => selectedAlertIds.has(ds.id))}
+                        onCheckedChange={() => selectAllInSection(filteredOrphanedSkuLinks)}
+                        data-testid="checkbox-select-all-orphaned"
+                      />
+                      <AlertTriangle className="h-5 w-5 text-orange-600" />
+                      <h4 className="font-semibold text-orange-600">
+                        {filteredOrphanedSkuLinks.length} Service Link{filteredOrphanedSkuLinks.length !== 1 ? "s" : ""} with Missing Parts (SKU Preserved)
+                      </h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 ml-9">
+                      These service links have a saved SKU but the part no longer exists in your parts list. Re-upload parts or assign a new part to fix.
+                    </p>
+                    <div className="space-y-1">
+                      {filteredOrphanedSkuLinks.map((ds) => (
+                        <div
+                          key={ds.id}
+                          className="flex items-center text-sm py-2 px-2 bg-background rounded border gap-2"
+                          data-testid={`orphaned-link-${ds.id}`}
+                        >
+                          <Checkbox
+                            checked={selectedAlertIds.has(ds.id)}
+                            onCheckedChange={() => toggleAlertSelection(ds.id)}
+                            data-testid={`checkbox-orphaned-${ds.id}`}
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="font-medium">{ds.device?.name || "Unknown"}</span>
+                            <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
+                            <span className="mx-2">→</span>
+                            <span>{ds.service?.name || "Unknown"}</span>
+                          </span>
+                          <Badge variant="outline" className="font-mono text-xs shrink-0">{ds.partSku}</Badge>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(ds)} data-testid={`button-fix-orphaned-${ds.id}`}>
+                              Reassign
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-orphaned-${ds.id}`}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-${ds.id}`}>
+                                  <Clock className="h-4 w-4 mr-2" /> Dismiss for 1 month
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "3months" })} data-testid={`dismiss-3months-${ds.id}`}>
+                                  <Calendar className="h-4 w-4 mr-2" /> Dismiss for 3 months
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-${ds.id}`}>
+                                  <EyeOff className="h-4 w-4 mr-2" /> Dismiss indefinitely
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {filteredMissingPartLinks.length > 0 && (
+                  <div className="border border-destructive/50 bg-destructive/5 rounded-md p-4" data-testid="section-missing-part-links">
+                    <div className="flex items-center gap-3 mb-3">
+                      <Checkbox
+                        checked={filteredMissingPartLinks.every(ds => selectedAlertIds.has(ds.id))}
+                        onCheckedChange={() => selectAllInSection(filteredMissingPartLinks)}
+                        data-testid="checkbox-select-all-missing"
+                      />
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                      <h4 className="font-semibold text-destructive">
+                        {filteredMissingPartLinks.length} Service Link{filteredMissingPartLinks.length !== 1 ? "s" : ""} Missing Parts
+                      </h4>
+                    </div>
+                    <p className="text-sm text-muted-foreground mb-3 ml-9">
+                      These service links have no part assigned and the service is not marked as "Labour only". They will show as "Not Available" in the quote widget.
+                    </p>
+                    <div className="space-y-1">
+                      {filteredMissingPartLinks.map((ds) => (
+                        <div
+                          key={ds.id}
+                          className="flex items-center text-sm py-2 px-2 bg-background rounded border gap-2"
+                          data-testid={`error-link-${ds.id}`}
+                        >
+                          <Checkbox
+                            checked={selectedAlertIds.has(ds.id)}
+                            onCheckedChange={() => toggleAlertSelection(ds.id)}
+                            data-testid={`checkbox-missing-${ds.id}`}
+                          />
+                          <span className="flex-1 min-w-0">
+                            <span className="font-medium">{ds.device?.name || "Unknown"}</span>
+                            <span className="text-muted-foreground"> ({ds.device?.brand?.name || "-"})</span>
+                            <span className="mx-2">→</span>
+                            <span>{ds.service?.name || "Unknown"}</span>
+                          </span>
+                          <div className="flex gap-1 shrink-0">
+                            <Button variant="outline" size="sm" onClick={() => handleEdit(ds)} data-testid={`button-fix-link-${ds.id}`}>
+                              Assign Part
+                            </Button>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8" data-testid={`button-dismiss-link-${ds.id}`}>
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "1month" })} data-testid={`dismiss-1month-link-${ds.id}`}>
+                                  <Clock className="h-4 w-4 mr-2" /> Dismiss for 1 month
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "3months" })} data-testid={`dismiss-3months-link-${ds.id}`}>
+                                  <Calendar className="h-4 w-4 mr-2" /> Dismiss for 3 months
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => dismissAlertMutation.mutate({ deviceServiceId: ds.id, dismissType: "indefinite" })} data-testid={`dismiss-indefinite-link-${ds.id}`}>
+                                  <EyeOff className="h-4 w-4 mr-2" /> Dismiss indefinitely
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {filteredOrphanedSkuLinks.length === 0 && filteredMissingPartLinks.length === 0 && (
+                  <p className="text-center py-4 text-muted-foreground">No items match the current filters.</p>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      </TabsContent>
+    </Tabs>
   );
 }
 

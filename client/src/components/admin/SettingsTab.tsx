@@ -86,12 +86,12 @@ function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>[
           Dismissed Missing Parts Alerts
         </CardTitle>
         <CardDescription>
-          Service links that have been permanently dismissed from the "Missing Parts" warnings
+          Service links that have been dismissed from the "Missing Parts" warnings (3 months or permanently)
         </CardDescription>
       </CardHeader>
       <CardContent>
         {alertsWithInfo.length === 0 ? (
-          <p className="text-sm text-muted-foreground py-4 text-center">No permanently dismissed alerts</p>
+          <p className="text-sm text-muted-foreground py-4 text-center">No dismissed alerts</p>
         ) : (
           <div className="space-y-2 max-h-64 overflow-y-auto">
             {alertsWithInfo.map((alert) => (
@@ -100,11 +100,19 @@ function DismissedAlertsSection({ toast }: { toast: ReturnType<typeof useToast>[
                 className="flex flex-col sm:flex-row sm:items-center justify-between text-sm py-2 px-3 bg-muted/50 rounded-md border gap-2"
                 data-testid={`dismissed-alert-${alert.deviceServiceId}`}
               >
-                <div className="flex-1 min-w-0">
-                  <span className="font-medium">{alert.deviceName}</span>
-                  <span className="text-muted-foreground"> ({alert.brandName})</span>
-                  <span className="mx-1 sm:mx-2">→</span>
-                  <span>{alert.serviceName}</span>
+                <div className="flex-1 min-w-0 flex flex-wrap items-center gap-2">
+                  <div className="flex-grow">
+                    <span className="font-medium">{alert.deviceName}</span>
+                    <span className="text-muted-foreground"> ({alert.brandName})</span>
+                    <span className="mx-1 sm:mx-2">→</span>
+                    <span>{alert.serviceName}</span>
+                  </div>
+                  <Badge 
+                    variant="outline"
+                    data-testid={`badge-dismiss-type-${alert.deviceServiceId}`}
+                  >
+                    {alert.dismissType === "indefinite" ? "Permanent" : "3 months"}
+                  </Badge>
                 </div>
                 <Button 
                   variant="outline" 

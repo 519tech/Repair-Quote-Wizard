@@ -156,7 +156,7 @@ export interface IStorage {
   getDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
   getActiveDismissedAlertIds(): Promise<string[]>;
   getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]>;
-  dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert>;
+  dismissAlert(deviceServiceId: string, dismissType: "1month" | "3months" | "indefinite"): Promise<DismissedServiceLinkAlert>;
   undismissAlert(deviceServiceId: string): Promise<void>;
 
   // Users
@@ -717,15 +717,21 @@ export class DatabaseStorage implements IStorage {
 
   async getIndefinitelyDismissedAlerts(): Promise<DismissedServiceLinkAlert[]> {
     return db.select().from(dismissedServiceLinkAlerts).where(
-      eq(dismissedServiceLinkAlerts.dismissType, "indefinite")
+      or(
+        eq(dismissedServiceLinkAlerts.dismissType, "indefinite"),
+        eq(dismissedServiceLinkAlerts.dismissType, "3months")
+      )
     );
   }
 
-  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "indefinite"): Promise<DismissedServiceLinkAlert> {
+  async dismissAlert(deviceServiceId: string, dismissType: "1month" | "3months" | "indefinite"): Promise<DismissedServiceLinkAlert> {
     await db.delete(dismissedServiceLinkAlerts).where(eq(dismissedServiceLinkAlerts.deviceServiceId, deviceServiceId));
-    const expiresAt = dismissType === "1month" 
-      ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() 
-      : null;
+    let expiresAt: string | null = null;
+    if (dismissType === "1month") {
+      expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+    } else if (dismissType === "3months") {
+      expiresAt = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
+    }
     const [alert] = await db.insert(dismissedServiceLinkAlerts).values({
       deviceServiceId,
       dismissType,
