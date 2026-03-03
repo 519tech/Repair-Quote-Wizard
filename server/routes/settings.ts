@@ -357,7 +357,16 @@ export function registerSettingsRoutes(app: Express) {
       res.json({ success: true, response: text.trim() });
     } catch (error: any) {
       logger.error('Gemini test error', { error: String(error) });
-      res.status(400).json({ error: error.message || "Gemini API test failed" });
+      const msg = String(error.message || "");
+      let userError = "Gemini API test failed";
+      if (msg.includes("429") || msg.includes("Too Many Requests") || msg.includes("quota")) {
+        userError = "Rate limit exceeded. Your API key is valid but you've hit the free tier quota. Wait a minute and try again, or upgrade your Gemini plan.";
+      } else if (msg.includes("401") || msg.includes("API_KEY_INVALID") || msg.includes("PERMISSION_DENIED")) {
+        userError = "Invalid API key. Please check your Gemini API key and try again.";
+      } else if (msg.includes("403")) {
+        userError = "Access denied. Your API key may not have the required permissions.";
+      }
+      res.status(400).json({ error: userError });
     }
   });
 }
