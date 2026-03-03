@@ -650,14 +650,27 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
                 if (!confirm(`Auto-detect release dates for ${devicesWithoutDate.length} devices without dates? This may take a few minutes.`)) return;
                 setBulkDetecting(true);
                 try {
-                  const res = await apiRequest("POST", "/api/devices/bulk-detect-release-dates");
-                  const data = await res.json();
-                  const desc = data.skippedRateLimit > 0
-                    ? `${data.updated} updated, ${data.failed} failed (${data.skippedRateLimit} hit rate limits). Click again to retry remaining.`
-                    : `${data.updated} updated, ${data.failed} failed out of ${data.total} devices`;
+                  const batches = [];
+                  for (let i = 0; i < devicesWithoutDate.length; i += 50) {
+                    batches.push(devicesWithoutDate.slice(i, i + 50));
+                  }
+                  let totalUpdated = 0;
+                  let totalFailed = 0;
+                  for (const batch of batches) {
+                    const payload = batch.map(d => ({
+                      id: d.id,
+                      deviceName: d.name,
+                      brandName: d.brandId ? brands.find(b => b.id === d.brandId)?.name : undefined,
+                    }));
+                    const res = await apiRequest("POST", "/api/devices/bulk-detect-release-dates", { devices: payload });
+                    const data = await res.json();
+                    const results = data.results || [];
+                    totalUpdated += results.filter((r: any) => r.releaseDate).length;
+                    totalFailed += results.filter((r: any) => !r.releaseDate).length;
+                  }
                   toast({
                     title: "Bulk Detection Complete",
-                    description: desc,
+                    description: `${totalUpdated} updated, ${totalFailed} could not be determined out of ${devicesWithoutDate.length} devices`,
                   });
                   queryClient.invalidateQueries({ queryKey: ["/api/devices"] });
                 } catch (error: any) {
