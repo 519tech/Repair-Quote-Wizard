@@ -574,6 +574,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   });
 
   return (
+    <>
     <Tabs defaultValue="service-links" className="space-y-4">
       <TabsList className="grid grid-cols-2 sm:flex sm:flex-wrap gap-1 h-auto w-full sm:w-auto">
         <TabsTrigger value="service-links" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-service-links">Service Links</TabsTrigger>
@@ -720,291 +721,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
               <DialogFooter>
                 <Button type="submit" disabled={createMutation.isPending || !deviceId || !serviceId} data-testid="button-save-link">
                   {createMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
-
-        <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setAdditionalPartSku(""); }}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-            <form onSubmit={handleEditSubmit}>
-              <DialogHeader>
-                <DialogTitle>Edit Device-Service Link</DialogTitle>
-                <DialogDescription>Update link details</DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                  <Label>Model (Device)</Label>
-                  <Input 
-                    value={editDeviceSearch} 
-                    onChange={(e) => setEditDeviceSearch(e.target.value)} 
-                    placeholder="Search devices..." 
-                    data-testid="input-edit-device-search-link"
-                  />
-                  <Select value={editItem?.deviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, deviceId: v} : null)}>
-                    <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
-                    <SelectContent>
-                      {editFilteredDevices.slice(0, 50).map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
-                      {editFilteredDevices.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50. Refine search.</p>}
-                      {editFilteredDevices.length === 0 && <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Service</Label>
-                  <Select value={editItem?.serviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, serviceId: v} : null)}>
-                    <SelectTrigger><SelectValue placeholder="Select service" /></SelectTrigger>
-                    <SelectContent>
-                      {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice} + {service.partsMarkup}x markup)</SelectItem>))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Part SKU (optional)</Label>
-                  <Input 
-                    value={editPartSku} 
-                    onChange={(e) => { 
-                      setEditPartSku(e.target.value); 
-                      setEditItem(prev => prev ? {...prev, partId: null} : null); 
-                    }} 
-                    placeholder="Enter SKU to auto-lookup" 
-                    data-testid="input-edit-part-sku" 
-                  />
-                  {editPartSku && editSkuPart && (
-                    <p className="text-sm text-green-600">Found in custom parts: {editSkuPart.name} (${editSkuPart.price})</p>
-                  )}
-                  {editPartSku && !editSkuPart && editPartSku.length > 0 && (
-                    <p className="text-sm text-muted-foreground">SKU will be saved - pricing lookup uses selected source</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Or Search Part by Name</Label>
-                  <Input 
-                    value={editPartSearch} 
-                    onChange={(e) => setEditPartSearch(e.target.value)} 
-                    placeholder="Type to search parts..." 
-                    data-testid="input-edit-part-search" 
-                  />
-                  {editPartSearch.length > 0 && (
-                    <Select 
-                      value={editItem?.partId || "none"} 
-                      onValueChange={(v) => { 
-                        setEditItem(prev => prev ? {...prev, partId: v === "none" ? null : v} : null); 
-                        setEditPartSku(""); 
-                      }}
-                    >
-                      <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No part required</SelectItem>
-                        {editFilteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
-                        {(editSearchedParts?.total || 0) > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results. Refine your search.</p>}
-                      </SelectContent>
-                    </Select>
-                  )}
-                  {editPartSearch.length === 0 && !editPartSku && (
-                    <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label>Alternative Primary Parts ({editAlternativePartSkus.length}/10)</Label>
-                  <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
-                  <Input 
-                    value={editAltPartSearch} 
-                    onChange={(e) => setEditAltPartSearch(e.target.value)} 
-                    placeholder="Search alternative parts..." 
-                    data-testid="input-edit-alt-part-search" 
-                  />
-                  {editAltPartSearch.length > 0 && editAltSearchedParts?.parts && (
-                    <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
-                      {editAlternativePartSkus.length >= 10 ? (
-                        <p className="p-1 text-sm text-muted-foreground">Maximum 10 alternative parts allowed</p>
-                      ) : editAltSearchedParts.parts.map((part) => (
-                        <div 
-                          key={part.id} 
-                          className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
-                          onClick={() => {
-                            if (!editAlternativePartSkus.includes(part.sku) && editAlternativePartSkus.length < 10) {
-                              setEditAlternativePartSkus([...editAlternativePartSkus, part.sku]);
-                              setEditAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
-                            }
-                          }}
-                        >
-                          <Plus className="h-3 w-3" />
-                          <span>{part.sku} - {part.name} (${part.price})</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {editAlternativePartSkus.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-2">
-                      {editAlternativePartSkus.map((sku) => (
-                        <Tooltip key={sku}>
-                          <TooltipTrigger asChild>
-                            <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
-                              {sku}
-                              <X 
-                                className="h-3 w-3 cursor-pointer" 
-                                onClick={(e) => { e.stopPropagation(); setEditAlternativePartSkus(editAlternativePartSkus.filter(s => s !== sku)); }} 
-                              />
-                            </Badge>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {editAlternativePartInfo[sku] ? (
-                              <>
-                                <p className="font-medium">{editAlternativePartInfo[sku].name}</p>
-                                <p className="text-xs text-muted-foreground">${editAlternativePartInfo[sku].price}</p>
-                              </>
-                            ) : (
-                              <p className="text-muted-foreground">Part details not available</p>
-                            )}
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* Additional Fee */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-additional-fee">Additional Fee ($)</Label>
-                  <Input
-                    id="edit-additional-fee"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0.00"
-                    value={editAdditionalFee}
-                    onChange={(e) => setEditAdditionalFee(e.target.value)}
-                    data-testid="input-edit-additional-fee"
-                  />
-                  <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination. Added to total before rounding.</p>
-                </div>
-
-                {/* Manual Price Override */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-manual-price-override">Manual Price Override (optional)</Label>
-                  <Input
-                    id="edit-manual-price-override"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="e.g. 129.99"
-                    value={editManualPriceOverride}
-                    onChange={(e) => setEditManualPriceOverride(e.target.value)}
-                    data-testid="input-edit-manual-price-override"
-                  />
-                  <p className="text-xs text-muted-foreground">If set, bypasses all price calculations (labor, parts, markup, rounding) and displays this exact price to customers.</p>
-                </div>
-
-                {/* RepairDesk Service ID */}
-                <div className="space-y-2">
-                  <Label htmlFor="edit-repairdesk-service-id">RepairDesk Service ID (optional)</Label>
-                  <Input
-                    id="edit-repairdesk-service-id"
-                    type="number"
-                    min="0"
-                    placeholder="e.g. 44227"
-                    value={editRepairDeskServiceId}
-                    onChange={(e) => setEditRepairDeskServiceId(e.target.value)}
-                    data-testid="input-edit-repairdesk-service-id"
-                  />
-                  <p className="text-xs text-muted-foreground">Link to a RepairDesk service for automatic price syncing every 2 days.</p>
-                </div>
-                
-                {/* Additional Parts (Secondary) Section */}
-                <div className="space-y-2 border-t pt-4">
-                  <Label>Additional Parts (Secondary)</Label>
-                  <p className="text-xs text-muted-foreground mb-2">These parts will be charged at {editItem?.service?.secondaryPartPercentage || 100}% of their cost</p>
-                  
-                  {/* List existing additional parts */}
-                  {dsAdditionalParts.filter(ap => !ap.isPrimary).length > 0 && (
-                    <div className="space-y-1 mb-2">
-                      {dsAdditionalParts.filter(ap => !ap.isPrimary).map((ap) => (
-                        <div key={ap.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
-                          <span>
-                            {ap.part ? (
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span className="cursor-help underline decoration-dotted">{ap.part.sku}</span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p className="font-medium">{ap.part.name}</p>
-                                  <p className="text-xs text-muted-foreground">${ap.part.price}</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            ) : (
-                              <span>{ap.partSku || "Unknown"}</span>
-                            )}
-                            {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
-                          </span>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <Button 
-                                type="button" 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6"
-                                disabled={dsRemoveAdditionalPartMutation.isPending}
-                                data-testid={`button-remove-ds-additional-part-${ap.id}`}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
-                                <AlertDialogDescription>This will remove this additional part from the service link. This action cannot be undone.</AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction onClick={() => dsRemoveAdditionalPartMutation.mutate(ap.id)} data-testid={`confirm-remove-ds-additional-part-${ap.id}`}>Remove</AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {/* Add new additional part */}
-                  <div className="flex gap-2">
-                    <Input 
-                      value={additionalPartSku} 
-                      onChange={(e) => setAdditionalPartSku(e.target.value)} 
-                      placeholder="Enter additional part SKU" 
-                      className="flex-1"
-                      data-testid="input-ds-additional-part-sku" 
-                    />
-                    <Button 
-                      type="button"
-                      size="sm"
-                      disabled={!dsAdditionalSkuPart || dsAddAdditionalPartMutation.isPending}
-                      onClick={() => {
-                        if (dsAdditionalSkuPart && editItem) {
-                          dsAddAdditionalPartMutation.mutate({
-                            deviceServiceId: editItem.id,
-                            partId: dsAdditionalSkuPart.id,
-                            partSku: dsAdditionalSkuPart.sku,
-                          });
-                        }
-                      }}
-                      data-testid="button-add-ds-additional-part"
-                    >
-                      {dsAddAdditionalPartMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                  {additionalPartSku && dsAdditionalSkuPart && (
-                    <p className="text-sm text-green-600">Found: {dsAdditionalSkuPart.name} (${dsAdditionalSkuPart.price})</p>
-                  )}
-                  {additionalPartSku && !dsAdditionalSkuPart && additionalPartSku.length > 0 && (
-                    <p className="text-sm text-destructive">SKU not found</p>
-                  )}
-                </div>
-              </div>
-              <DialogFooter>
-                <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-link">
-                  {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
                 </Button>
               </DialogFooter>
             </form>
@@ -1523,6 +1239,286 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
         </Card>
       </TabsContent>
     </Tabs>
+
+      <Dialog open={editOpen} onOpenChange={(open) => { setEditOpen(open); if (!open) setAdditionalPartSku(""); }}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <form onSubmit={handleEditSubmit}>
+            <DialogHeader>
+              <DialogTitle>Edit Device-Service Link</DialogTitle>
+              <DialogDescription>Update link details</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Model (Device)</Label>
+                <Input 
+                  value={editDeviceSearch} 
+                  onChange={(e) => setEditDeviceSearch(e.target.value)} 
+                  placeholder="Search devices..." 
+                  data-testid="input-edit-device-search-link"
+                />
+                <Select value={editItem?.deviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, deviceId: v} : null)}>
+                  <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
+                  <SelectContent>
+                    {editFilteredDevices.slice(0, 50).map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                    {editFilteredDevices.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50. Refine search.</p>}
+                    {editFilteredDevices.length === 0 && <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Service</Label>
+                <Select value={editItem?.serviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, serviceId: v} : null)}>
+                  <SelectTrigger><SelectValue placeholder="Select service" /></SelectTrigger>
+                  <SelectContent>
+                    {services.map((service) => (<SelectItem key={service.id} value={service.id}>{service.name} (${service.laborPrice} + {service.partsMarkup}x markup)</SelectItem>))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Part SKU (optional)</Label>
+                <Input 
+                  value={editPartSku} 
+                  onChange={(e) => { 
+                    setEditPartSku(e.target.value); 
+                    setEditItem(prev => prev ? {...prev, partId: null} : null); 
+                  }} 
+                  placeholder="Enter SKU to auto-lookup" 
+                  data-testid="input-edit-part-sku" 
+                />
+                {editPartSku && editSkuPart && (
+                  <p className="text-sm text-green-600">Found in custom parts: {editSkuPart.name} (${editSkuPart.price})</p>
+                )}
+                {editPartSku && !editSkuPart && editPartSku.length > 0 && (
+                  <p className="text-sm text-muted-foreground">SKU will be saved - pricing lookup uses selected source</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Or Search Part by Name</Label>
+                <Input 
+                  value={editPartSearch} 
+                  onChange={(e) => setEditPartSearch(e.target.value)} 
+                  placeholder="Type to search parts..." 
+                  data-testid="input-edit-part-search" 
+                />
+                {editPartSearch.length > 0 && (
+                  <Select 
+                    value={editItem?.partId || "none"} 
+                    onValueChange={(v) => { 
+                      setEditItem(prev => prev ? {...prev, partId: v === "none" ? null : v} : null); 
+                      setEditPartSku(""); 
+                    }}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No part required</SelectItem>
+                      {editFilteredParts.map((part) => (<SelectItem key={part.id} value={part.id}>{part.sku} - {part.name} (${part.price})</SelectItem>))}
+                      {(editSearchedParts?.total || 0) > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50 results. Refine your search.</p>}
+                    </SelectContent>
+                  </Select>
+                )}
+                {editPartSearch.length === 0 && !editPartSku && (
+                  <p className="text-sm text-muted-foreground">Enter SKU above or type to search by name</p>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label>Alternative Primary Parts ({editAlternativePartSkus.length}/10)</Label>
+                <p className="text-sm text-muted-foreground">Quote will use cheapest available part. Stock shows "In Stock" if ANY is available.</p>
+                <Input 
+                  value={editAltPartSearch} 
+                  onChange={(e) => setEditAltPartSearch(e.target.value)} 
+                  placeholder="Search alternative parts..." 
+                  data-testid="input-edit-alt-part-search" 
+                />
+                {editAltPartSearch.length > 0 && editAltSearchedParts?.parts && (
+                  <div className="max-h-32 overflow-y-auto border rounded p-2 space-y-1">
+                    {editAlternativePartSkus.length >= 10 ? (
+                      <p className="p-1 text-sm text-muted-foreground">Maximum 10 alternative parts allowed</p>
+                    ) : editAltSearchedParts.parts.map((part) => (
+                      <div 
+                        key={part.id} 
+                        className="flex items-center gap-2 text-sm cursor-pointer hover-elevate p-1 rounded"
+                        onClick={() => {
+                          if (!editAlternativePartSkus.includes(part.sku) && editAlternativePartSkus.length < 10) {
+                            setEditAlternativePartSkus([...editAlternativePartSkus, part.sku]);
+                            setEditAlternativePartInfo(prev => ({ ...prev, [part.sku]: { name: part.name, price: part.price } }));
+                          }
+                        }}
+                      >
+                        <Plus className="h-3 w-3" />
+                        <span>{part.sku} - {part.name} (${part.price})</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {editAlternativePartSkus.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {editAlternativePartSkus.map((sku) => (
+                      <Tooltip key={sku}>
+                        <TooltipTrigger asChild>
+                          <Badge variant="secondary" className="flex items-center gap-1 cursor-help">
+                            {sku}
+                            <X 
+                              className="h-3 w-3 cursor-pointer" 
+                              onClick={(e) => { e.stopPropagation(); setEditAlternativePartSkus(editAlternativePartSkus.filter(s => s !== sku)); }} 
+                            />
+                          </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          {editAlternativePartInfo[sku] ? (
+                            <>
+                              <p className="font-medium">{editAlternativePartInfo[sku].name}</p>
+                              <p className="text-xs text-muted-foreground">${editAlternativePartInfo[sku].price}</p>
+                            </>
+                          ) : (
+                            <p className="text-muted-foreground">Part details not available</p>
+                          )}
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-additional-fee">Additional Fee ($)</Label>
+                <Input
+                  id="edit-additional-fee"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={editAdditionalFee}
+                  onChange={(e) => setEditAdditionalFee(e.target.value)}
+                  data-testid="input-edit-additional-fee"
+                />
+                <p className="text-xs text-muted-foreground">Extra fee for this specific device-service combination. Added to total before rounding.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-manual-price-override">Manual Price Override (optional)</Label>
+                <Input
+                  id="edit-manual-price-override"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="e.g. 129.99"
+                  value={editManualPriceOverride}
+                  onChange={(e) => setEditManualPriceOverride(e.target.value)}
+                  data-testid="input-edit-manual-price-override"
+                />
+                <p className="text-xs text-muted-foreground">If set, bypasses all price calculations (labor, parts, markup, rounding) and displays this exact price to customers.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="edit-repairdesk-service-id">RepairDesk Service ID (optional)</Label>
+                <Input
+                  id="edit-repairdesk-service-id"
+                  type="number"
+                  min="0"
+                  placeholder="e.g. 44227"
+                  value={editRepairDeskServiceId}
+                  onChange={(e) => setEditRepairDeskServiceId(e.target.value)}
+                  data-testid="input-edit-repairdesk-service-id"
+                />
+                <p className="text-xs text-muted-foreground">Link to a RepairDesk service for automatic price syncing every 2 days.</p>
+              </div>
+              
+              <div className="space-y-2 border-t pt-4">
+                <Label>Additional Parts (Secondary)</Label>
+                <p className="text-xs text-muted-foreground mb-2">These parts will be charged at {editItem?.service?.secondaryPartPercentage || 100}% of their cost</p>
+                
+                {dsAdditionalParts.filter(ap => !ap.isPrimary).length > 0 && (
+                  <div className="space-y-1 mb-2">
+                    {dsAdditionalParts.filter(ap => !ap.isPrimary).map((ap) => (
+                      <div key={ap.id} className="flex items-center justify-between p-2 bg-muted rounded text-sm">
+                        <span>
+                          {ap.part ? (
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span className="cursor-help underline decoration-dotted">{ap.part.sku}</span>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                <p className="font-medium">{ap.part.name}</p>
+                                <p className="text-xs text-muted-foreground">${ap.part.price}</p>
+                              </TooltipContent>
+                            </Tooltip>
+                          ) : (
+                            <span>{ap.partSku || "Unknown"}</span>
+                          )}
+                          {ap.part && <span className="ml-2 text-muted-foreground">({ap.part.name} - ${ap.part.price})</span>}
+                        </span>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button 
+                              type="button" 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-6 w-6"
+                              disabled={dsRemoveAdditionalPartMutation.isPending}
+                              data-testid={`button-remove-ds-additional-part-${ap.id}`}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                              <AlertDialogDescription>This will remove this additional part from the service link. This action cannot be undone.</AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => dsRemoveAdditionalPartMutation.mutate(ap.id)} data-testid={`confirm-remove-ds-additional-part-${ap.id}`}>Remove</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                
+                <div className="flex gap-2">
+                  <Input 
+                    value={additionalPartSku} 
+                    onChange={(e) => setAdditionalPartSku(e.target.value)} 
+                    placeholder="Enter additional part SKU" 
+                    className="flex-1"
+                    data-testid="input-ds-additional-part-sku" 
+                  />
+                  <Button 
+                    type="button"
+                    size="sm"
+                    disabled={!dsAdditionalSkuPart || dsAddAdditionalPartMutation.isPending}
+                    onClick={() => {
+                      if (dsAdditionalSkuPart && editItem) {
+                        dsAddAdditionalPartMutation.mutate({
+                          deviceServiceId: editItem.id,
+                          partId: dsAdditionalSkuPart.id,
+                          partSku: dsAdditionalSkuPart.sku,
+                        });
+                      }
+                    }}
+                    data-testid="button-add-ds-additional-part"
+                  >
+                    {dsAddAdditionalPartMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {additionalPartSku && dsAdditionalSkuPart && (
+                  <p className="text-sm text-green-600">Found: {dsAdditionalSkuPart.name} (${dsAdditionalSkuPart.price})</p>
+                )}
+                {additionalPartSku && !dsAdditionalSkuPart && additionalPartSku.length > 0 && (
+                  <p className="text-sm text-destructive">SKU not found</p>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={updateMutation.isPending} data-testid="button-update-link">
+                {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : "Update"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
