@@ -454,7 +454,7 @@ export function DevicesTab({ toast }: { toast: ReturnType<typeof useToast>["toas
     setLoading(true);
     try {
       const res = await apiRequest("POST", "/api/devices/detect-release-date", {
-        modelName: deviceName,
+        deviceName,
         brandName
       });
       const data = await res.json();
