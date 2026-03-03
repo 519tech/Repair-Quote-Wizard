@@ -788,6 +788,10 @@ function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact, quoteValid
                 </div>
               </div>
             )}
+            <p className="text-sm font-medium text-center pt-3" data-testid="text-contact-help">
+              Having issues with getting a quote?{" "}
+              <a href="https://519techservices.ca/pages/contact-us-elmira-on" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:text-primary/80">Contact us</a>
+            </p>
             <p className="text-xs text-muted-foreground text-center pt-2" data-testid="text-quote-validity">
               This quote is valid for {quoteValidDays} days
             </p>
