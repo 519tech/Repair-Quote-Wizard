@@ -322,6 +322,14 @@ export function registerSettingsRoutes(app: Express) {
         });
       }
       if (aiProvider) {
+        if (aiProvider === 'gemini') {
+          const templates = await storage.getMessageTemplates();
+          const existingKey = templates.find(t => t.type === 'gemini_api_key');
+          const hasKey = !!existingKey?.content || !!geminiApiKey;
+          if (!hasKey) {
+            return res.status(400).json({ error: "Cannot switch to Gemini without an API key configured" });
+          }
+        }
         await storage.upsertMessageTemplate({
           type: 'ai_provider',
           content: aiProvider,

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle, AlertTriangle, Check, Database, DollarSign, ExternalLink, EyeOff, Layers, Link2, Loader2, Lock, Mail, MessageSquare, RefreshCw, Search, Users } from "lucide-react";
+import { AlertCircle, AlertTriangle, Brain, Check, Database, DollarSign, ExternalLink, Eye, EyeOff, Layers, Link2, Loader2, Lock, Mail, MessageSquare, RefreshCw, Search, Users } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Device, Service, DeviceServiceWithRelations, MessageTemplate } from "@shared/schema";
@@ -460,6 +460,40 @@ export function SettingsTab({ toast }: { toast: ReturnType<typeof useToast>["toa
   const [smsServiceItemTemplate, setSmsServiceItemTemplate] = useState("");
   const [testEmail, setTestEmail] = useState("");
   const [testPhone, setTestPhone] = useState("");
+  const [geminiApiKey, setGeminiApiKey] = useState("");
+  const [showGeminiKey, setShowGeminiKey] = useState(false);
+
+  const { data: aiSettings, refetch: refetchAiSettings } = useQuery<{ geminiKeySet: boolean; aiProvider: string }>({
+    queryKey: ["/api/settings/ai"],
+  });
+
+  const saveAiSettings = useMutation({
+    mutationFn: async (data: { geminiApiKey?: string; aiProvider?: string }) => {
+      const res = await apiRequest("POST", "/api/settings/ai", data);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/settings/ai"] });
+      setGeminiApiKey("");
+      toast({ title: "AI settings saved" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const testGemini = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/settings/ai/test-gemini");
+      return res.json();
+    },
+    onSuccess: (data: { success: boolean; response: string }) => {
+      toast({ title: "Gemini Connected", description: `Response: ${data.response}` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Gemini Test Failed", description: error.message, variant: "destructive" });
+    },
+  });
 
   // RepairDesk Integration (API Key based)
   const { data: repairDeskStatus, refetch: refetchRepairDeskStatus } = useQuery<{ connected: boolean; stockCheckEnabled: boolean }>({
@@ -831,6 +865,7 @@ $\{servicePrice} plus taxes
         <TabsTrigger value="quote-templates" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-quote-templates">Templates</TabsTrigger>
         <TabsTrigger value="repairdesk" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-repairdesk">RepairDesk</TabsTrigger>
         <TabsTrigger value="mobilesentrix" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-mobilesentrix">Mobilesentrix</TabsTrigger>
+        <TabsTrigger value="ai" className="text-xs sm:text-sm px-2 sm:px-3" data-testid="subtab-ai">AI</TabsTrigger>
       </TabsList>
 
       {/* Quote Settings Sub-Tab */}
@@ -1647,6 +1682,148 @@ $\{servicePrice} plus taxes
         </Card>
 
         {mobilesentrixStatus?.configured && <SkuValidationCard />}
+      </TabsContent>
+
+      {/* AI Sub-Tab */}
+      <TabsContent value="ai" className="space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Brain className="h-5 w-5" />
+              AI Provider
+            </CardTitle>
+            <CardDescription>Choose which AI model to use for auto-detecting device release dates</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Active Provider</Label>
+              <Select
+                value={aiSettings?.aiProvider || "replit"}
+                onValueChange={(value) => saveAiSettings.mutate({ aiProvider: value })}
+                disabled={saveAiSettings.isPending}
+              >
+                <SelectTrigger className="w-full sm:w-64" data-testid="select-ai-provider">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="replit">Replit AI (OpenAI)</SelectItem>
+                  <SelectItem value="gemini">Google Gemini (with Web Search)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                {aiSettings?.aiProvider === "gemini"
+                  ? "Gemini uses Google Search grounding to look up real-time release dates from the web"
+                  : "Replit AI uses OpenAI to estimate release dates from training data"}
+              </p>
+            </div>
+
+            {aiSettings?.aiProvider === "gemini" && !aiSettings?.geminiKeySet && (
+              <div className="flex items-center gap-2 p-3 rounded-lg border border-destructive/50 bg-destructive/5">
+                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                <p className="text-sm text-destructive">Gemini API key required. Add your key below to enable this provider.</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              Gemini API Key
+            </CardTitle>
+            <CardDescription>Enter your Google Gemini API key to enable web-search-powered release date detection</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+              <Badge
+                variant="secondary"
+                className={aiSettings?.geminiKeySet
+                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                  : "bg-muted"}
+              >
+                {aiSettings?.geminiKeySet ? (
+                  <><Check className="h-3 w-3 mr-1" />Configured</>
+                ) : (
+                  "Not Set"
+                )}
+              </Badge>
+              {aiSettings?.geminiKeySet && (
+                <span className="text-sm text-muted-foreground">Key is saved securely in the database</span>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="gemini-key">{aiSettings?.geminiKeySet ? "Update API Key" : "API Key"}</Label>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="gemini-key"
+                    type={showGeminiKey ? "text" : "password"}
+                    value={geminiApiKey}
+                    onChange={(e) => setGeminiApiKey(e.target.value)}
+                    placeholder={aiSettings?.geminiKeySet ? "Enter new key to update..." : "AIzaSy..."}
+                    data-testid="input-gemini-api-key"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0"
+                    onClick={() => setShowGeminiKey(!showGeminiKey)}
+                    data-testid="button-toggle-gemini-key"
+                  >
+                    {showGeminiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <Button
+                  onClick={() => saveAiSettings.mutate({ geminiApiKey })}
+                  disabled={!geminiApiKey || saveAiSettings.isPending}
+                  className="shrink-0"
+                  data-testid="button-save-gemini-key"
+                >
+                  {saveAiSettings.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save Key
+                </Button>
+              </div>
+            </div>
+
+            {aiSettings?.geminiKeySet && (
+              <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                <Button
+                  variant="outline"
+                  onClick={() => testGemini.mutate()}
+                  disabled={testGemini.isPending}
+                  data-testid="button-test-gemini"
+                >
+                  {testGemini.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Test Connection
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={() => {
+                    if (confirm("Remove the Gemini API key? This will switch back to Replit AI.")) {
+                      saveAiSettings.mutate({ geminiApiKey: "", aiProvider: "replit" });
+                    }
+                  }}
+                  data-testid="button-remove-gemini-key"
+                >
+                  Remove Key
+                </Button>
+              </div>
+            )}
+
+            <div className="rounded-lg bg-muted/50 p-3 space-y-1">
+              <p className="text-sm font-medium">How to get a Gemini API Key</p>
+              <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                <li>Go to <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" className="underline text-primary">Google AI Studio</a></li>
+                <li>Sign in with your Google account</li>
+                <li>Click "Create API Key"</li>
+                <li>Copy the key and paste it above</li>
+              </ol>
+            </div>
+          </CardContent>
+        </Card>
       </TabsContent>
     </Tabs>
   );

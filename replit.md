@@ -58,3 +58,9 @@ The application's data model includes Device Types, Devices, Service Categories,
 - **SKU Validation**: Validates service link SKUs against the API with batch processing and progress tracking.
 - **API Status Testing**: Provides connection testing and error notifications via email.
 - **OAuth Authorization Flow**: Browser-based OAuth for automatic token management.
+
+### AI Integration (Release Date Detection)
+- **Provider Selection**: Admin can choose between Replit AI (OpenAI) or Google Gemini for auto-detecting device release dates. Configured via Settings > AI tab.
+- **Gemini with Web Search**: When Gemini is selected, uses Google Search grounding to look up real-time release dates from the web. Requires a Gemini API key stored in the `message_templates` table (type `gemini_api_key`).
+- **Fallback**: If Gemini fails, automatically falls back to OpenAI. Provider preference stored as `ai_provider` in `message_templates`.
+- **NPM Package**: `@google/generative-ai` for Gemini SDK.

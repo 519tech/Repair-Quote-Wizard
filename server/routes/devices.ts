@@ -362,8 +362,15 @@ Do not include any other text.`;
 
       const ai = await getAiProvider();
       let result: string | null;
+      let usedProvider = ai.provider;
       if (ai.provider === 'gemini' && ai.geminiKey) {
-        result = await detectWithGemini(prompt, ai.geminiKey);
+        try {
+          result = await detectWithGemini(prompt, ai.geminiKey);
+        } catch (geminiErr: any) {
+          logger.error('Gemini failed, falling back to OpenAI', { error: String(geminiErr) });
+          result = await detectWithOpenAI(prompt);
+          usedProvider = 'replit';
+        }
       } else {
         result = await detectWithOpenAI(prompt);
       }
@@ -374,7 +381,7 @@ Do not include any other text.`;
 
       const dateMatch = result.match(/\d{4}-\d{2}-\d{2}/);
       if (dateMatch) {
-        return res.json({ releaseDate: dateMatch[0], provider: ai.provider });
+        return res.json({ releaseDate: dateMatch[0], provider: usedProvider });
       }
 
       res.json({ releaseDate: null, message: "Could not parse release date" });
@@ -412,8 +419,15 @@ Devices:
 ${deviceDescriptions}`;
 
       let result: string | null;
+      let usedProvider = ai.provider;
       if (ai.provider === 'gemini' && ai.geminiKey) {
-        result = await detectWithGemini(prompt, ai.geminiKey);
+        try {
+          result = await detectWithGemini(prompt, ai.geminiKey);
+        } catch (geminiErr: any) {
+          logger.error('Gemini bulk detect failed, falling back to OpenAI', { error: String(geminiErr) });
+          result = await detectWithOpenAI(prompt, deviceList.length * 20);
+          usedProvider = 'replit';
+        }
       } else {
         result = await detectWithOpenAI(prompt, deviceList.length * 20);
       }
