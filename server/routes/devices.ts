@@ -13,6 +13,11 @@ import {
 } from "@shared/schema";
 import OpenAI from "openai";
 
+const openai = new OpenAI({
+  apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
+});
+
 export function registerDeviceRoutes(app: Express) {
   app.get("/api/device-types", async (req, res) => {
     try {
@@ -317,7 +322,6 @@ export function registerDeviceRoutes(app: Express) {
         return res.status(400).json({ error: "Device name is required" });
       }
 
-      const openai = new OpenAI();
       const prompt = `What is the release date of the ${brandName ? brandName + ' ' : ''}${deviceName}? 
 Reply with ONLY a date in YYYY-MM-DD format. If you're not sure of the exact day, use the 1st of the month.
 If you cannot determine the release date at all, reply with "UNKNOWN".
@@ -359,7 +363,6 @@ Do not include any other text.`;
         return res.status(400).json({ error: "Maximum 50 devices per batch" });
       }
 
-      const openai = new OpenAI();
       const deviceDescriptions = deviceList.map((d: any, i: number) =>
         `${i + 1}. ${d.brandName ? d.brandName + ' ' : ''}${d.deviceName}`
       ).join('\n');
