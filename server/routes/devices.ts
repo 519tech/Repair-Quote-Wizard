@@ -18,6 +18,38 @@ const openai = new OpenAI({
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
 });
 
+async function getAiProvider(): Promise<{ provider: string; geminiKey?: string }> {
+  const templates = await storage.getMessageTemplates();
+  const providerSetting = templates.find(t => t.type === 'ai_provider');
+  const geminiKey = templates.find(t => t.type === 'gemini_api_key');
+  const provider = providerSetting?.content || 'replit';
+  if (provider === 'gemini' && geminiKey?.content) {
+    return { provider: 'gemini', geminiKey: geminiKey.content };
+  }
+  return { provider: 'replit' };
+}
+
+async function detectWithGemini(prompt: string, geminiKey: string): Promise<string | null> {
+  const { GoogleGenerativeAI } = await import("@google/generative-ai");
+  const genAI = new GoogleGenerativeAI(geminiKey);
+  const model = genAI.getGenerativeModel({
+    model: "gemini-2.0-flash",
+    tools: [{ googleSearch: {} } as any],
+  });
+  const result = await model.generateContent(prompt);
+  return result.response.text()?.trim() || null;
+}
+
+async function detectWithOpenAI(prompt: string, maxTokens: number = 20): Promise<string | null> {
+  const response = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: maxTokens,
+    temperature: 0,
+  });
+  return response.choices[0]?.message?.content?.trim() || null;
+}
+
 export function registerDeviceRoutes(app: Express) {
   app.get("/api/device-types", async (req, res) => {
     try {
@@ -322,27 +354,27 @@ export function registerDeviceRoutes(app: Express) {
         return res.status(400).json({ error: "Device name is required" });
       }
 
-      const prompt = `What is the release date of the ${brandName ? brandName + ' ' : ''}${deviceName}? 
+      const fullName = `${brandName ? brandName + ' ' : ''}${deviceName}`;
+      const prompt = `What is the release date of the ${fullName}? 
 Reply with ONLY a date in YYYY-MM-DD format. If you're not sure of the exact day, use the 1st of the month.
 If you cannot determine the release date at all, reply with "UNKNOWN".
 Do not include any other text.`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: 20,
-        temperature: 0,
-      });
+      const ai = await getAiProvider();
+      let result: string | null;
+      if (ai.provider === 'gemini' && ai.geminiKey) {
+        result = await detectWithGemini(prompt, ai.geminiKey);
+      } else {
+        result = await detectWithOpenAI(prompt);
+      }
 
-      const result = response.choices[0]?.message?.content?.trim();
-
-      if (!result || result === "UNKNOWN") {
+      if (!result || result.includes("UNKNOWN")) {
         return res.json({ releaseDate: null, message: "Could not determine release date" });
       }
 
-      const dateMatch = result.match(/^\d{4}-\d{2}-\d{2}$/);
+      const dateMatch = result.match(/\d{4}-\d{2}-\d{2}/);
       if (dateMatch) {
-        return res.json({ releaseDate: dateMatch[0] });
+        return res.json({ releaseDate: dateMatch[0], provider: ai.provider });
       }
 
       res.json({ releaseDate: null, message: "Could not parse release date" });
@@ -363,6 +395,8 @@ Do not include any other text.`;
         return res.status(400).json({ error: "Maximum 50 devices per batch" });
       }
 
+      const ai = await getAiProvider();
+
       const deviceDescriptions = deviceList.map((d: any, i: number) =>
         `${i + 1}. ${d.brandName ? d.brandName + ' ' : ''}${d.deviceName}`
       ).join('\n');
@@ -377,19 +411,18 @@ Reply with ONLY numbered lines in this exact format:
 Devices:
 ${deviceDescriptions}`;
 
-      const response = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [{ role: "user", content: prompt }],
-        max_tokens: deviceList.length * 20,
-        temperature: 0,
-      });
+      let result: string | null;
+      if (ai.provider === 'gemini' && ai.geminiKey) {
+        result = await detectWithGemini(prompt, ai.geminiKey);
+      } else {
+        result = await detectWithOpenAI(prompt, deviceList.length * 20);
+      }
 
-      const result = response.choices[0]?.message?.content?.trim();
       if (!result) {
         return res.json({ results: deviceList.map(() => ({ releaseDate: null })) });
       }
 
-      const lines = result.split('\n');
+      const lines = result.split('\n').filter((l: string) => l.trim());
       const results = deviceList.map((device: any, index: number) => {
         const line = lines[index]?.trim();
         if (!line) return { deviceId: device.id, releaseDate: null };
@@ -408,7 +441,7 @@ ${deviceDescriptions}`;
       }
 
       invalidateDeviceSearchCache();
-      res.json({ results });
+      res.json({ results, provider: ai.provider });
     } catch (error: any) {
       logger.error('Bulk release date detection error', { error: String(error) });
       res.status(500).json({ error: error.message || "Failed to detect release dates" });

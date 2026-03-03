@@ -297,4 +297,59 @@ export function registerSettingsRoutes(app: Express) {
       res.status(500).json({ error: "Failed to update setting" });
     }
   });
+
+  app.get("/api/settings/ai", requireAdmin, async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const geminiKey = templates.find(t => t.type === 'gemini_api_key');
+      const aiProvider = templates.find(t => t.type === 'ai_provider');
+      res.json({
+        geminiKeySet: !!geminiKey?.content,
+        aiProvider: aiProvider?.content || 'replit',
+      });
+    } catch (error) {
+      res.status(500).json({ error: "Failed to get AI settings" });
+    }
+  });
+
+  app.post("/api/settings/ai", requireAdmin, async (req, res) => {
+    try {
+      const { geminiApiKey, aiProvider } = req.body;
+      if (geminiApiKey !== undefined) {
+        await storage.upsertMessageTemplate({
+          type: 'gemini_api_key',
+          content: geminiApiKey || '',
+        });
+      }
+      if (aiProvider) {
+        await storage.upsertMessageTemplate({
+          type: 'ai_provider',
+          content: aiProvider,
+        });
+      }
+      res.json({ success: true });
+    } catch (error) {
+      logger.error('AI settings update error', { error: String(error) });
+      res.status(500).json({ error: "Failed to update AI settings" });
+    }
+  });
+
+  app.post("/api/settings/ai/test-gemini", requireAdmin, async (req, res) => {
+    try {
+      const templates = await storage.getMessageTemplates();
+      const geminiKey = templates.find(t => t.type === 'gemini_api_key');
+      if (!geminiKey?.content) {
+        return res.status(400).json({ error: "Gemini API key not configured" });
+      }
+      const { GoogleGenerativeAI } = await import("@google/generative-ai");
+      const genAI = new GoogleGenerativeAI(geminiKey.content);
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const result = await model.generateContent("Say 'OK' if you can read this.");
+      const text = result.response.text();
+      res.json({ success: true, response: text.trim() });
+    } catch (error: any) {
+      logger.error('Gemini test error', { error: String(error) });
+      res.status(400).json({ error: error.message || "Gemini API test failed" });
+    }
+  });
 }
