@@ -556,8 +556,8 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
       data: {
         deviceId: editItem.deviceId,
         serviceId: editItem.serviceId,
-        partSku: editPartSku || undefined,
-        partId: editItem.partId || undefined,
+        partSku: editPartSku || null,
+        partId: editPartSku ? (editItem.partId || null) : null,
         alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
         additionalFee: editAdditionalFee ? parseFloat(editAdditionalFee) : 0,
         repairDeskServiceId: editRepairDeskServiceId ? parseInt(editRepairDeskServiceId, 10) : null,

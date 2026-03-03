@@ -139,8 +139,8 @@ export function registerServiceRoutes(app: Express) {
   const deviceServiceWithSkuSchema = z.object({
     deviceId: z.string(),
     serviceId: z.string(),
-    partSku: z.string().optional(),
-    partId: z.string().optional(),
+    partSku: z.string().nullable().optional(),
+    partId: z.string().nullable().optional(),
     alternativePartSkus: z.array(z.string()).optional(),
     additionalFee: z.number().optional(),
     repairDeskServiceId: z.number().nullable().optional(),
