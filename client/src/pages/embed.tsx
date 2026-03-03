@@ -75,6 +75,10 @@ export default function Embed() {
           <SuccessView w={w} />
         )}
 
+        <p className="text-sm font-medium text-center pt-3" data-testid="text-contact-help">
+          Having issues with getting a quote?{" "}
+          <a href="https://519techservices.ca/pages/contact-us-elmira-on" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:text-primary/80">Contact us</a>
+        </p>
         <div className="pt-4 text-xs text-muted-foreground text-center space-y-1">
           <p>The prices shown are estimates and may change. A final quote will be confirmed after in-store inspection.</p>
           <p>
@@ -788,10 +792,6 @@ function QuoteView({ w, hidePricesCompletely, hidePricesUntilContact, quoteValid
                 </div>
               </div>
             )}
-            <p className="text-sm font-medium text-center pt-3" data-testid="text-contact-help">
-              Having issues with getting a quote?{" "}
-              <a href="https://519techservices.ca/pages/contact-us-elmira-on" target="_blank" rel="noopener noreferrer" className="underline text-primary hover:text-primary/80">Contact us</a>
-            </p>
             <p className="text-xs text-muted-foreground text-center pt-2" data-testid="text-quote-validity">
               This quote is valid for {quoteValidDays} days
             </p>
