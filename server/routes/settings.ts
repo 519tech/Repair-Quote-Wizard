@@ -351,7 +351,7 @@ export function registerSettingsRoutes(app: Express) {
       }
       const { GoogleGenerativeAI } = await import("@google/generative-ai");
       const genAI = new GoogleGenerativeAI(geminiKey.content);
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
       const result = await model.generateContent("Say 'OK' if you can read this.");
       const text = result.response.text();
       res.json({ success: true, response: text.trim() });

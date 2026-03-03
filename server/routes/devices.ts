@@ -33,7 +33,7 @@ async function detectWithGemini(prompt: string, geminiKey: string): Promise<stri
   const { GoogleGenerativeAI } = await import("@google/generative-ai");
   const genAI = new GoogleGenerativeAI(geminiKey);
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
+    model: "gemini-2.5-flash",
     tools: [{ googleSearch: {} } as any],
   });
   const result = await model.generateContent(prompt);
