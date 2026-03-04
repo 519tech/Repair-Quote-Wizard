@@ -4,6 +4,28 @@ import { replaceMacros, replaceCombinedMacros } from './template-utils';
 import type { QuoteData, CombinedQuoteData } from './template-utils';
 import { logger } from './logger';
 
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  label: string,
+  maxAttempts = 3,
+  baseDelayMs = 2000
+): Promise<T> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (attempt === maxAttempts) {
+        logger.error(`${label} failed after ${maxAttempts} attempts`, { error: String(error) });
+        throw error;
+      }
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      logger.warn(`${label} attempt ${attempt}/${maxAttempts} failed, retrying in ${delay}ms`, { error: String(error) });
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+  throw new Error(`${label} exhausted all retries`);
+}
+
 let cachedConnectionSettings: any = null;
 
 async function getAccessToken() {

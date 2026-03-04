@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { z } from "zod";
 import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
-import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification } from "../gmail";
+import { sendQuoteEmail, sendCombinedQuoteEmail, sendAdminNotificationEmail, sendUnknownDeviceQuoteEmail, sendUnknownDeviceAdminNotification, withRetry } from "../gmail";
 import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from "../sms";
 import { createLead } from "../repairdesk";
 import { isMobilesentrixConfigured, getProductBySku, MobilesentrixApiError, getCachedPriceWithDb, setCachedPrice } from "../mobilesentrix";
@@ -370,14 +370,14 @@ export function registerQuoteRoutes(app: Express) {
           quoteValidDays: validSetting ? parseInt(validSetting.content) : 7,
         };
 
-        sendQuoteEmail(quoteData).catch(err => logger.error('Email send error', { error: String(err) }));
+        withRetry(() => sendQuoteEmail(quoteData), 'Quote customer email').catch(err => logger.error('Email send error (all retries failed)', { error: String(err) }));
 
         if (input.customerPhone) {
-          sendQuoteSms(quoteData).catch(err => logger.error('SMS send error', { error: String(err) }));
+          withRetry(() => sendQuoteSms(quoteData), 'Quote customer SMS').catch(err => logger.error('SMS send error (all retries failed)', { error: String(err) }));
         }
       }
 
-      sendAdminNotificationEmail({
+      withRetry(() => sendAdminNotificationEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
@@ -390,7 +390,7 @@ export function registerQuoteRoutes(app: Express) {
         }],
         grandTotal: quotedPrice,
         notes: input.notes,
-      }).catch(err => logger.error('Admin notification error', { error: String(err) }));
+      }), 'Quote admin notification').catch(err => logger.error('Admin notification error (all retries failed)', { error: String(err) }));
 
       res.status(201).json(quote);
     } catch (error: any) {
@@ -498,7 +498,7 @@ export function registerQuoteRoutes(app: Express) {
       const validDaysSetting = allTemplates.find(t => t.type === 'quote_valid_days');
       const quoteValidDays = validDaysSetting ? parseInt(validDaysSetting.content) : 7;
 
-      sendCombinedQuoteEmail({
+      withRetry(() => sendCombinedQuoteEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         deviceName,
@@ -506,10 +506,10 @@ export function registerQuoteRoutes(app: Express) {
         grandTotal: finalTotal.toFixed(2),
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         quoteValidDays,
-      }).catch(err => logger.error('Combined email send error', { error: String(err) }));
+      }), 'Combined quote customer email').catch(err => logger.error('Combined email send error (all retries failed)', { error: String(err) }));
 
       if (input.customerPhone) {
-        sendCombinedQuoteSms({
+        withRetry(() => sendCombinedQuoteSms({
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           deviceName,
@@ -517,10 +517,10 @@ export function registerQuoteRoutes(app: Express) {
           grandTotal: finalTotal.toFixed(2),
           multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
           quoteValidDays,
-        }).catch(err => logger.error('Combined SMS send error', { error: String(err) }));
+        }), 'Combined quote customer SMS').catch(err => logger.error('Combined SMS send error (all retries failed)', { error: String(err) }));
       }
 
-      sendAdminNotificationEmail({
+      withRetry(() => sendAdminNotificationEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
@@ -529,7 +529,7 @@ export function registerQuoteRoutes(app: Express) {
         grandTotal: finalTotal.toFixed(2),
         multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
         notes: input.notes,
-      }).catch(err => logger.error('Admin notification error', { error: String(err) }));
+      }), 'Combined quote admin notification').catch(err => logger.error('Admin notification error (all retries failed)', { error: String(err) }));
 
       const templates = await storage.getMessageTemplates();
       const rdLeadSetting = templates.find(t => t.type === 'repairdesk_leads_enabled');
@@ -608,29 +608,29 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
         issueDescription: input.issueDescription,
       });
 
-      sendUnknownDeviceQuoteEmail({
+      withRetry(() => sendUnknownDeviceQuoteEmail({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         deviceDescription: input.deviceDescription,
         issueDescription: input.issueDescription,
-      }).catch(err => logger.error('Unknown device email error', { error: String(err) }));
+      }), 'Unknown device customer email').catch(err => logger.error('Unknown device email error (all retries failed)', { error: String(err) }));
 
       if (input.customerPhone) {
-        sendUnknownDeviceQuoteSms({
+        withRetry(() => sendUnknownDeviceQuoteSms({
           customerName: input.customerName,
           customerPhone: input.customerPhone,
           deviceDescription: input.deviceDescription,
           issueDescription: input.issueDescription,
-        }).catch(err => logger.error('Unknown device SMS error', { error: String(err) }));
+        }), 'Unknown device customer SMS').catch(err => logger.error('Unknown device SMS error (all retries failed)', { error: String(err) }));
       }
 
-      sendUnknownDeviceAdminNotification({
+      withRetry(() => sendUnknownDeviceAdminNotification({
         customerName: input.customerName,
         customerEmail: input.customerEmail,
         customerPhone: input.customerPhone,
         deviceDescription: input.deviceDescription,
         issueDescription: input.issueDescription,
-      }).catch(err => logger.error('Unknown device admin notification error', { error: String(err) }));
+      }), 'Unknown device admin notification').catch(err => logger.error('Unknown device admin notification error (all retries failed)', { error: String(err) }));
 
       res.status(201).json({ success: true });
     } catch (error: any) {
