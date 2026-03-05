@@ -296,6 +296,20 @@ export const insertQuoteRequestSchema = createInsertSchema(quoteRequests).omit({
 export type InsertQuoteRequest = z.infer<typeof insertQuoteRequestSchema>;
 export type QuoteRequest = typeof quoteRequests.$inferSelect;
 
+export const quoteViews = pgTable("quote_views", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  deviceId: varchar("device_id").notNull().references(() => devices.id, { onDelete: "cascade" }),
+  deviceServiceId: varchar("device_service_id").notNull().references(() => deviceServices.id, { onDelete: "cascade" }),
+  serviceName: text("service_name").notNull(),
+  deviceName: text("device_name").notNull(),
+  calculatedPrice: decimal("calculated_price", { precision: 10, scale: 2 }).notNull(),
+  viewedAt: text("viewed_at").notNull().default(sql`now()`),
+});
+
+export const insertQuoteViewSchema = createInsertSchema(quoteViews).omit({ id: true, viewedAt: true });
+export type InsertQuoteView = z.infer<typeof insertQuoteViewSchema>;
+export type QuoteView = typeof quoteViews.$inferSelect;
+
 // Message templates for email/SMS
 export const messageTemplates = pgTable("message_templates", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),

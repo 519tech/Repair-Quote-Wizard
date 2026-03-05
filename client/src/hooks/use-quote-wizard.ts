@@ -1,8 +1,10 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { Device, DeviceServiceWithRelations, Brand, DeviceType, MessageTemplate } from "@shared/schema";
+
+const trackedQuoteViews = new Set<string>();
 
 export type DeviceSearchResult = Device & {
   brand?: Brand | null;
@@ -361,6 +363,18 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
       }
 
       setAllQuotes(quotes);
+
+      services.forEach((ds, i) => {
+        const q = quotes[i];
+        if (q && q.isAvailable && !trackedQuoteViews.has(ds.id)) {
+          trackedQuoteViews.add(ds.id);
+          fetch("/api/quote-views", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceServiceId: ds.id, calculatedPrice: q.price }),
+          }).catch(() => {});
+        }
+      });
     } finally {
       setQuotesLoading(false);
     }

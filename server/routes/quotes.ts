@@ -702,4 +702,99 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
       res.status(500).json({ error: "Failed to search submissions" });
     }
   });
+
+  app.get("/api/internal/submissions", async (req, res) => {
+    try {
+      const query = (req.query.q as string || "").toLowerCase().trim();
+
+      const quoteRequests = await storage.getQuoteRequests();
+      const unknownQuotes = await storage.getUnknownDeviceQuotes();
+
+      const enrichedQuoteRequests = await Promise.all(
+        quoteRequests.map(async (qr) => {
+          const device = await storage.getDevice(qr.deviceId);
+          const deviceService = await storage.getDeviceServiceWithRelations(qr.deviceServiceId);
+          return {
+            id: qr.id,
+            type: 'quote' as const,
+            customerName: qr.customerName,
+            customerEmail: qr.customerEmail,
+            customerPhone: qr.customerPhone,
+            deviceName: device?.name || 'Unknown Device',
+            serviceName: deviceService?.service.name || 'Unknown Service',
+            quotedPrice: qr.quotedPrice,
+            deviceServiceId: qr.deviceServiceId,
+            notes: qr.notes,
+            createdAt: qr.createdAt,
+          };
+        })
+      );
+
+      const enrichedUnknownQuotes = unknownQuotes.map((uq) => ({
+        id: uq.id,
+        type: 'unknown' as const,
+        customerName: uq.customerName,
+        customerEmail: uq.customerEmail,
+        customerPhone: uq.customerPhone,
+        deviceDescription: uq.deviceDescription,
+        issueDescription: uq.issueDescription,
+        createdAt: uq.createdAt,
+      }));
+
+      const allSubmissions = [...enrichedQuoteRequests, ...enrichedUnknownQuotes];
+
+      const filtered = query
+        ? allSubmissions.filter(s =>
+            s.customerName.toLowerCase().includes(query) ||
+            s.customerEmail.toLowerCase().includes(query) ||
+            (s.customerPhone && s.customerPhone.toLowerCase().includes(query))
+          )
+        : allSubmissions;
+
+      filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      res.json(filtered);
+    } catch (error) {
+      logger.error('Internal submissions error', { error: String(error) });
+      res.status(500).json({ error: "Failed to fetch submissions" });
+    }
+  });
+
+  app.post("/api/quote-views", async (req, res) => {
+    try {
+      const schema = z.object({
+        deviceServiceId: z.string(),
+        calculatedPrice: z.string(),
+      });
+      const input = schema.parse(req.body);
+
+      const ds = await storage.getDeviceServiceWithRelations(input.deviceServiceId);
+      if (!ds) {
+        return res.status(404).json({ error: "Device service not found" });
+      }
+
+      const view = await storage.createQuoteView({
+        deviceId: ds.deviceId,
+        deviceServiceId: input.deviceServiceId,
+        serviceName: ds.service?.name || "Unknown Service",
+        deviceName: ds.device?.name || "Unknown Device",
+        calculatedPrice: input.calculatedPrice,
+      });
+
+      res.status(201).json(view);
+    } catch (error: any) {
+      logger.error('Quote view tracking error', { error: String(error) });
+      res.status(400).json({ error: error.message || "Failed to track quote view" });
+    }
+  });
+
+  app.get("/api/quote-views", async (req, res) => {
+    try {
+      const views = await storage.getQuoteViews();
+      res.json(views);
+    } catch (error) {
+      logger.error('Get quote views error', { error: String(error) });
+      res.status(500).json({ error: "Failed to fetch quote views" });
+    }
+  });
 }

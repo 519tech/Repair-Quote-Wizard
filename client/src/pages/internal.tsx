@@ -4,8 +4,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Search, Loader2, X, Wrench, Package } from "lucide-react";
-import type { DeviceServiceWithRelations, ServiceCategory } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Loader2, X, Wrench, Package, FileText, Eye, Mail, Phone, Clock } from "lucide-react";
+import type { DeviceServiceWithRelations } from "@shared/schema";
+
+const trackedInternalViews = new Set<string>();
 
 interface DeviceSearchResult {
   id: string;
@@ -32,10 +36,48 @@ interface QuoteData {
   additionalPartSkus?: string[];
 }
 
-export default function Internal() {
-  useEffect(() => {
-    document.title = "Counter Lookup | 519 Tech Services";
-  }, []);
+type Submission = {
+  id: string;
+  type: 'quote' | 'unknown';
+  customerName: string;
+  customerEmail: string;
+  customerPhone?: string | null;
+  deviceName?: string;
+  serviceName?: string;
+  quotedPrice?: string;
+  deviceServiceId?: string;
+  deviceDescription?: string;
+  issueDescription?: string;
+  notes?: string | null;
+  createdAt: string;
+};
+
+type QuoteViewEntry = {
+  id: string;
+  deviceId: string;
+  deviceServiceId: string;
+  serviceName: string;
+  deviceName: string;
+  calculatedPrice: string;
+  viewedAt: string;
+};
+
+function formatDate(dateStr: string) {
+  try {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function CounterLookupTab() {
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<DeviceSearchResult[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
@@ -112,23 +154,30 @@ export default function Internal() {
                 additionalPartSkus: data.additionalPartSkus || [],
               };
             }
-          } catch {
-            // Skip failed quotes
-          }
+          } catch {}
           return null;
         })
       );
       const validQuotes = quotes.filter((q): q is NonNullable<typeof q> => q !== null);
       setAllQuotes(validQuotes);
-      
-      // Fetch stock status for all SKUs
+
+      services.forEach((ds, i) => {
+        const q = quotes[i];
+        if (q && q.isAvailable && !trackedInternalViews.has(ds.id)) {
+          trackedInternalViews.add(ds.id);
+          fetch("/api/quote-views", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceServiceId: ds.id, calculatedPrice: q.price }),
+          }).catch(() => {});
+        }
+      });
+
       const allSkus = new Set<string>();
       validQuotes.forEach(q => {
-        // Collect all primary part SKUs
         if (q.primaryPartSkus?.length) {
           q.primaryPartSkus.forEach((sku: string) => allSkus.add(sku));
         }
-        // Collect all secondary part SKUs
         if (q.additionalPartSkus?.length) {
           q.additionalPartSkus.forEach((sku: string) => allSkus.add(sku));
         }
@@ -150,7 +199,7 @@ export default function Internal() {
           })
           .then(res => res?.ok ? res.json() : {})
           .then(stockInfo => stockInfo && setStockData(stockInfo))
-          .catch(() => console.log('Stock check not available'))
+          .catch(() => {})
           .finally(() => setStockLoading(false));
       } else {
         setStockLoading(false);
@@ -170,8 +219,6 @@ export default function Internal() {
     setSelectedDevice(device);
     setSearchQuery("");
     setSearchResults([]);
-    
-    // Prefetch all parts for this device (for Mobilesentrix API caching)
     fetch('/api/prefetch-category-parts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -189,7 +236,6 @@ export default function Internal() {
 
   const groupedQuotes = () => {
     const groups: Record<string, { categoryName: string; quotes: QuoteData[] }> = {};
-    
     allQuotes.forEach(quote => {
       const categoryId = quote.categoryId || "other";
       const categoryName = quote.categoryName || "Other Services";
@@ -198,23 +244,17 @@ export default function Internal() {
       }
       groups[categoryId].quotes.push(quote);
     });
-
     Object.keys(groups).forEach(key => {
       groups[key].quotes.sort((a, b) => {
-        if (a.isAvailable !== b.isAvailable) {
-          return a.isAvailable ? -1 : 1;
-        }
+        if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
         return parseFloat(a.price) - parseFloat(b.price);
       });
     });
-
-    // Sort category IDs by displayOrder
     const sortedCategoryIds = Object.keys(groups).sort((a, b) => {
       const aOrder = serviceCategoriesData.find(c => c.id === a)?.displayOrder ?? 999;
       const bOrder = serviceCategoriesData.find(c => c.id === b)?.displayOrder ?? 999;
       return aOrder - bOrder;
     });
-    
     return sortedCategoryIds.map(categoryId => ({
       categoryName: groups[categoryId].categoryName,
       quotes: groups[categoryId].quotes,
@@ -222,192 +262,453 @@ export default function Internal() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
-      <header className="sticky top-0 z-50 mx-4 mt-4">
-        <div className="glass-nav px-4 py-3 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <Wrench className="h-5 w-5 text-primary" />
-            <span className="font-semibold">Counter Lookup</span>
-          </div>
-        </div>
-      </header>
-
-      <main className="container mx-auto px-4 py-6 max-w-4xl">
-        <div className="mb-6">
-          <div className="relative" role="search">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
-            <Input
-              ref={inputRef}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search device model..."
-              className="pl-10 pr-10 h-14 text-lg"
-              data-testid="input-internal-search"
-              aria-label="Search for a device model"
-              autoFocus
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                onClick={() => setSearchQuery("")}
-                data-testid="button-clear-internal-search"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            )}
-          </div>
-
-          {searchQuery.length >= 2 && (
-            <div className="mt-2 border rounded-lg max-h-80 overflow-y-auto bg-card shadow-lg">
-              {searchLoading ? (
-                <div className="flex justify-center py-6">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : searchResults.length === 0 ? (
-                <p className="text-center py-6 text-muted-foreground">No devices found</p>
-              ) : (
-                <div className="p-2 space-y-1">
-                  {searchResults.map((device) => (
-                    <Button
-                      key={device.id}
-                      variant="ghost"
-                      className="w-full justify-start text-left h-auto py-3 hover-elevate"
-                      onClick={() => handleSearchSelect(device)}
-                      data-testid={`button-internal-result-${device.id}`}
-                    >
-                      <div>
-                        <div className="font-medium text-base">{device.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
-                        </div>
-                      </div>
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </div>
+    <div>
+      <div className="mb-6">
+        <div className="relative" role="search">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" aria-hidden="true" />
+          <Input
+            ref={inputRef}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search device model..."
+            className="pl-10 pr-10 h-14 text-lg"
+            data-testid="input-internal-search"
+            aria-label="Search for a device model"
+            autoFocus
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              className="absolute right-3 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              onClick={() => setSearchQuery("")}
+              data-testid="button-clear-internal-search"
+            >
+              <X className="h-5 w-5" />
+            </button>
           )}
         </div>
 
-        {selectedDevice && (
-          <div className="space-y-6">
-            <Card>
-              <CardHeader className="py-4">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                  <div>
-                    <CardTitle className="text-xl">{selectedDevice.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      {selectedDevice.brand?.name} · {selectedDevice.deviceType?.name}
-                    </p>
-                  </div>
-                  <Button variant="outline" onClick={clearSelection} data-testid="button-clear-device">
-                    <X className="h-4 w-4 mr-2" />
-                    Clear
-                  </Button>
-                </div>
-              </CardHeader>
-            </Card>
-
-            {(servicesLoading || quotesLoading) ? (
-              <div className="flex justify-center py-12">
-                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        {searchQuery.length >= 2 && (
+          <div className="mt-2 border rounded-lg max-h-80 overflow-y-auto bg-card shadow-lg">
+            {searchLoading ? (
+              <div className="flex justify-center py-6">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : allQuotes.length === 0 ? (
-              <Card>
-                <CardContent className="py-8">
-                  <p className="text-center text-muted-foreground">No services available for this device.</p>
-                </CardContent>
-              </Card>
+            ) : searchResults.length === 0 ? (
+              <p className="text-center py-6 text-muted-foreground">No devices found</p>
             ) : (
-              <div className="space-y-6">
-                {groupedQuotes().map(({ categoryName, quotes }) => (
-                  <Card key={categoryName} className="bg-[#187908]/[0.03]">
-                    <CardHeader className="py-3 border-b">
-                      <CardTitle className="text-lg">{categoryName}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                      <div className="divide-y">
-                        {quotes.map((quote) => (
-                          <div 
-                            key={quote.serviceId} 
-                            className={`p-4 flex items-center justify-between gap-4 ${!quote.isAvailable ? 'opacity-50 bg-muted/30' : ''}`}
-                            data-testid={`internal-quote-${quote.serviceId}`}
-                          >
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium">{quote.serviceName}</div>
-                              {quote.serviceDescription && (
-                                <p className="text-sm text-muted-foreground truncate">{quote.serviceDescription}</p>
-                              )}
-                              {quote.isAvailable && (quote.repairTime || quote.warranty) && (
-                                <div className="flex flex-wrap gap-2 mt-1">
-                                  {quote.repairTime && (
-                                    <Badge variant="secondary" className="text-xs">{quote.repairTime}</Badge>
-                                  )}
-                                  {quote.warranty && (
-                                    <Badge variant="secondary" className="text-xs">{quote.warranty} warranty</Badge>
-                                  )}
-                                </div>
-                              )}
-                              {quote.isAvailable && (quote.primaryPartSkus?.length || 0) > 0 && (
-                                <div className="mt-1">
-                                  {stockLoading ? (
-                                    <Badge variant="secondary" className="text-xs">
-                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                      Checking stock...
-                                    </Badge>
-                                  ) : (() => {
-                                    // For primary parts: ANY in stock = show "In Stock"
-                                    const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
-                                    // For secondary parts: ALL must be in stock (if any exist)
-                                    const allSecondaryInStock = !quote.additionalPartSkus?.length || 
-                                      quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
-                                    
-                                    if (Object.keys(stockData).length === 0) return null;
-                                    
-                                    if (anyPrimaryInStock && allSecondaryInStock) {
-                                      return (
-                                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                          <Package className="h-3 w-3 mr-1" />
-                                          In Stock
-                                        </Badge>
-                                      );
-                                    } else {
-                                      return (
-                                        <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
-                                          <Package className="h-3 w-3 mr-1 shrink-0" />
-                                          Parts order may be required
-                                        </Badge>
-                                      );
-                                    }
-                                  })()}
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-right shrink-0">
-                              {quote.isAvailable ? (
-                                <span className="text-xl font-bold text-primary">${quote.price}</span>
-                              ) : (
-                                <span className="text-sm font-medium text-muted-foreground">Not Available</span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
+              <div className="p-2 space-y-1">
+                {searchResults.map((device) => (
+                  <Button
+                    key={device.id}
+                    variant="ghost"
+                    className="w-full justify-start text-left h-auto py-3 hover-elevate"
+                    onClick={() => handleSearchSelect(device)}
+                    data-testid={`button-internal-result-${device.id}`}
+                  >
+                    <div>
+                      <div className="font-medium text-base">{device.name}</div>
+                      <div className="text-sm text-muted-foreground">
+                        {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </Button>
                 ))}
               </div>
             )}
           </div>
         )}
+      </div>
 
-        {!selectedDevice && searchQuery.length < 2 && (
-          <div className="text-center py-16 text-muted-foreground">
-            <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
-            <p className="text-lg">Search for a device to view all repair services</p>
+      {selectedDevice && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="py-4">
+              <div className="flex items-center justify-between gap-4 flex-wrap">
+                <div>
+                  <CardTitle className="text-xl">{selectedDevice.name}</CardTitle>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {selectedDevice.brand?.name} · {selectedDevice.deviceType?.name}
+                  </p>
+                </div>
+                <Button variant="outline" onClick={clearSelection} data-testid="button-clear-device">
+                  <X className="h-4 w-4 mr-2" />
+                  Clear
+                </Button>
+              </div>
+            </CardHeader>
+          </Card>
+
+          {(servicesLoading || quotesLoading) ? (
+            <div className="flex justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : allQuotes.length === 0 ? (
+            <Card>
+              <CardContent className="py-8">
+                <p className="text-center text-muted-foreground">No services available for this device.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {groupedQuotes().map(({ categoryName, quotes }) => (
+                <Card key={categoryName} className="bg-[#187908]/[0.03]">
+                  <CardHeader className="py-3 border-b">
+                    <CardTitle className="text-lg">{categoryName}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="divide-y">
+                      {quotes.map((quote) => (
+                        <div
+                          key={quote.serviceId}
+                          className={`p-4 flex items-center justify-between gap-4 ${!quote.isAvailable ? 'opacity-50 bg-muted/30' : ''}`}
+                          data-testid={`internal-quote-${quote.serviceId}`}
+                        >
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium">{quote.serviceName}</div>
+                            {quote.serviceDescription && (
+                              <p className="text-sm text-muted-foreground truncate">{quote.serviceDescription}</p>
+                            )}
+                            {quote.isAvailable && (quote.repairTime || quote.warranty) && (
+                              <div className="flex flex-wrap gap-2 mt-1">
+                                {quote.repairTime && (
+                                  <Badge variant="secondary" className="text-xs">{quote.repairTime}</Badge>
+                                )}
+                                {quote.warranty && (
+                                  <Badge variant="secondary" className="text-xs">{quote.warranty} warranty</Badge>
+                                )}
+                              </div>
+                            )}
+                            {quote.isAvailable && (quote.primaryPartSkus?.length || 0) > 0 && (
+                              <div className="mt-1">
+                                {stockLoading ? (
+                                  <Badge variant="secondary" className="text-xs">
+                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                    Checking stock...
+                                  </Badge>
+                                ) : (() => {
+                                  const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                  const allSecondaryInStock = !quote.additionalPartSkus?.length ||
+                                    quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                  if (Object.keys(stockData).length === 0) return null;
+                                  if (anyPrimaryInStock && allSecondaryInStock) {
+                                    return (
+                                      <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                        <Package className="h-3 w-3 mr-1" />
+                                        In Stock
+                                      </Badge>
+                                    );
+                                  } else {
+                                    return (
+                                      <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
+                                        <Package className="h-3 w-3 mr-1 shrink-0" />
+                                        Parts order may be required
+                                      </Badge>
+                                    );
+                                  }
+                                })()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            {quote.isAvailable ? (
+                              <span className="text-xl font-bold text-primary">${quote.price}</span>
+                            ) : (
+                              <span className="text-sm font-medium text-muted-foreground">Not Available</span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {!selectedDevice && searchQuery.length < 2 && (
+        <div className="text-center py-16 text-muted-foreground">
+          <Search className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <p className="text-lg">Search for a device to view all repair services</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function QuoteHistoryTab() {
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const { data: submissions = [], isLoading } = useQuery<Submission[]>({
+    queryKey: ["/api/internal/submissions", debouncedQuery],
+    queryFn: async () => {
+      const url = debouncedQuery
+        ? `/api/internal/submissions?q=${encodeURIComponent(debouncedQuery)}`
+        : `/api/internal/submissions`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to fetch submissions');
+      return res.json();
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search by name, email, or phone..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9"
+          data-testid="input-quote-history-search"
+        />
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : submissions.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          {searchQuery ? "No submissions found matching your search." : "No submissions yet."}
+        </div>
+      ) : (
+        <div className="border rounded-lg divide-y max-h-[600px] overflow-y-auto">
+          {submissions.map((submission) => (
+            <div key={submission.id} className="p-4 hover:bg-muted/30 transition-colors" data-testid={`submission-${submission.id}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="font-medium">{submission.customerName}</span>
+                    <Badge variant={submission.type === 'quote' ? 'default' : 'secondary'} className="text-xs">
+                      {submission.type === 'quote' ? 'Quote' : 'Unknown Device'}
+                    </Badge>
+                  </div>
+                  <div className="text-sm text-muted-foreground space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <Mail className="h-3 w-3" />
+                      <span>{submission.customerEmail}</span>
+                    </div>
+                    {submission.customerPhone && (
+                      <div className="flex items-center gap-2">
+                        <Phone className="h-3 w-3" />
+                        <span>{submission.customerPhone}</span>
+                      </div>
+                    )}
+                  </div>
+                  {submission.type === 'quote' ? (
+                    <div className="mt-2 text-sm">
+                      <span className="text-muted-foreground">Device:</span> {submission.deviceName}
+                      <span className="mx-2">·</span>
+                      <span className="text-muted-foreground">Service:</span> {submission.serviceName}
+                      <span className="mx-2">·</span>
+                      <span className="font-medium text-primary">${submission.quotedPrice}</span>
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-sm">
+                      <div><span className="text-muted-foreground">Device:</span> {submission.deviceDescription}</div>
+                      <div><span className="text-muted-foreground">Issue:</span> {submission.issueDescription}</div>
+                    </div>
+                  )}
+                  {submission.notes && (
+                    <div className="mt-1 text-xs text-muted-foreground italic">
+                      Notes: {submission.notes}
+                    </div>
+                  )}
+                </div>
+                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                  {formatDate(submission.createdAt)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {submissions.length > 0 && (
+        <p className="text-sm text-muted-foreground text-center">
+          Showing {submissions.length} submission{submissions.length !== 1 ? 's' : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function UnconfirmedQuotesTab() {
+  const [dateRange, setDateRange] = useState("7");
+
+  const { data: allViews = [], isLoading } = useQuery<QuoteViewEntry[]>({
+    queryKey: ["/api/quote-views"],
+  });
+
+  const { data: submissions = [] } = useQuery<Submission[]>({
+    queryKey: ["/api/internal/submissions"],
+    queryFn: async () => {
+      const res = await fetch("/api/internal/submissions");
+      if (!res.ok) throw new Error('Failed');
+      return res.json();
+    },
+  });
+
+  const confirmedServiceIds = new Set(
+    submissions
+      .filter(s => s.type === 'quote' && s.deviceServiceId)
+      .map(s => s.deviceServiceId!)
+  );
+
+  const filteredViews = allViews.filter(view => {
+    if (confirmedServiceIds.has(view.deviceServiceId)) return false;
+    if (dateRange === "all") return true;
+    const viewDate = new Date(view.viewedAt);
+    const now = new Date();
+    const daysAgo = parseInt(dateRange);
+    const cutoff = new Date(now.getTime() - daysAgo * 24 * 60 * 60 * 1000);
+    return viewDate >= cutoff;
+  });
+
+  const groupedByDevice = filteredViews.reduce((acc, view) => {
+    const key = `${view.deviceName}`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(view);
+    return acc;
+  }, {} as Record<string, QuoteViewEntry[]>);
+
+  const totalViews = filteredViews.length;
+  const uniqueDevices = Object.keys(groupedByDevice).length;
+  const uniqueServices = new Set(filteredViews.map(v => v.serviceName)).size;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex gap-4">
+          <div className="text-center px-4 py-2 bg-primary/10 rounded-lg">
+            <div className="text-2xl font-bold text-primary" data-testid="text-total-views">{totalViews}</div>
+            <div className="text-xs text-muted-foreground">Total Views</div>
           </div>
-        )}
+          <div className="text-center px-4 py-2 bg-primary/10 rounded-lg">
+            <div className="text-2xl font-bold text-primary" data-testid="text-unique-devices">{uniqueDevices}</div>
+            <div className="text-xs text-muted-foreground">Devices</div>
+          </div>
+          <div className="text-center px-4 py-2 bg-primary/10 rounded-lg">
+            <div className="text-2xl font-bold text-primary" data-testid="text-unique-services">{uniqueServices}</div>
+            <div className="text-xs text-muted-foreground">Services</div>
+          </div>
+        </div>
+        <Select value={dateRange} onValueChange={setDateRange}>
+          <SelectTrigger className="w-[160px]" data-testid="select-date-range">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+            <SelectItem value="all">All time</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredViews.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Eye className="h-12 w-12 mx-auto mb-4 opacity-30" />
+          <p>No quote views recorded for this period.</p>
+        </div>
+      ) : (
+        <div className="border rounded-lg divide-y max-h-[600px] overflow-y-auto">
+          {filteredViews
+            .sort((a, b) => new Date(b.viewedAt).getTime() - new Date(a.viewedAt).getTime())
+            .map((view) => (
+            <div key={view.id} className="p-4 hover:bg-muted/30 transition-colors" data-testid={`quote-view-${view.id}`}>
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1 min-w-0">
+                  <div className="font-medium">{view.deviceName}</div>
+                  <div className="text-sm text-muted-foreground">{view.serviceName}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="text-lg font-bold text-primary">${view.calculatedPrice}</div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <Clock className="h-3 w-3" />
+                    {formatDate(view.viewedAt)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {filteredViews.length > 0 && (
+        <p className="text-sm text-muted-foreground text-center">
+          Showing {filteredViews.length} unconfirmed quote view{filteredViews.length !== 1 ? 's' : ''}
+        </p>
+      )}
+    </div>
+  );
+}
+
+export default function Internal() {
+  const [activeTab, setActiveTab] = useState("lookup");
+
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      lookup: "Counter Lookup | 519 Tech Services",
+      history: "Quote History | 519 Tech Services",
+      unconfirmed: "Unconfirmed Quotes | 519 Tech Services",
+    };
+    document.title = titles[activeTab] || titles.lookup;
+  }, [activeTab]);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+      <header className="sticky top-0 z-50 mx-4 mt-4">
+        <div className="glass-nav px-4 py-3 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Wrench className="h-5 w-5 text-primary" />
+            <span className="font-semibold">Internal Tools</span>
+          </div>
+        </div>
+      </header>
+
+      <main className="container mx-auto px-4 py-6 max-w-4xl">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList className="w-full mb-6" data-testid="tabs-internal">
+            <TabsTrigger value="lookup" className="flex-1 gap-2" data-testid="tab-lookup">
+              <Search className="h-4 w-4" />
+              Counter Lookup
+            </TabsTrigger>
+            <TabsTrigger value="history" className="flex-1 gap-2" data-testid="tab-history">
+              <FileText className="h-4 w-4" />
+              Quote History
+            </TabsTrigger>
+            <TabsTrigger value="unconfirmed" className="flex-1 gap-2" data-testid="tab-unconfirmed">
+              <Eye className="h-4 w-4" />
+              Unconfirmed Quotes
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="lookup">
+            <CounterLookupTab />
+          </TabsContent>
+
+          <TabsContent value="history">
+            <QuoteHistoryTab />
+          </TabsContent>
+
+          <TabsContent value="unconfirmed">
+            <UnconfirmedQuotesTab />
+          </TabsContent>
+        </Tabs>
       </main>
     </div>
   );

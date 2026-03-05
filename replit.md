@@ -14,14 +14,15 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 The backend is an Express.js 5 application on Node.js with TypeScript and ESM modules, exposing RESTful APIs. Data persistence uses Drizzle ORM with PostgreSQL, and schema validation is done with Zod. A storage abstraction layer manages database operations. Backend routes are organized into modules for admin, devices, services, parts, quotes, integrations, and settings. Shared middleware provides authentication and file upload utilities. Structured logging via `server/logger.ts` outputs JSON-formatted log entries with timestamps and levels to stdout/stderr, replacing raw console.log/error calls across all server files.
 
 ### Data Model
-The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), Quote Requests, and Parts Price Cache (for persisting Mobilesentrix API prices). Database indexes exist on devices (name, brandId, deviceTypeId), device_services (deviceId, serviceId, repairDeskServiceId), and parts/supplier_parts (sku via unique constraint).
+The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), Quote Requests, Quote Views (tracking price views for analytics), and Parts Price Cache (for persisting Mobilesentrix API prices). Database indexes exist on devices (name, brandId, deviceTypeId), device_services (deviceId, serviceId, repairDeskServiceId), and parts/supplier_parts (sku via unique constraint).
 
 ### Core Features
 - **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.
 - **Admin Panel**: Provides comprehensive CRUD operations for all data entities, including bulk import (Excel), image uploads, and management of service links. The Links tab uses subtabs: "Service Links" (main table) and "Missing Parts" (dedicated view with multi-select, bulk dismiss, brand/service filters). Dismiss durations: 1 month, 3 months, or indefinite.
 - **Embeddable Widget**: A simplified quote wizard for external website integration.
 - **"I Don't Know My Device" Flow**: Allows customers to describe issues for manual follow-up, supported by customizable templates.
-- **Internal Counter Lookup**: A staff interface for quick service and price lookups.
+- **Internal Tools Page**: A staff interface with three tabs: "Counter Lookup" (quick service and price lookups), "Quote History" (searchable list of confirmed quote submissions), and "Unconfirmed Quotes" (analytics showing quote views that didn't result in submissions, with date range filtering).
+- **Quote View Tracking**: The `quote_views` table records every time a visitor sees a calculated repair price. Tracked from `useQuoteWizard` hook (home + embed pages) and internal counter lookup. Data powers the Unconfirmed Quotes analytics tab.
 - **Multi-Service Selection**: Allows selection of multiple services with a running total.
 - **Pricing Logic**: Server-side calculation supports "Labour only" services, multi-part pricing (primary, secondary parts with configurable percentages), and alternative primary parts (choosing the cheapest available).
 - **Unique Constraints**: Database-level constraints ensure data integrity.
