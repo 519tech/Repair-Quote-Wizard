@@ -5,7 +5,7 @@ import { insertPartSchema } from "@shared/schema";
 import { logger } from "../logger";
 
 export function registerPartRoutes(app: Express) {
-  app.get("/api/parts", async (req, res) => {
+  app.get("/api/parts", requireAdmin, async (req, res) => {
     try {
       const page = parseInt(req.query.page as string) || 1;
       const limit = parseInt(req.query.limit as string) || 100;
@@ -24,7 +24,7 @@ export function registerPartRoutes(app: Express) {
     }
   });
 
-  app.get("/api/parts/sku/:sku", async (req, res) => {
+  app.get("/api/parts/sku/:sku", requireAdmin, async (req, res) => {
     try {
       const part = await storage.getPartBySku(req.params.sku);
       if (!part) {
@@ -94,7 +94,7 @@ export function registerPartRoutes(app: Express) {
     }
   });
 
-  app.get("/api/supplier-parts/sku/:sku", async (req, res) => {
+  app.get("/api/supplier-parts/sku/:sku", requireAdmin, async (req, res) => {
     try {
       const part = await storage.getSupplierPartBySku(req.params.sku);
       if (!part) {

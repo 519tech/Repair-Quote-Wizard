@@ -40,7 +40,9 @@ The application's data model includes Device Types, Devices, Service Categories,
 - `Radix UI`: Accessible UI components.
 
 ### Authentication
-- **Username/Password Auth**: Admin panel uses username/password with sessions stored in PostgreSQL.
+- **Username/Password Auth**: Admin panel and internal tools page use username/password with sessions stored in PostgreSQL. Session duration is 8 hours.
+- **Route Protection**: All endpoints returning customer data (quote requests, submissions, quote views), internal business data (parts, supplier parts, message templates with API keys), and upload URLs are protected with `requireAdmin` middleware. The `calculate-quote` endpoint is public but sanitized — internal cost details (labor price, markup, part cost) are stripped from responses.
+- **Message Template Whitelist**: The `/api/message-templates/:type` endpoint allows public access only to safe template types (email/SMS templates, parts_last_updated). Sensitive types (API keys, tokens) require admin authentication.
 
 ### Quote Delivery Integrations
 - **Gmail**: For sending quote confirmation emails.

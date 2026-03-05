@@ -132,6 +132,11 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
 export { getSkuPrice };
 
 export function registerQuoteRoutes(app: Express) {
+  const sanitizeQuoteResponse = (data: Record<string, any>) => {
+    const { laborPrice, partsMarkup, secondaryPartPercentage, partCost, partName, additionalPartsCost, totalPartCost, ...safe } = data;
+    return safe;
+  };
+
   app.get("/api/calculate-quote/:deviceServiceId", async (req, res) => {
     try {
       const deviceService = await storage.getDeviceServiceWithRelations(req.params.deviceServiceId);
@@ -153,7 +158,7 @@ export function registerQuoteRoutes(app: Express) {
           const overrideAdditionalParts = await storage.getDeviceServiceParts(deviceService.id);
           const overrideAdditionalSkus = overrideAdditionalParts.filter(ap => !ap.isPrimary && ap.part?.sku).map(ap => ap.part!.sku);
 
-          return res.json({
+          return res.json(sanitizeQuoteResponse({
             deviceServiceId: deviceService.id,
             deviceName: deviceService.device.name,
             serviceName: service.name,
@@ -177,7 +182,7 @@ export function registerQuoteRoutes(app: Express) {
             isAvailable: true,
             bypassMultiDiscount: service.bypassMultiDiscount || false,
             isManualPriceOverride: true,
-          });
+          }));
         }
       }
 
@@ -246,7 +251,7 @@ export function registerQuoteRoutes(app: Express) {
         }
       }
 
-      res.json({
+      res.json(sanitizeQuoteResponse({
         deviceServiceId: deviceService.id,
         deviceName: deviceService.device.name,
         serviceName: service.name,
@@ -269,14 +274,14 @@ export function registerQuoteRoutes(app: Express) {
         isLabourOnly,
         isAvailable,
         bypassMultiDiscount: service.bypassMultiDiscount || false,
-      });
+      }));
     } catch (error: any) {
       logger.error('Calculate quote error', { error: String(error.message || error) });
       res.status(500).json({ error: "Failed to calculate quote", details: error.message });
     }
   });
 
-  app.get("/api/quote-requests", async (req, res) => {
+  app.get("/api/quote-requests", requireAdmin, async (req, res) => {
     try {
       const quotes = await storage.getQuoteRequests();
       res.json(quotes);
@@ -703,7 +708,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
     }
   });
 
-  app.get("/api/internal/submissions", async (req, res) => {
+  app.get("/api/internal/submissions", requireAdmin, async (req, res) => {
     try {
       const query = (req.query.q as string || "").toLowerCase().trim();
 
@@ -788,7 +793,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
     }
   });
 
-  app.get("/api/quote-views", async (req, res) => {
+  app.get("/api/quote-views", requireAdmin, async (req, res) => {
     try {
       const views = await storage.getQuoteViews();
       res.json(views);

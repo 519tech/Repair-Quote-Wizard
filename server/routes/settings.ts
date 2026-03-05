@@ -5,7 +5,13 @@ import { insertMessageTemplateSchema } from "@shared/schema";
 import { logger } from "../logger";
 
 export function registerSettingsRoutes(app: Express) {
-  app.get("/api/message-templates", async (req, res) => {
+  const SAFE_TEMPLATE_TYPES = new Set([
+    "email_body", "email_subject", "sms", "sms_unknown",
+    "email_subject_unknown", "email_body_unknown", "parts_last_updated",
+    "unknown_device_template",
+  ]);
+
+  app.get("/api/message-templates", requireAdmin, async (req, res) => {
     try {
       const templates = await storage.getMessageTemplates();
       res.json(templates);
@@ -16,6 +22,9 @@ export function registerSettingsRoutes(app: Express) {
 
   app.get("/api/message-templates/:type", async (req, res) => {
     try {
+      if (!SAFE_TEMPLATE_TYPES.has(req.params.type) && !req.session?.isAdmin) {
+        return res.status(401).json({ error: "Unauthorized" });
+      }
       const template = await storage.getMessageTemplate(req.params.type);
       if (!template) {
         return res.status(404).json({ error: "Template not found" });

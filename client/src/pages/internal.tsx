@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useQuery, useMutation } from "@tanstack/react-query";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, X, Wrench, Package, FileText, Eye, Mail, Phone, Clock } from "lucide-react";
+import { Search, Loader2, X, Wrench, Package, FileText, Eye, Mail, Phone, Clock, Lock, LogOut } from "lucide-react";
+import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { DeviceServiceWithRelations } from "@shared/schema";
 
 const trackedInternalViews = new Set<string>();
@@ -658,7 +661,50 @@ function UnconfirmedQuotesTab() {
 }
 
 export default function Internal() {
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("lookup");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  const { data: authStatus, isLoading: authLoading } = useQuery<{ isAdmin: boolean; username: string | null }>({
+    queryKey: ["/api/admin/me"],
+  });
+
+  const loginMutation = useMutation({
+    mutationFn: async (credentials: { username: string; password: string }) => {
+      const res = await apiRequest("POST", "/api/admin/login", credentials);
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Login failed");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
+      setUsername("");
+      setPassword("");
+      toast({ title: "Logged in successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const logoutMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/admin/logout", {});
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/me"] });
+      toast({ title: "Logged out" });
+    },
+  });
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    loginMutation.mutate({ username, password });
+  };
 
   useEffect(() => {
     const titles: Record<string, string> = {
@@ -669,6 +715,75 @@ export default function Internal() {
     document.title = titles[activeTab] || titles.lookup;
   }, [activeTab]);
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (!authStatus?.isAdmin) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
+        <header className="sticky top-0 z-50 mx-4 mt-4">
+          <div className="glass-nav px-4 py-3 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Wrench className="h-5 w-5 text-primary" />
+              <span className="font-semibold">Internal Tools</span>
+            </div>
+          </div>
+        </header>
+        <main className="container mx-auto px-4 py-8 flex items-center justify-center">
+          <Card className="w-full max-w-md">
+            <CardHeader className="text-center">
+              <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+                <Lock className="h-6 w-6 text-primary" />
+              </div>
+              <CardTitle>Staff Login</CardTitle>
+              <CardDescription>Enter your credentials to access internal tools</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="internal-username">Username</Label>
+                  <Input
+                    id="internal-username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    placeholder="Enter username"
+                    required
+                    data-testid="input-internal-username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="internal-password">Password</Label>
+                  <Input
+                    id="internal-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="Enter password"
+                    required
+                    data-testid="input-internal-password"
+                  />
+                </div>
+                <Button type="submit" className="w-full" disabled={loginMutation.isPending} data-testid="button-internal-login">
+                  {loginMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Login"
+                  )}
+                </Button>
+              </form>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-background via-background to-primary/5">
       <header className="sticky top-0 z-50 mx-4 mt-4">
@@ -676,6 +791,12 @@ export default function Internal() {
           <div className="flex items-center gap-2">
             <Wrench className="h-5 w-5 text-primary" />
             <span className="font-semibold">Internal Tools</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">{authStatus.username}</span>
+            <Button variant="ghost" size="sm" onClick={() => logoutMutation.mutate()} data-testid="button-internal-logout">
+              <LogOut className="h-4 w-4" />
+            </Button>
           </div>
         </div>
       </header>
