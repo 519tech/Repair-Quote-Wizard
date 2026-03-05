@@ -12,8 +12,6 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceServiceWithRelations } from "@shared/schema";
 
-const trackedInternalViews = new Set<string>();
-
 interface DeviceSearchResult {
   id: string;
   name: string;
@@ -163,18 +161,6 @@ function CounterLookupTab() {
       );
       const validQuotes = quotes.filter((q): q is NonNullable<typeof q> => q !== null);
       setAllQuotes(validQuotes);
-
-      services.forEach((ds, i) => {
-        const q = quotes[i];
-        if (q && q.isAvailable && !trackedInternalViews.has(ds.id)) {
-          trackedInternalViews.add(ds.id);
-          fetch("/api/quote-views", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ deviceServiceId: ds.id, calculatedPrice: q.price }),
-          }).catch(() => {});
-        }
-      });
 
       const allSkus = new Set<string>();
       validQuotes.forEach(q => {

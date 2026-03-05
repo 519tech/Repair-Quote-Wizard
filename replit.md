@@ -22,7 +22,7 @@ The application's data model includes Device Types, Devices, Service Categories,
 - **Embeddable Widget**: A simplified quote wizard for external website integration.
 - **"I Don't Know My Device" Flow**: Allows customers to describe issues for manual follow-up, supported by customizable templates.
 - **Internal Tools Page**: A staff interface with three tabs: "Counter Lookup" (quick service and price lookups), "Quote History" (searchable list of confirmed quote submissions), and "Unconfirmed Quotes" (analytics showing quote views that didn't result in submissions, with date range filtering).
-- **Quote View Tracking**: The `quote_views` table records every time a visitor sees a calculated repair price. Tracked from `useQuoteWizard` hook (home + embed pages) and internal counter lookup. Data powers the Unconfirmed Quotes analytics tab.
+- **Quote View Tracking**: The `quote_views` table records when a customer selects a specific service (clicks on it). Tracked from `toggleServiceSelection` in the `useQuoteWizard` hook (home + embed pages). Internal counter lookup does NOT track views (staff usage). Deduplicated per session via module-level Set. Data powers the Unconfirmed Quotes analytics tab.
 - **Multi-Service Selection**: Allows selection of multiple services with a running total.
 - **Pricing Logic**: Server-side calculation supports "Labour only" services, multi-part pricing (primary, secondary parts with configurable percentages), and alternative primary parts (choosing the cheapest available).
 - **Unique Constraints**: Database-level constraints ensure data integrity.

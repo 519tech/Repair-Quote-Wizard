@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,7 @@ export type DeviceSearchResult = Device & {
 };
 
 export type QuoteItem = {
+  deviceServiceId: string;
   serviceId: string;
   serviceName: string;
   serviceDescription?: string;
@@ -304,6 +305,7 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
             if (!res.ok) throw new Error('Quote calculation failed');
             const quote = await res.json();
             return {
+              deviceServiceId: ds.id,
               serviceId: ds.service.id,
               serviceName: ds.service.name,
               serviceDescription: ds.service.description || undefined,
@@ -325,6 +327,7 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
             };
           } catch {
             return {
+              deviceServiceId: ds.id,
               serviceId: ds.service.id,
               serviceName: ds.service.name,
               serviceDescription: ds.service.description || undefined,
@@ -363,18 +366,6 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
       }
 
       setAllQuotes(quotes);
-
-      services.forEach((ds, i) => {
-        const q = quotes[i];
-        if (q && q.isAvailable && !trackedQuoteViews.has(ds.id)) {
-          trackedQuoteViews.add(ds.id);
-          fetch("/api/quote-views", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ deviceServiceId: ds.id, calculatedPrice: q.price }),
-          }).catch(() => {});
-        }
-      });
     } finally {
       setQuotesLoading(false);
     }
@@ -404,6 +395,15 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
           });
         }
         next.add(serviceId);
+
+        if (!trackedQuoteViews.has(quote.deviceServiceId)) {
+          trackedQuoteViews.add(quote.deviceServiceId);
+          fetch("/api/quote-views", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ deviceServiceId: quote.deviceServiceId, calculatedPrice: quote.price }),
+          }).catch(() => {});
+        }
       }
       return next;
     });
