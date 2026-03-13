@@ -94,6 +94,29 @@ async function getGmailClientWithRetry() {
   }
 }
 
+async function sendGmailMessage(rawMessage: string): Promise<void> {
+  const gmail = await getGmailClientWithRetry();
+  try {
+    await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encodeEmailMessage(rawMessage) }
+    });
+  } catch (error: any) {
+    const errMsg = String(error);
+    if (errMsg.includes('Invalid Credentials') || errMsg.includes('invalid_grant') || errMsg.includes('Token has been expired') || error?.code === 401 || error?.response?.status === 401) {
+      logger.warn('Gmail credentials invalid, clearing cache and retrying send', { error: errMsg });
+      cachedConnectionSettings = null;
+      const freshGmail = await getGmailClient();
+      await freshGmail.users.messages.send({
+        userId: 'me',
+        requestBody: { raw: encodeEmailMessage(rawMessage) }
+      });
+      return;
+    }
+    throw error;
+  }
+}
+
 function encodeEmailMessage(rawMessage: string): string {
   return Buffer.from(rawMessage)
     .toString('base64')
@@ -128,8 +151,6 @@ The RepairQuote Team`;
 
 export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClientWithRetry();
-
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
     const bodyTemplate = await storage.getMessageTemplate('email_body');
 
@@ -144,10 +165,7 @@ export async function sendQuoteEmail(data: QuoteEmailData): Promise<boolean> {
       emailBody
     ].join('\n');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) }
-    });
+    await sendGmailMessage(message);
 
     logger.info('Quote email sent', { to: data.customerEmail });
     return true;
@@ -168,8 +186,6 @@ $\{servicePrice} plus taxes
 
 export async function sendCombinedQuoteEmail(data: CombinedQuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClientWithRetry();
-
     const subjectTemplate = await storage.getMessageTemplate('email_subject');
     const bodyTemplate = await storage.getMessageTemplate('email_body');
 
@@ -204,10 +220,7 @@ The RepairQuote Team`;
       emailBody
     ].join('\n');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) }
-    });
+    await sendGmailMessage(message);
 
     logger.info('Combined quote email sent', { to: data.customerEmail });
     return true;
@@ -240,8 +253,6 @@ export async function sendAdminNotificationEmail(data: AdminNotificationData): P
       logger.info('Admin notification email not configured');
       return false;
     }
-
-    const gmail = await getGmailClientWithRetry();
 
     const servicesList = data.services.map(s => 
       `- ${s.serviceName}: $${s.price}${s.repairTime ? ` (${s.repairTime})` : ''}${s.warranty ? ` - ${s.warranty} warranty` : ''}`
@@ -280,10 +291,7 @@ This is an automated notification from RepairQuote.`;
 
     const message = [...messageHeaders, '', emailBody].join('\n');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) }
-    });
+    await sendGmailMessage(message);
 
     logger.info('Admin notification email sent', { to: adminEmailSetting.content, replyTo: data.customerEmail });
     return true;
@@ -302,8 +310,6 @@ interface UnknownDeviceQuoteEmailData {
 
 export async function sendUnknownDeviceQuoteEmail(data: UnknownDeviceQuoteEmailData): Promise<boolean> {
   try {
-    const gmail = await getGmailClientWithRetry();
-
     const bodyTemplate = await storage.getMessageTemplate('unknown_device_email');
 
     const defaultBody = `Dear ${data.customerName},
@@ -339,10 +345,7 @@ The RepairQuote Team`;
       emailBody.trim()
     ].join('\n');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) }
-    });
+    await sendGmailMessage(message);
 
     logger.info('Unknown device quote email sent', { to: data.customerEmail });
     return true;
@@ -359,8 +362,6 @@ export async function sendUnknownDeviceAdminNotification(data: UnknownDeviceQuot
       logger.info('Admin notification email not configured');
       return false;
     }
-
-    const gmail = await getGmailClientWithRetry();
 
     const subject = `New Unknown Device Quote Request - ${data.customerName}`;
     const emailBody = `New Unknown Device Quote Request Received
@@ -392,10 +393,7 @@ This is an automated notification from RepairQuote.`;
 
     const message = [...messageHeaders, '', emailBody].join('\n');
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) }
-    });
+    await sendGmailMessage(message);
 
     logger.info('Unknown device admin notification sent', { to: adminEmailSetting.content, replyTo: data.customerEmail });
     return true;
@@ -441,8 +439,6 @@ export async function sendApiErrorNotification(serviceName: string, errorMessage
       return false;
     }
 
-    const gmail = await getGmailClientWithRetry();
-
     const subject = `⚠️ API Error: ${serviceName}`;
     const emailBody = `API Error Notification
 
@@ -466,10 +462,7 @@ Please check the integration settings and connection status.`;
 
     const message = `${messageHeaders}\r\n\r\n${emailBody}`;
 
-    await gmail.users.messages.send({
-      userId: 'me',
-      requestBody: { raw: encodeEmailMessage(message) },
-    });
+    await sendGmailMessage(message);
 
     logger.info('API error notification sent', { to: adminEmailSetting.content });
     return true;
