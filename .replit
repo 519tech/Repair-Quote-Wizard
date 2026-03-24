@@ -45,3 +45,7 @@ integrations = ["javascript_database:1.0.0", "google-mail:1.0.0", "javascript_ob
 
 [userenv.development]
 MOBILESENTRIX_API_URL = "https://preprod.mobilesentrix.ca"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 20000
