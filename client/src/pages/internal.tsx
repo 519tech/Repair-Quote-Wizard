@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Loader2, X, Wrench, Package, FileText, Eye, Mail, Phone, Clock, Lock, LogOut } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Search, Loader2, X, Wrench, Package, FileText, Eye, Mail, Phone, Clock, Lock, LogOut, Send } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import type { DeviceServiceWithRelations } from "@shared/schema";
@@ -87,8 +88,13 @@ function CounterLookupTab() {
   const [quotesLoading, setQuotesLoading] = useState(false);
   const [stockData, setStockData] = useState<Record<string, number>>({});
   const [stockLoading, setStockLoading] = useState(false);
+  const [selectedServiceIds, setSelectedServiceIds] = useState<Set<string>>(new Set());
+  const [customerName, setCustomerName] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
+  const [customerPhone, setCustomerPhone] = useState("");
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
   const { data: deviceServices = [], isLoading: servicesLoading } = useQuery<DeviceServiceWithRelations[]>({
     queryKey: [`/api/device-services/by-device/${selectedDevice?.id}`],
@@ -220,8 +226,58 @@ function CounterLookupTab() {
     setAllQuotes([]);
     setStockData({});
     setSearchQuery("");
+    setSelectedServiceIds(new Set());
+    setCustomerName("");
+    setCustomerEmail("");
+    setCustomerPhone("");
     setTimeout(() => inputRef.current?.focus(), 100);
   };
+
+  const toggleService = (serviceId: string) => {
+    setSelectedServiceIds(prev => {
+      const next = new Set(prev);
+      if (next.has(serviceId)) {
+        next.delete(serviceId);
+      } else {
+        next.add(serviceId);
+      }
+      return next;
+    });
+  };
+
+  const selectedQuotes = allQuotes.filter(q => selectedServiceIds.has(q.serviceId) && q.isAvailable);
+  const selectedTotal = selectedQuotes.reduce((sum, q) => sum + parseFloat(q.price), 0);
+
+  const submitQuoteMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/quote-requests/combined", {
+        customerName,
+        customerEmail,
+        customerPhone: customerPhone || undefined,
+        deviceId: selectedDevice!.id,
+        deviceServiceIds: selectedQuotes.map(q => q.serviceId),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/internal/submissions"] });
+      setSelectedServiceIds(new Set());
+      setCustomerName("");
+      setCustomerEmail("");
+      setCustomerPhone("");
+      toast({
+        title: "Quote sent",
+        description: "The quote has been sent to the customer successfully.",
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to send quote",
+        variant: "destructive",
+      });
+    },
+  });
 
   const groupedQuotes = () => {
     const groups: Record<string, { categoryName: string; quotes: QuoteData[] }> = {};
@@ -297,9 +353,6 @@ function CounterLookupTab() {
                   >
                     <div>
                       <div className="font-medium text-base">{device.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {device.brand?.name || "Unknown Brand"} · {device.deviceType?.name || "Unknown Type"}
-                      </div>
                     </div>
                   </Button>
                 ))}
@@ -339,79 +392,172 @@ function CounterLookupTab() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-6">
-              {groupedQuotes().map(({ categoryName, quotes }) => (
-                <Card key={categoryName} className="bg-[#187908]/[0.03]">
-                  <CardHeader className="py-3 border-b">
-                    <CardTitle className="text-lg">{categoryName}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <div className="divide-y">
-                      {quotes.map((quote) => (
-                        <div
-                          key={quote.serviceId}
-                          className={`p-4 flex items-center justify-between gap-4 ${!quote.isAvailable ? 'opacity-50 bg-muted/30' : ''}`}
-                          data-testid={`internal-quote-${quote.serviceId}`}
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="font-medium">{quote.serviceName}</div>
-                            {quote.serviceDescription && (
-                              <p className="text-sm text-muted-foreground truncate">{quote.serviceDescription}</p>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 space-y-6">
+                {groupedQuotes().map(({ categoryName, quotes }) => (
+                  <Card key={categoryName} className="bg-[#187908]/[0.03]">
+                    <CardHeader className="py-3 border-b">
+                      <CardTitle className="text-lg">{categoryName}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                      <div className="divide-y">
+                        {quotes.map((quote) => (
+                          <div
+                            key={quote.serviceId}
+                            className={`p-4 flex items-center gap-3 ${!quote.isAvailable ? 'opacity-50 bg-muted/30' : 'cursor-pointer hover:bg-muted/20'}`}
+                            data-testid={`internal-quote-${quote.serviceId}`}
+                            onClick={() => quote.isAvailable && toggleService(quote.serviceId)}
+                          >
+                            {quote.isAvailable && (
+                              <Checkbox
+                                checked={selectedServiceIds.has(quote.serviceId)}
+                                onCheckedChange={() => toggleService(quote.serviceId)}
+                                onClick={(e) => e.stopPropagation()}
+                                data-testid={`checkbox-service-${quote.serviceId}`}
+                                className="shrink-0"
+                              />
                             )}
-                            {quote.isAvailable && (quote.repairTime || quote.warranty) && (
-                              <div className="flex flex-wrap gap-2 mt-1">
-                                {quote.repairTime && (
-                                  <Badge variant="secondary" className="text-xs">{quote.repairTime}</Badge>
-                                )}
-                                {quote.warranty && (
-                                  <Badge variant="secondary" className="text-xs">{quote.warranty} warranty</Badge>
-                                )}
-                              </div>
-                            )}
-                            {quote.isAvailable && (quote.primaryPartSkus?.length || 0) > 0 && (
-                              <div className="mt-1">
-                                {stockLoading ? (
-                                  <Badge variant="secondary" className="text-xs">
-                                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                                    Checking stock...
-                                  </Badge>
-                                ) : (() => {
-                                  const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
-                                  const allSecondaryInStock = !quote.additionalPartSkus?.length ||
-                                    quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
-                                  if (Object.keys(stockData).length === 0) return null;
-                                  if (anyPrimaryInStock && allSecondaryInStock) {
-                                    return (
-                                      <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
-                                        <Package className="h-3 w-3 mr-1" />
-                                        In Stock
-                                      </Badge>
-                                    );
-                                  } else {
-                                    return (
-                                      <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
-                                        <Package className="h-3 w-3 mr-1 shrink-0" />
-                                        Parts order may be required
-                                      </Badge>
-                                    );
-                                  }
-                                })()}
-                              </div>
-                            )}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium">{quote.serviceName}</div>
+                              {quote.serviceDescription && (
+                                <p className="text-sm text-muted-foreground truncate">{quote.serviceDescription}</p>
+                              )}
+                              {quote.isAvailable && (quote.repairTime || quote.warranty) && (
+                                <div className="flex flex-wrap gap-2 mt-1">
+                                  {quote.repairTime && (
+                                    <Badge variant="secondary" className="text-xs">{quote.repairTime}</Badge>
+                                  )}
+                                  {quote.warranty && (
+                                    <Badge variant="secondary" className="text-xs">{quote.warranty} warranty</Badge>
+                                  )}
+                                </div>
+                              )}
+                              {quote.isAvailable && (quote.primaryPartSkus?.length || 0) > 0 && (
+                                <div className="mt-1">
+                                  {stockLoading ? (
+                                    <Badge variant="secondary" className="text-xs">
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                      Checking stock...
+                                    </Badge>
+                                  ) : (() => {
+                                    const anyPrimaryInStock = quote.primaryPartSkus?.some(sku => stockData[sku] && stockData[sku] > 0);
+                                    const allSecondaryInStock = !quote.additionalPartSkus?.length ||
+                                      quote.additionalPartSkus.every(sku => stockData[sku] && stockData[sku] > 0);
+                                    if (Object.keys(stockData).length === 0) return null;
+                                    if (anyPrimaryInStock && allSecondaryInStock) {
+                                      return (
+                                        <Badge variant="secondary" className="text-xs bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                                          <Package className="h-3 w-3 mr-1" />
+                                          In Stock
+                                        </Badge>
+                                      );
+                                    } else {
+                                      return (
+                                        <Badge variant="secondary" className="text-xs bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 whitespace-normal text-left">
+                                          <Package className="h-3 w-3 mr-1 shrink-0" />
+                                          Parts order may be required
+                                        </Badge>
+                                      );
+                                    }
+                                  })()}
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right shrink-0">
+                              {quote.isAvailable ? (
+                                <span className="text-xl font-bold text-primary">${quote.price}</span>
+                              ) : (
+                                <span className="text-sm font-medium text-muted-foreground">Not Available</span>
+                              )}
+                            </div>
                           </div>
-                          <div className="text-right shrink-0">
-                            {quote.isAvailable ? (
-                              <span className="text-xl font-bold text-primary">${quote.price}</span>
-                            ) : (
-                              <span className="text-sm font-medium text-muted-foreground">Not Available</span>
-                            )}
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              {selectedQuotes.length > 0 && (
+                <div className="lg:col-span-1">
+                  <Card className="sticky top-4">
+                    <CardHeader className="py-4 border-b">
+                      <CardTitle className="text-lg">Send Quote</CardTitle>
+                      <CardDescription>
+                        {selectedQuotes.length} service{selectedQuotes.length !== 1 ? 's' : ''} selected
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="p-4 space-y-4">
+                      <div className="space-y-2">
+                        {selectedQuotes.map(q => (
+                          <div key={q.serviceId} className="flex justify-between text-sm" data-testid={`selected-service-${q.serviceId}`}>
+                            <span className="truncate mr-2">{q.serviceName}</span>
+                            <span className="font-medium shrink-0">${q.price}</span>
                           </div>
+                        ))}
+                        <div className="border-t pt-2 flex justify-between font-semibold">
+                          <span>Total</span>
+                          <span data-testid="text-quote-total">${selectedTotal.toFixed(2)}</span>
                         </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+                      </div>
+
+                      <div className="space-y-3">
+                        <div>
+                          <Label htmlFor="customer-name">Name *</Label>
+                          <Input
+                            id="customer-name"
+                            value={customerName}
+                            onChange={(e) => setCustomerName(e.target.value)}
+                            placeholder="Customer name"
+                            data-testid="input-customer-name"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="customer-email">Email *</Label>
+                          <Input
+                            id="customer-email"
+                            type="email"
+                            value={customerEmail}
+                            onChange={(e) => setCustomerEmail(e.target.value)}
+                            placeholder="customer@example.com"
+                            data-testid="input-customer-email"
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="customer-phone">Phone</Label>
+                          <Input
+                            id="customer-phone"
+                            type="tel"
+                            value={customerPhone}
+                            onChange={(e) => setCustomerPhone(e.target.value)}
+                            placeholder="Phone number (optional)"
+                            data-testid="input-customer-phone"
+                          />
+                        </div>
+                      </div>
+
+                      <Button
+                        className="w-full"
+                        disabled={!customerName.trim() || !customerEmail.trim() || submitQuoteMutation.isPending}
+                        onClick={() => submitQuoteMutation.mutate()}
+                        data-testid="button-send-quote"
+                      >
+                        {submitQuoteMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-2" />
+                            Send Quote
+                          </>
+                        )}
+                      </Button>
+                    </CardContent>
+                  </Card>
+                </div>
+              )}
             </div>
           )}
         </div>
