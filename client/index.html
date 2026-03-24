@@ -3,7 +3,11 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <title>519 Tech Services - Instant Device Repair Quotes | Elmira, ON</title>
     <meta name="description" content="Get instant repair quotes for iPhones, Samsung, iPads, and laptops from 519 Tech Services in Elmira, Ontario. Transparent pricing, quality parts, and same-day repairs. Call 226-444-9927." />
     <meta name="keywords" content="phone repair Elmira, device repair Waterloo Region, screen replacement Ontario, battery replacement, iPhone repair, Samsung repair, tablet repair, laptop repair, 519 Tech Services, cell phone repair near me" />
@@ -73,10 +77,54 @@
           "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
         },
         {
+          "@type": "City",
+          "name": "Kitchener",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "Waterloo",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "Cambridge",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "Guelph",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "St. Jacobs",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "Fergus",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
+          "@type": "City",
+          "name": "Listowel",
+          "containedInPlace": { "@type": "AdministrativeArea", "name": "Ontario" }
+        },
+        {
           "@type": "AdministrativeArea",
-          "name": "Waterloo Region"
+          "name": "Region of Waterloo"
         }
       ],
+      "serviceArea": {
+        "@type": "GeoCircle",
+        "geoMidpoint": {
+          "@type": "GeoCoordinates",
+          "latitude": 43.5893,
+          "longitude": -80.5575
+        },
+        "geoRadius": "50000"
+      },
       "priceRange": "$$",
       "currenciesAccepted": "CAD",
       "paymentAccepted": "Cash, Credit Card, Debit Card",
@@ -142,6 +190,62 @@
         "@id": "https://519techservices.ca/#business"
       }
     }
+    </script>
+
+    <!-- Structured Data - Individual Services -->
+    <script type="application/ld+json">
+    [
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Screen Replacement",
+        "description": "Professional screen replacement for smartphones, tablets, and laptops. Same-day service available with quality OEM and aftermarket parts.",
+        "provider": { "@id": "https://519techservices.ca/#business" },
+        "areaServed": { "@type": "AdministrativeArea", "name": "Region of Waterloo" },
+        "serviceType": "Screen Replacement",
+        "category": "Device Repair"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Battery Replacement",
+        "description": "Battery replacement service to restore your device's battery life and performance. Available for iPhones, Samsung, iPads, and laptops.",
+        "provider": { "@id": "https://519techservices.ca/#business" },
+        "areaServed": { "@type": "AdministrativeArea", "name": "Region of Waterloo" },
+        "serviceType": "Battery Replacement",
+        "category": "Device Repair"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Charging Port Repair",
+        "description": "Charging port repair and replacement for smartphones and tablets. Fix loose connections, debris buildup, and damaged ports.",
+        "provider": { "@id": "https://519techservices.ca/#business" },
+        "areaServed": { "@type": "AdministrativeArea", "name": "Region of Waterloo" },
+        "serviceType": "Charging Port Repair",
+        "category": "Device Repair"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Water Damage Repair",
+        "description": "Water and liquid damage repair for smartphones, tablets, and laptops. Professional cleaning, component replacement, and data recovery.",
+        "provider": { "@id": "https://519techservices.ca/#business" },
+        "areaServed": { "@type": "AdministrativeArea", "name": "Region of Waterloo" },
+        "serviceType": "Water Damage Repair",
+        "category": "Device Repair"
+      },
+      {
+        "@context": "https://schema.org",
+        "@type": "Service",
+        "name": "Device Diagnostics",
+        "description": "Complete device diagnostics and troubleshooting for smartphones, tablets, and laptops. Identify issues before committing to repairs.",
+        "provider": { "@id": "https://519techservices.ca/#business" },
+        "areaServed": { "@type": "AdministrativeArea", "name": "Region of Waterloo" },
+        "serviceType": "Device Diagnostics",
+        "category": "Device Repair"
+      }
+    ]
     </script>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">

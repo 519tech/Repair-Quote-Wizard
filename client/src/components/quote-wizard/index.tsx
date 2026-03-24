@@ -66,6 +66,7 @@ export function SearchView({ w }: WizardProps) {
                       type="button"
                       onClick={() => { w.setShowSearch(false); w.setView('unknown'); }}
                       className="text-sm text-primary hover:underline"
+                      aria-label="Request a quote for unlisted device"
                       data-testid="link-device-not-listed"
                     >
                       Your device not listed?
@@ -103,6 +104,7 @@ export function SearchView({ w }: WizardProps) {
               variant="default"
               className="w-full"
               onClick={() => w.setView('unknown')}
+              aria-label="Get help identifying your device and request a custom quote"
               data-testid="button-unknown-device"
             >
               <HelpCircle className="h-4 w-4 mr-2" aria-hidden="true" />
@@ -124,6 +126,7 @@ export function PickerFlow({ w }: WizardProps) {
             type="button"
             className="hover:text-foreground transition-colors"
             onClick={() => { w.setPickerTypeId(null); w.setPickerBrandId(null); }}
+            aria-label="Go back to device type selection"
             data-testid="picker-nav-types"
           >
             Device Type
@@ -135,6 +138,7 @@ export function PickerFlow({ w }: WizardProps) {
                 type="button"
                 className="hover:text-foreground transition-colors"
                 onClick={() => { w.setPickerBrandId(null); }}
+                aria-label="Go back to brand selection"
                 data-testid="picker-nav-brands"
               >
                 {w.pickerDeviceTypes.find(t => t.id === w.pickerTypeId)?.name || "Brand"}
@@ -170,6 +174,7 @@ export function PickerFlow({ w }: WizardProps) {
                   type="button"
                   className="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all hover:border-primary/50 hover-elevate"
                   onClick={() => w.handlePickerTypeClick(type.id, type.name)}
+                  aria-label={`Browse ${type.name} devices`}
                   data-testid={`picker-type-${type.id}`}
                 >
                   {type.imageUrl ? (
@@ -207,6 +212,7 @@ export function PickerFlow({ w }: WizardProps) {
                   type="button"
                   className="flex flex-col items-center gap-2 p-3 rounded-lg border transition-all hover:border-primary/50 hover-elevate"
                   onClick={() => w.setPickerBrandId(brand.id)}
+                  aria-label={`Select ${brand.name} brand`}
                   data-testid={`picker-brand-${brand.id}`}
                 >
                   {brand.logo ? (
@@ -315,6 +321,7 @@ export function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }
                 w.resetForm();
               }
             }}
+            aria-label="Go back to previous step"
             data-testid="button-back-services"
           >
             Back
@@ -325,6 +332,7 @@ export function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }
             onClick={() => {
               w.resetForm();
             }}
+            aria-label="Start over with a new device"
             data-testid="button-start-over"
           >
             <X className="h-4 w-4 mr-1" aria-hidden="true" />
@@ -357,6 +365,7 @@ export function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); w.handleCategorySelect(cat.id); } }}
                   role="button"
                   tabIndex={0}
+                  aria-label={`Select ${cat.name} repair category`}
                   data-testid={`category-${cat.id}`}
                 >
                   <div className="flex items-center gap-3">
@@ -398,6 +407,7 @@ export function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }
                 onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); w.handleCategorySelect("other"); } }}
                 role="button"
                 tabIndex={0}
+                aria-label="View other repair services"
                 data-testid="category-other"
               >
                 <div className="flex items-center gap-3">
@@ -423,6 +433,7 @@ export function ServicesView({ w, hidePricesUntilContact, hidePricesCompletely }
               onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); w.handleNotListedClick(); } }}
               role="button"
               tabIndex={0}
+              aria-label="Request a custom quote for unlisted repair"
               data-testid="category-not-listed"
             >
               <div className="flex items-center gap-3">
@@ -529,7 +540,7 @@ export function ServicesList({ w, hidePricesUntilContact, hidePricesCompletely }
                       </>
                     )}
                   </div>
-                  <Button size="sm" className="sm:hidden" onClick={() => w.contactCollectedEarly ? w.handleContinueWithEarlyContact() : w.handleContinueToQuote()} data-testid="button-continue-quote-mobile">
+                  <Button size="sm" className="sm:hidden" onClick={() => w.contactCollectedEarly ? w.handleContinueWithEarlyContact() : w.handleContinueToQuote()} aria-label="Continue to quote summary" data-testid="button-continue-quote-mobile">
                     <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                     Continue
                   </Button>
@@ -539,12 +550,13 @@ export function ServicesList({ w, hidePricesUntilContact, hidePricesCompletely }
                     variant="outline"
                     size="sm"
                     onClick={() => w.setSelectedCategoryId(null)}
+                    aria-label="Add another repair service"
                     data-testid="button-add-another-service"
                   >
                     <Plus className="h-4 w-4 mr-1" aria-hidden="true" />
                     Add another service
                   </Button>
-                  <Button size="sm" className="hidden sm:inline-flex" onClick={() => w.contactCollectedEarly ? w.handleContinueWithEarlyContact() : w.handleContinueToQuote()} data-testid="button-continue-quote">
+                  <Button size="sm" className="hidden sm:inline-flex" onClick={() => w.contactCollectedEarly ? w.handleContinueWithEarlyContact() : w.handleContinueToQuote()} aria-label="Continue to quote summary" data-testid="button-continue-quote">
                     <ChevronRight className="h-4 w-4 mr-1" aria-hidden="true" />
                     Continue
                   </Button>

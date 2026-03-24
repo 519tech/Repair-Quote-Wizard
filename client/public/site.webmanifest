@@ -1,0 +1,27 @@
+{
+  "name": "519 Tech Services - Device Repair Quotes",
+  "short_name": "519 Tech",
+  "description": "Get instant repair quotes for smartphones, tablets, and laptops from 519 Tech Services in Elmira, Ontario.",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#22c55e",
+  "background_color": "#111827",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
