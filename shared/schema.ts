@@ -44,7 +44,10 @@ export const brandDeviceTypes = pgTable("brand_device_types", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   brandId: varchar("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
   deviceTypeId: varchar("device_type_id").notNull().references(() => deviceTypes.id, { onDelete: "cascade" }),
-});
+}, (table) => [
+  index("idx_brand_device_types_brand_id").on(table.brandId),
+  index("idx_brand_device_types_device_type_id").on(table.deviceTypeId),
+]);
 
 export const brandDeviceTypesRelations = relations(brandDeviceTypes, ({ one }) => ({
   brand: one(brands, {
@@ -140,7 +143,10 @@ export const brandServiceCategories = pgTable("brand_service_categories", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   brandId: varchar("brand_id").notNull().references(() => brands.id, { onDelete: "cascade" }),
   categoryId: varchar("category_id").notNull().references(() => serviceCategories.id, { onDelete: "cascade" }),
-});
+}, (table) => [
+  index("idx_brand_service_categories_brand_id").on(table.brandId),
+  index("idx_brand_service_categories_category_id").on(table.categoryId),
+]);
 
 export const brandServiceCategoriesRelations = relations(brandServiceCategories, ({ one }) => ({
   brand: one(brands, {
@@ -236,7 +242,10 @@ export const deviceServiceParts = pgTable("device_service_parts", {
   partId: varchar("part_id").references(() => parts.id, { onDelete: "set null" }),
   partSku: varchar("part_sku"),
   isPrimary: boolean("is_primary").notNull().default(false),
-});
+}, (table) => [
+  index("idx_device_service_parts_device_service_id").on(table.deviceServiceId),
+  index("idx_device_service_parts_part_id").on(table.partId),
+]);
 
 export const deviceServicePartsRelations = relations(deviceServiceParts, ({ one }) => ({
   deviceService: one(deviceServices, {

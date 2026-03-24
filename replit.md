@@ -14,7 +14,15 @@ The frontend is built with React 18 and TypeScript, utilizing Wouter for routing
 The backend is an Express.js 5 application on Node.js with TypeScript and ESM modules, exposing RESTful APIs. Data persistence uses Drizzle ORM with PostgreSQL, and schema validation is done with Zod. A storage abstraction layer manages database operations. Backend routes are organized into modules for admin, devices, services, parts, quotes, integrations, and settings. Shared middleware provides authentication and file upload utilities. Structured logging via `server/logger.ts` outputs JSON-formatted log entries with timestamps and levels to stdout/stderr, replacing raw console.log/error calls across all server files.
 
 ### Data Model
-The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), Quote Requests, Quote Views (tracking price views for analytics), and Parts Price Cache (for persisting Mobilesentrix API prices). Database indexes exist on devices (name, brandId, deviceTypeId), device_services (deviceId, serviceId, repairDeskServiceId), and parts/supplier_parts (sku via unique constraint).
+The application's data model includes Device Types, Devices, Service Categories, Services, Parts, Device-Service Links (connecting devices to services with pricing and part associations), Quote Requests, Quote Views (tracking price views for analytics), and Parts Price Cache (for persisting Mobilesentrix API prices). Database indexes exist on devices (name, brandId, deviceTypeId), device_services (deviceId, serviceId, repairDeskServiceId), parts/supplier_parts (sku via unique constraint), brand_device_types (brandId, deviceTypeId), brand_service_categories (brandId, categoryId), and device_service_parts (deviceServiceId, partId).
+
+### Performance Optimizations
+- **Shared Quote Wizard Components**: `client/src/components/quote-wizard/index.tsx` contains shared components (SearchView, PickerFlow, ServicesView, ServicesList, StockBadge, QuoteView, QuoteStockBadge, ContactView, UnknownDeviceView, SuccessView, WizardFooter) imported by both `home.tsx` and `embed.tsx`.
+- **Response Compression**: Express uses `compression` middleware for gzip/brotli.
+- **Batch SKU Price Lookups**: `getSkuPricesBatch()` fetches multiple SKU prices in parallel via `Promise.all` instead of sequential N+1 queries.
+- **Bulk SQL Reorder Operations**: `reorderDeviceTypes`, `reorderBrands`, `reorderServiceCategories` use single SQL `UPDATE ... CASE` statements instead of N individual updates.
+- **HTTP Cache Headers**: GET endpoints for device types, brands, and service categories include `Cache-Control: public, max-age=300, stale-while-revalidate=60`.
+- **Vite Chunk Splitting**: Manual chunks for vendor-react, vendor-ui, and vendor-query improve browser caching.
 
 ### Core Features
 - **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.

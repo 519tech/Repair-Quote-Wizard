@@ -54,6 +54,7 @@ export function registerDeviceRoutes(app: Express) {
   app.get("/api/device-types", async (req, res) => {
     try {
       const types = await storage.getDeviceTypes();
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       res.json(types);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch device types" });
@@ -111,6 +112,7 @@ export function registerDeviceRoutes(app: Express) {
   app.get("/api/brands", async (req, res) => {
     try {
       const brands = await storage.getBrands();
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       res.json(brands);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch brands" });
@@ -120,6 +122,7 @@ export function registerDeviceRoutes(app: Express) {
   app.get("/api/brands/by-type/:deviceTypeId", async (req, res) => {
     try {
       const brands = await storage.getBrandsByDeviceType(req.params.deviceTypeId);
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       res.json(brands);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch brands" });

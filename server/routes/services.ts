@@ -8,6 +8,7 @@ export function registerServiceRoutes(app: Express) {
   app.get("/api/service-categories", async (req, res) => {
     try {
       const categories = await storage.getServiceCategories();
+      res.set("Cache-Control", "public, max-age=300, stale-while-revalidate=60");
       res.json(categories);
     } catch (error) {
       res.status(500).json({ error: "Failed to fetch service categories" });

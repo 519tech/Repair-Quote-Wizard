@@ -197,11 +197,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderDeviceTypes(orderedIds: string[]): Promise<void> {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.update(deviceTypes)
-        .set({ displayOrder: i })
-        .where(eq(deviceTypes.id, orderedIds[i]));
-    }
+    if (orderedIds.length === 0) return;
+    const chunks = orderedIds.map((id, i) => sql`WHEN ${id} THEN ${i}`);
+    const caseExpr = sql.join(chunks, sql` `);
+    const idList = orderedIds.map(id => sql`${id}`);
+    const inExpr = sql.join(idList, sql`, `);
+    await db.execute(sql`UPDATE device_types SET display_order = CASE id ${caseExpr} END WHERE id IN (${inExpr})`);
   }
 
   // Brands
@@ -229,11 +230,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderBrands(orderedIds: string[]): Promise<void> {
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.update(brands)
-        .set({ displayOrder: i })
-        .where(eq(brands.id, orderedIds[i]));
-    }
+    if (orderedIds.length === 0) return;
+    const chunks = orderedIds.map((id, i) => sql`WHEN ${id} THEN ${i}`);
+    const caseExpr = sql.join(chunks, sql` `);
+    const idList = orderedIds.map(id => sql`${id}`);
+    const inExpr = sql.join(idList, sql`, `);
+    await db.execute(sql`UPDATE brands SET display_order = CASE id ${caseExpr} END WHERE id IN (${inExpr})`);
   }
 
   // Brand-DeviceType Links
@@ -532,12 +534,12 @@ export class DatabaseStorage implements IStorage {
   }
 
   async reorderServiceCategories(orderedIds: string[]): Promise<void> {
-    // Update each category with its new display order
-    for (let i = 0; i < orderedIds.length; i++) {
-      await db.update(serviceCategories)
-        .set({ displayOrder: i })
-        .where(eq(serviceCategories.id, orderedIds[i]));
-    }
+    if (orderedIds.length === 0) return;
+    const chunks = orderedIds.map((id, i) => sql`WHEN ${id} THEN ${i}`);
+    const caseExpr = sql.join(chunks, sql` `);
+    const idList = orderedIds.map(id => sql`${id}`);
+    const inExpr = sql.join(idList, sql`, `);
+    await db.execute(sql`UPDATE service_categories SET display_order = CASE id ${caseExpr} END WHERE id IN (${inExpr})`);
   }
 
   // Services

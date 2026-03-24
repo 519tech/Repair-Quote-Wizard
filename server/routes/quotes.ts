@@ -129,6 +129,45 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
   }
 }
 
+async function getSkuPricesBatch(skus: string[]): Promise<Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>> {
+  const results = new Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>();
+  const uniqueSkus = [...new Set(skus)];
+  const batchResults = await Promise.all(uniqueSkus.map(sku => getSkuPrice(sku).then(r => ({ sku, ...r }))));
+  for (const r of batchResults) {
+    results.set(r.sku, { price: r.price, name: r.name, found: r.found, source: r.source });
+  }
+  return results;
+}
+
+async function calculateDeviceServicePrice(
+  deviceService: any,
+  service: any,
+  priceMap?: Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>,
+): Promise<number> {
+  const manualPriceOverride = deviceService.manualPriceOverride;
+  if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+    const overridePrice = parseFloat(manualPriceOverride);
+    if (!isNaN(overridePrice)) {
+      return overridePrice;
+    }
+  }
+
+  const laborPrice = parseFloat(service.laborPrice || "0");
+  const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+  let partCost = 0;
+  const primaryPartSku = deviceService.partSku;
+  if (primaryPartSku) {
+    const priceResult = priceMap?.get(primaryPartSku) ?? await getSkuPrice(primaryPartSku);
+    if (priceResult.found) {
+      partCost = priceResult.price;
+    }
+  }
+  const markedUpPartCost = partCost * partsMarkup;
+  const additionalFee = deviceService.additionalFee || 0;
+  const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+  return roundPrice(rawTotal, service.bypassRounding === true);
+}
+
 export { getSkuPrice };
 
 export function registerQuoteRoutes(app: Express) {
@@ -202,15 +241,16 @@ export function registerQuoteRoutes(app: Express) {
         primaryPartSkusToFetch.push(...alternativeSkus);
       }
 
+      const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
+      const secondarySkus = additionalParts.filter(ap => ap.part?.sku && !ap.isPrimary).map(ap => ap.part!.sku);
+      const allSkusToFetch = [...primaryPartSkusToFetch, ...secondarySkus];
+      const priceMap = await getSkuPricesBatch(allSkusToFetch);
+
       const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
       for (const sku of primaryPartSkusToFetch) {
-        const priceResult = await getSkuPrice(sku);
-        if (priceResult.found) {
-          primaryPartOptions.push({
-            sku,
-            price: priceResult.price,
-            name: priceResult.name,
-          });
+        const priceResult = priceMap.get(sku);
+        if (priceResult?.found) {
+          primaryPartOptions.push({ sku, price: priceResult.price, name: priceResult.name });
         }
       }
 
@@ -221,12 +261,11 @@ export function registerQuoteRoutes(app: Express) {
 
       const primaryPartCost = cheapestPrimaryPart?.price || 0;
 
-      const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
       let additionalPartsCost = 0;
       for (const ap of additionalParts) {
         if (ap.part?.sku && !ap.isPrimary) {
-          const priceResult = await getSkuPrice(ap.part.sku);
-          if (priceResult.found) {
+          const priceResult = priceMap.get(ap.part.sku);
+          if (priceResult?.found) {
             additionalPartsCost += priceResult.price * secondaryPartPercentage;
           }
         }
@@ -311,44 +350,7 @@ export function registerQuoteRoutes(app: Express) {
 
       const service = deviceService.service;
 
-      let quotedPrice: string;
-      const manualPriceOverride = (deviceService as any).manualPriceOverride;
-      if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
-        const overridePrice = parseFloat(manualPriceOverride);
-        if (!isNaN(overridePrice)) {
-          quotedPrice = overridePrice.toFixed(2);
-        } else {
-          const laborPrice = parseFloat(service.laborPrice || "0");
-          const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-          let partCost = 0;
-          const primaryPartSku = (deviceService as any).partSku;
-          if (primaryPartSku) {
-            const priceResult = await getSkuPrice(primaryPartSku);
-            if (priceResult.found) {
-              partCost = priceResult.price;
-            }
-          }
-          const markedUpPartCost = partCost * partsMarkup;
-          const additionalFee = (deviceService as any).additionalFee || 0;
-          const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-          quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
-        }
-      } else {
-        const laborPrice = parseFloat(service.laborPrice || "0");
-        const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-        let partCost = 0;
-        const primaryPartSku = (deviceService as any).partSku;
-        if (primaryPartSku) {
-          const priceResult = await getSkuPrice(primaryPartSku);
-          if (priceResult.found) {
-            partCost = priceResult.price;
-          }
-        }
-        const markedUpPartCost = partCost * partsMarkup;
-        const additionalFee = (deviceService as any).additionalFee || 0;
-        const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-        quotedPrice = (await roundPrice(rawTotal, service.bypassRounding === true)).toFixed(2);
-      }
+      const quotedPrice = (await calculateDeviceServicePrice(deviceService, service)).toFixed(2);
 
       const quote = await storage.createQuoteRequest({
         customerName: input.customerName,
@@ -427,53 +429,31 @@ export function registerQuoteRoutes(app: Express) {
       let grandTotal = 0;
       let deviceName = '';
 
-      for (const deviceServiceId of input.deviceServiceIds) {
-        const deviceService = await storage.getDeviceServiceWithRelations(deviceServiceId);
-        if (!deviceService) {
-          return res.status(400).json({ error: `Device service ${deviceServiceId} not found` });
+      const deviceServices = await Promise.all(
+        input.deviceServiceIds.map(async (id) => {
+          const ds = await storage.getDeviceServiceWithRelations(id);
+          return { id, ds };
+        })
+      );
+
+      for (const { id, ds } of deviceServices) {
+        if (!ds) {
+          return res.status(400).json({ error: `Device service ${id} not found` });
         }
+      }
+
+      const allSkus = deviceServices
+        .map(({ ds }) => ds?.partSku)
+        .filter((sku): sku is string => !!sku);
+      const priceMap = allSkus.length > 0 ? await getSkuPricesBatch(allSkus) : new Map();
+
+      for (const { id: dsId, ds: deviceService } of deviceServices) {
+        if (!deviceService) continue;
 
         deviceName = deviceService.device.name;
         const service = deviceService.service;
 
-        let quotedPrice: number;
-        const manualPriceOverride = (deviceService as any).manualPriceOverride;
-        if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
-          const overridePrice = parseFloat(manualPriceOverride);
-          if (!isNaN(overridePrice)) {
-            quotedPrice = overridePrice;
-          } else {
-            const laborPrice = parseFloat(service.laborPrice || "0");
-            const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-            let partCost = 0;
-            const primaryPartSku = (deviceService as any).partSku;
-            if (primaryPartSku) {
-              const priceResult = await getSkuPrice(primaryPartSku);
-              if (priceResult.found) {
-                partCost = priceResult.price;
-              }
-            }
-            const markedUpPartCost = partCost * partsMarkup;
-            const additionalFee = (deviceService as any).additionalFee || 0;
-            const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-            quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
-          }
-        } else {
-          const laborPrice = parseFloat(service.laborPrice || "0");
-          const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-          let partCost = 0;
-          const primaryPartSku = (deviceService as any).partSku;
-          if (primaryPartSku) {
-            const priceResult = await getSkuPrice(primaryPartSku);
-            if (priceResult.found) {
-              partCost = priceResult.price;
-            }
-          }
-          const markedUpPartCost = partCost * partsMarkup;
-          const additionalFee = (deviceService as any).additionalFee || 0;
-          const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-          quotedPrice = await roundPrice(rawTotal, service.bypassRounding === true);
-        }
+        const quotedPrice = await calculateDeviceServicePrice(deviceService, service, priceMap);
 
         servicesData.push({
           serviceName: service.name,
@@ -490,7 +470,7 @@ export function registerQuoteRoutes(app: Express) {
           customerEmail: input.customerEmail,
           customerPhone: input.customerPhone,
           deviceId: input.deviceId,
-          deviceServiceId: deviceServiceId,
+          deviceServiceId: dsId,
           quotedPrice: quotedPrice.toFixed(2),
           notes: input.notes,
         });
