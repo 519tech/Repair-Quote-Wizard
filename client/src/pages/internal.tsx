@@ -36,6 +36,7 @@ interface QuoteData {
   partSku?: string;
   primaryPartSkus?: string[];
   additionalPartSkus?: string[];
+  bypassMultiDiscount?: boolean;
 }
 
 type Submission = {
@@ -105,6 +106,10 @@ function CounterLookupTab() {
     queryKey: ["/api/service-categories"],
   });
 
+  const { data: quoteFlowSettings } = useQuery<{ multiDiscount: { enabled: boolean; amount: number } }>({
+    queryKey: ["/api/settings/quote-flow"],
+  });
+
   useEffect(() => {
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -159,6 +164,7 @@ function CounterLookupTab() {
                 partSku: data.partSku,
                 primaryPartSkus: data.primaryPartSkus || [],
                 additionalPartSkus: data.additionalPartSkus || [],
+                bypassMultiDiscount: data.bypassMultiDiscount || false,
               };
             }
           } catch {}
@@ -246,7 +252,11 @@ function CounterLookupTab() {
   };
 
   const selectedQuotes = allQuotes.filter(q => selectedServiceIds.has(q.serviceId) && q.isAvailable);
-  const selectedTotal = selectedQuotes.reduce((sum, q) => sum + parseFloat(q.price), 0);
+  const subtotal = selectedQuotes.reduce((sum, q) => sum + parseFloat(q.price), 0);
+  const multiDiscountSettings = quoteFlowSettings?.multiDiscount;
+  const eligibleCount = selectedQuotes.filter(q => !q.bypassMultiDiscount).length;
+  const multiServiceDiscount = (multiDiscountSettings?.enabled && eligibleCount >= 2) ? (multiDiscountSettings.amount || 0) : 0;
+  const grandTotal = subtotal - multiServiceDiscount;
 
   const submitQuoteMutation = useMutation({
     mutationFn: async () => {
@@ -256,6 +266,7 @@ function CounterLookupTab() {
         customerPhone: customerPhone || undefined,
         deviceId: selectedDevice!.id,
         deviceServiceIds: selectedQuotes.map(q => q.serviceId),
+        multiServiceDiscount: multiServiceDiscount > 0 ? multiServiceDiscount : undefined,
       });
       return res.json();
     },
@@ -495,9 +506,21 @@ function CounterLookupTab() {
                             <span className="font-medium shrink-0">${q.price}</span>
                           </div>
                         ))}
-                        <div className="border-t pt-2 flex justify-between font-semibold">
+                        {multiServiceDiscount > 0 && (
+                          <>
+                            <div className="border-t pt-2 flex justify-between text-sm text-muted-foreground">
+                              <span>Subtotal</span>
+                              <span>${subtotal.toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between text-sm text-green-600">
+                              <span>Multi-Service Discount</span>
+                              <span>-${multiServiceDiscount.toFixed(2)}</span>
+                            </div>
+                          </>
+                        )}
+                        <div className={`${multiServiceDiscount > 0 ? '' : 'border-t pt-2'} flex justify-between font-semibold`}>
                           <span>Total</span>
-                          <span data-testid="text-quote-total">${selectedTotal.toFixed(2)}</span>
+                          <span data-testid="text-quote-total">${grandTotal.toFixed(2)}</span>
                         </div>
                       </div>
 
