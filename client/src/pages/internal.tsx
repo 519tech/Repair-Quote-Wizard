@@ -252,7 +252,7 @@ function CounterLookupTab() {
     mutationFn: async () => {
       const res = await apiRequest("POST", "/api/quote-requests/combined", {
         customerName,
-        customerEmail,
+        customerEmail: customerEmail || undefined,
         customerPhone: customerPhone || undefined,
         deviceId: selectedDevice!.id,
         deviceServiceIds: selectedQuotes.map(q => q.serviceId),
@@ -509,17 +509,23 @@ function CounterLookupTab() {
                             value={customerName}
                             onChange={(e) => setCustomerName(e.target.value)}
                             placeholder="Customer name"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
                             data-testid="input-customer-name"
                           />
                         </div>
                         <div>
-                          <Label htmlFor="customer-email">Email *</Label>
+                          <Label htmlFor="customer-email">Email</Label>
                           <Input
                             id="customer-email"
                             type="email"
                             value={customerEmail}
                             onChange={(e) => setCustomerEmail(e.target.value)}
-                            placeholder="customer@example.com"
+                            placeholder="customer@example.com (optional)"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
                             data-testid="input-customer-email"
                           />
                         </div>
@@ -531,6 +537,9 @@ function CounterLookupTab() {
                             value={customerPhone}
                             onChange={(e) => setCustomerPhone(e.target.value)}
                             placeholder="Phone number (optional)"
+                            autoComplete="off"
+                            data-lpignore="true"
+                            data-1p-ignore="true"
                             data-testid="input-customer-phone"
                           />
                         </div>
@@ -538,7 +547,7 @@ function CounterLookupTab() {
 
                       <Button
                         className="w-full"
-                        disabled={!customerName.trim() || !customerEmail.trim() || submitQuoteMutation.isPending}
+                        disabled={!customerName.trim() || submitQuoteMutation.isPending}
                         onClick={() => submitQuoteMutation.mutate()}
                         data-testid="button-send-quote"
                       >
@@ -876,7 +885,7 @@ export default function Internal() {
               <CardDescription>Enter your credentials to access internal tools</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
                 <div className="space-y-2">
                   <Label htmlFor="internal-username">Username</Label>
                   <Input
@@ -886,6 +895,9 @@ export default function Internal() {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Enter username"
                     required
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     data-testid="input-internal-username"
                   />
                 </div>
@@ -898,6 +910,9 @@ export default function Internal() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     required
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
                     data-testid="input-internal-password"
                   />
                 </div>

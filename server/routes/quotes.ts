@@ -407,7 +407,7 @@ export function registerQuoteRoutes(app: Express) {
 
   const combinedQuoteRequestSchema = z.object({
     customerName: z.string().min(1),
-    customerEmail: z.string().email(),
+    customerEmail: z.string().email().optional().or(z.literal("")),
     customerPhone: z.string().optional(),
     deviceId: z.string(),
     deviceServiceIds: z.array(z.string()).min(1),
@@ -467,7 +467,7 @@ export function registerQuoteRoutes(app: Express) {
 
         await storage.createQuoteRequest({
           customerName: input.customerName,
-          customerEmail: input.customerEmail,
+          customerEmail: input.customerEmail || '',
           customerPhone: input.customerPhone,
           deviceId: input.deviceId,
           deviceServiceId: dsId,
@@ -483,15 +483,17 @@ export function registerQuoteRoutes(app: Express) {
       const validDaysSetting = allTemplates.find(t => t.type === 'quote_valid_days');
       const quoteValidDays = validDaysSetting ? parseInt(validDaysSetting.content) : 7;
 
-      withRetry(() => sendCombinedQuoteEmail({
-        customerName: input.customerName,
-        customerEmail: input.customerEmail,
-        deviceName,
-        services: servicesData,
-        grandTotal: finalTotal.toFixed(2),
-        multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
-        quoteValidDays,
-      }), 'Combined quote customer email').catch(err => logger.error('Combined email send error (all retries failed)', { error: String(err) }));
+      if (input.customerEmail) {
+        withRetry(() => sendCombinedQuoteEmail({
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          deviceName,
+          services: servicesData,
+          grandTotal: finalTotal.toFixed(2),
+          multiServiceDiscount: discountAmount > 0 ? discountAmount.toFixed(2) : undefined,
+          quoteValidDays,
+        }), 'Combined quote customer email').catch(err => logger.error('Combined email send error (all retries failed)', { error: String(err) }));
+      }
 
       if (input.customerPhone) {
         withRetry(() => sendCombinedQuoteSms({
@@ -507,7 +509,7 @@ export function registerQuoteRoutes(app: Express) {
 
       withRetry(() => sendAdminNotificationEmail({
         customerName: input.customerName,
-        customerEmail: input.customerEmail,
+        customerEmail: input.customerEmail || '',
         customerPhone: input.customerPhone,
         deviceName,
         services: servicesData,
@@ -531,7 +533,7 @@ export function registerQuoteRoutes(app: Express) {
 
 Customer Information:
 - Name: ${input.customerName}
-- Email: ${input.customerEmail}
+- Email: ${input.customerEmail || 'Not provided'}
 - Phone: ${input.customerPhone || 'Not provided'}
 
 Device: ${deviceName}
@@ -547,7 +549,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
           summary: {
             firstName,
             lastName,
-            email: input.customerEmail,
+            email: input.customerEmail || '',
             mobile: input.customerPhone,
             referredBy: 'Website Quote',
           },
