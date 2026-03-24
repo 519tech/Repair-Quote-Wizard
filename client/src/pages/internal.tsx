@@ -908,7 +908,7 @@ export default function Internal() {
               <CardDescription>Enter your credentials to access internal tools</CardDescription>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4" autoComplete="off">
+              <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="internal-username">Username</Label>
                   <Input
@@ -918,9 +918,6 @@ export default function Internal() {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="Enter username"
                     required
-                    autoComplete="off"
-                    data-lpignore="true"
-                    data-1p-ignore="true"
                     data-testid="input-internal-username"
                   />
                 </div>
@@ -933,9 +930,6 @@ export default function Internal() {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter password"
                     required
-                    autoComplete="off"
-                    data-lpignore="true"
-                    data-1p-ignore="true"
                     data-testid="input-internal-password"
                   />
                 </div>
