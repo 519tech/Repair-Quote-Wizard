@@ -2,7 +2,6 @@ import type { Express } from "express";
 import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
 import { isRepairDeskConnected, checkInventoryBySku } from "../repairdesk";
-import { syncAllPricesToRepairDesk, getSyncHistory, getLastSyncTime, getBrokenLinks, getLinkedServicesCount, isRepairDeskSyncConfigured, startScheduledSync } from "../repairdesk-sync";
 import { searchProducts, getProductBySku, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, testConnection, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "../mobilesentrix";
 import { logger } from "../logger";
 
@@ -458,68 +457,4 @@ export function registerIntegrationRoutes(app: Express) {
     }
   });
 
-  app.get("/api/repairdesk/sync/status", requireAdmin, async (req, res) => {
-    try {
-      const configured = isRepairDeskSyncConfigured();
-      const connected = configured ? await isRepairDeskConnected() : false;
-      const linkedServicesCount = await getLinkedServicesCount();
-      const lastSyncTime = await getLastSyncTime();
-
-      res.json({
-        configured,
-        connected,
-        linkedServicesCount,
-        lastSyncTime,
-      });
-    } catch (error) {
-      logger.error("Failed to get RepairDesk sync status", { error: String(error) });
-      res.status(500).json({ error: "Failed to get sync status" });
-    }
-  });
-
-  app.post("/api/repairdesk/sync/trigger", requireAdmin, async (req, res) => {
-    try {
-      const result = await syncAllPricesToRepairDesk("manual");
-      res.json(result);
-    } catch (error) {
-      logger.error("Failed to trigger RepairDesk sync", { error: String(error) });
-      res.status(500).json({ error: "Failed to trigger sync" });
-    }
-  });
-
-  app.get("/api/repairdesk/sync/history", requireAdmin, async (req, res) => {
-    try {
-      const limit = parseInt(req.query.limit as string) || 10;
-      const history = await getSyncHistory(limit);
-      res.json(history);
-    } catch (error) {
-      logger.error("Failed to get sync history", { error: String(error) });
-      res.status(500).json({ error: "Failed to get sync history" });
-    }
-  });
-
-  app.get("/api/repairdesk/sync/broken-links", requireAdmin, async (req, res) => {
-    try {
-      const brokenLinks = await getBrokenLinks();
-      res.json(brokenLinks);
-    } catch (error) {
-      logger.error("Failed to get broken links", { error: String(error) });
-      res.status(500).json({ error: "Failed to get broken links" });
-    }
-  });
-
-  app.get("/api/repairdesk/sync/calculated-prices", requireAdmin, async (req, res) => {
-    try {
-      const { getCalculatedPrices } = await import("../repairdesk-sync");
-      const prices = await getCalculatedPrices();
-      res.json(prices);
-    } catch (error) {
-      logger.error("Failed to get calculated prices", { error: String(error) });
-      res.status(500).json({ error: "Failed to get calculated prices" });
-    }
-  });
-
-  if (isRepairDeskSyncConfigured()) {
-    startScheduledSync(2);
-  }
 }

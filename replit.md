@@ -59,7 +59,6 @@ The application's data model includes Device Types, Devices, Service Categories,
 ### RepairDesk Integration
 - **API Key Authentication**: Integrates with RepairDesk POS for inventory checking.
 - **Inventory Checking**: Queries RepairDesk's inventory API for part stock levels.
-- **Price Sync**: Calculates service prices (labor + parts with markup) for syncing to RepairDesk services, though direct API price updates are currently limited by RepairDesk. Supports manual price overrides and tracks sync history.
 
 ### Mobilesentrix Integration
 - **OAuth1 Authentication**: Integrates with Mobilesentrix POS API using OAuth 1.0a.

@@ -38,7 +38,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   const [editAlternativePartInfo, setEditAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
   const [editAdditionalFee, setEditAdditionalFee] = useState<string>("");
-  const [editRepairDeskServiceId, setEditRepairDeskServiceId] = useState<string>("");
   const [editManualPriceOverride, setEditManualPriceOverride] = useState<string>("");
   const [additionalPartSku, setAdditionalPartSku] = useState("");
   const [debouncedPartSearch, setDebouncedPartSearch] = useState("");
@@ -413,7 +412,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number; repairDeskServiceId?: number | null; manualPriceOverride?: string | null } }) => {
+    mutationFn: async ({ id, data }: { id: string; data: { deviceId?: string; serviceId?: string; partSku?: string; partId?: string; alternativePartSkus?: string[]; additionalFee?: number; manualPriceOverride?: string | null } }) => {
       const res = await apiRequest("PATCH", `/api/device-services/${id}`, data);
       return res.json();
     },
@@ -524,7 +523,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
     setEditAlternativePartSkus(altSkus);
     setEditAltPartSearch("");
     setEditAdditionalFee((ds as any).additionalFee ? String((ds as any).additionalFee) : "");
-    setEditRepairDeskServiceId((ds as any).repairDeskServiceId ? String((ds as any).repairDeskServiceId) : "");
     setEditManualPriceOverride((ds as any).manualPriceOverride ? String((ds as any).manualPriceOverride) : "");
     setEditOpen(true);
     
@@ -560,7 +558,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
         partId: editPartSku ? (editItem.partId || null) : null,
         alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
         additionalFee: editAdditionalFee ? parseFloat(editAdditionalFee) : 0,
-        repairDeskServiceId: editRepairDeskServiceId ? parseInt(editRepairDeskServiceId, 10) : null,
         manualPriceOverride: editManualPriceOverride ? editManualPriceOverride : null,
       },
     });
@@ -1409,19 +1406,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
                 <p className="text-xs text-muted-foreground">If set, bypasses all price calculations (labor, parts, markup, rounding) and displays this exact price to customers.</p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="edit-repairdesk-service-id">RepairDesk Service ID (optional)</Label>
-                <Input
-                  id="edit-repairdesk-service-id"
-                  type="number"
-                  min="0"
-                  placeholder="e.g. 44227"
-                  value={editRepairDeskServiceId}
-                  onChange={(e) => setEditRepairDeskServiceId(e.target.value)}
-                  data-testid="input-edit-repairdesk-service-id"
-                />
-                <p className="text-xs text-muted-foreground">Link to a RepairDesk service for automatic price syncing every 2 days.</p>
-              </div>
               
               <div className="space-y-2 border-t pt-4">
                 <Label>Additional Parts (Secondary)</Label>
