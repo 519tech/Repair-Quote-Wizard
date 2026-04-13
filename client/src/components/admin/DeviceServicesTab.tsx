@@ -37,6 +37,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   const [editAlternativePartSkus, setEditAlternativePartSkus] = useState<string[]>([]);
   const [editAlternativePartInfo, setEditAlternativePartInfo] = useState<Record<string, { name: string; price: string }>>({});
   const [editAltPartSearch, setEditAltPartSearch] = useState("");
+  const [editPartClearedBySkuInput, setEditPartClearedBySkuInput] = useState(false);
   const [editAdditionalFee, setEditAdditionalFee] = useState<string>("");
   const [editManualPriceOverride, setEditManualPriceOverride] = useState<string>("");
   const [additionalPartSku, setAdditionalPartSku] = useState("");
@@ -426,7 +427,6 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
       setEditAlternativePartInfo({});
       setEditAltPartSearch("");
       setEditAdditionalFee("");
-      setEditRepairDeskServiceId("");
       setEditManualPriceOverride("");
       toast({ title: "Link updated" });
     },
@@ -517,6 +517,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
   const handleEdit = async (ds: DeviceServiceWithRelations) => {
     setEditItem(ds);
     setEditPartSku(ds.part?.sku || ds.partSku || "");
+    setEditPartClearedBySkuInput(false);
     setEditPartSearch("");
     setEditDeviceSearch("");
     const altSkus = (ds as any).alternativePartSkus || [];
@@ -555,7 +556,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
         deviceId: editItem.deviceId,
         serviceId: editItem.serviceId,
         partSku: editPartSku || null,
-        partId: editPartSku ? (editItem.partId || null) : null,
+        partId: editPartClearedBySkuInput ? null : (editItem.partId || null),
         alternativePartSkus: editAlternativePartSkus.length > 0 ? editAlternativePartSkus : undefined,
         additionalFee: editAdditionalFee ? parseFloat(editAdditionalFee) : 0,
         manualPriceOverride: editManualPriceOverride ? editManualPriceOverride : null,
@@ -1276,7 +1277,9 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
                 <Input 
                   value={editPartSku} 
                   onChange={(e) => { 
-                    setEditPartSku(e.target.value); 
+                    const nextSku = e.target.value;
+                    setEditPartSku(nextSku);
+                    setEditPartClearedBySkuInput(nextSku.trim().length === 0);
                     setEditItem(prev => prev ? {...prev, partId: null} : null); 
                   }} 
                   placeholder="Enter SKU to auto-lookup" 
@@ -1303,6 +1306,7 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
                     onValueChange={(v) => { 
                       setEditItem(prev => prev ? {...prev, partId: v === "none" ? null : v} : null); 
                       setEditPartSku(""); 
+                      setEditPartClearedBySkuInput(false);
                     }}
                   >
                     <SelectTrigger><SelectValue placeholder="Select from results" /></SelectTrigger>
