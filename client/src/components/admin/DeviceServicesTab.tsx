@@ -145,6 +145,30 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
     const search = editDeviceSearch.toLowerCase();
     return devices.filter(d => d.name.toLowerCase().includes(search));
   }, [devices, editDeviceSearch]);
+
+  /**
+   * Radix Select only shows a label when the current value exists in rendered SelectItems.
+   * We cap the list at 50 for performance; always include the selected device if it would be cut off.
+   */
+  const editDeviceOptions = useMemo(() => {
+    const max = 50;
+    const list = editFilteredDevices;
+    const sid = editItem?.deviceId;
+    if (!sid) return list.slice(0, max);
+
+    const selected =
+      devices.find((d) => d.id === sid) ||
+      (editItem?.device?.id === sid ? (editItem.device as Device) : undefined);
+
+    const firstN = list.slice(0, max);
+    if (firstN.some((d) => d.id === sid)) return firstN;
+
+    if (selected) {
+      const rest = list.filter((d) => d.id !== sid).slice(0, max - 1);
+      return [selected, ...rest];
+    }
+    return firstN;
+  }, [editFilteredDevices, editItem, devices]);
   
   const partSearchUrl = useMemo(() => {
     if (!debouncedPartSearch) return null;
@@ -1255,11 +1279,15 @@ export function DeviceServicesTab({ toast }: { toast: ReturnType<typeof useToast
                   data-testid="input-edit-device-search-link"
                 />
                 <Select value={editItem?.deviceId || ""} onValueChange={(v) => setEditItem(prev => prev ? {...prev, deviceId: v} : null)}>
-                  <SelectTrigger><SelectValue placeholder="Select device" /></SelectTrigger>
+                  <SelectTrigger data-testid="select-edit-link-device">
+                    <SelectValue placeholder="Select device" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {editFilteredDevices.slice(0, 50).map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
+                    {editDeviceOptions.map((device) => (<SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>))}
                     {editFilteredDevices.length > 50 && <p className="px-2 py-1 text-sm text-muted-foreground">Showing first 50. Refine search.</p>}
-                    {editFilteredDevices.length === 0 && <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>}
+                    {editFilteredDevices.length === 0 && editDeviceOptions.length === 0 && (
+                      <p className="px-2 py-1 text-sm text-muted-foreground">No devices found</p>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
