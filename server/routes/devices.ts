@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { storage } from "../storage";
 import { requireAdmin, upload, getDeviceSearchData, invalidateDeviceSearchCache } from "../middleware";
 import { logger } from "../logger";
+import { searchLimiter } from "../rate-limit";
 import {
   insertDeviceTypeSchema,
   insertDeviceSchema,
@@ -242,7 +243,7 @@ export function registerDeviceRoutes(app: Express) {
     }
   });
 
-  app.get("/api/devices/search", async (req, res) => {
+  app.get("/api/devices/search", searchLimiter, async (req, res) => {
     try {
       const query = (req.query.q as string || "").toLowerCase().trim();
       if (!query || query.length < 2) {

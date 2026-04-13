@@ -1,8 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import session from "express-session";
-import connectPg from "connect-pg-simple";
 import { registerObjectStorageRoutes } from "./replit_integrations/object_storage";
 import { setDatabaseTokens, setErrorNotificationCallback, loadDbCacheIntoMemory } from "./mobilesentrix";
 import { sendApiErrorNotification } from "./gmail";
@@ -21,26 +19,6 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    tableName: "sessions",
-  });
-
-  app.set("trust proxy", 1);
-  app.use(session({
-    store: sessionStore,
-    secret: process.env.SESSION_SECRET || "dev-only-secret-not-for-production",
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      secure: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-    },
-  }));
-
   registerObjectStorageRoutes(app);
 
   try {

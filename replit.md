@@ -19,10 +19,17 @@ The application's data model includes Device Types, Devices, Service Categories,
 ### Performance Optimizations
 - **Shared Quote Wizard Components**: `client/src/components/quote-wizard/index.tsx` contains shared components (SearchView, PickerFlow, ServicesView, ServicesList, StockBadge, QuoteView, QuoteStockBadge, ContactView, UnknownDeviceView, SuccessView, WizardFooter) imported by both `home.tsx` and `embed.tsx`.
 - **Response Compression**: Express uses `compression` middleware for gzip/brotli.
+- **Batch Quote Calculation**: `POST /api/calculate-quotes` accepts `{ deviceServiceIds: string[] }`, loads all device services, collects all SKUs, resolves prices in one batched pipeline, and returns an array of quote DTOs. The client `useQuoteWizard` hook makes one request instead of N parallel GETs.
+- **Per-Request Template Caching**: Quote pricing helpers (`roundPriceWithTemplates`, `getSkuPriceWithTemplates`, `getSkuPricesBatchWithTemplates`) accept a pre-loaded `MessageTemplate[]` parameter, eliminating repeated `getMessageTemplates()` DB calls within a single request.
 - **Batch SKU Price Lookups**: `getSkuPricesBatch()` fetches multiple SKU prices in parallel via `Promise.all` instead of sequential N+1 queries.
 - **Bulk SQL Reorder Operations**: `reorderDeviceTypes`, `reorderBrands`, `reorderServiceCategories` use single SQL `UPDATE ... CASE` statements instead of N individual updates.
 - **HTTP Cache Headers**: GET endpoints for device types, brands, and service categories include `Cache-Control: public, max-age=300, stale-while-revalidate=60`.
+- **Static Asset Immutable Caching**: Vite hashed assets under `/assets/` are served with `maxAge: 1y, immutable: true` headers in production (`server/static.ts`).
 - **Vite Chunk Splitting**: Manual chunks for vendor-react, vendor-ui, and vendor-query improve browser caching.
+- **Database Pool Tuning**: `server/db.ts` configures `pg.Pool` with `max: 10`, `idleTimeoutMillis: 30000`, `connectionTimeoutMillis: 5000` for autoscale deployments.
+- **Rate Limiting**: `express-rate-limit` on public endpoints — search (30/min), quote calculation (60/min), quote submission (10/min) per IP. Config in `server/rate-limit.ts`.
+- **Sanitized API Logging**: API response body logging is gated behind `DEBUG_API_LOGS=true` env var to avoid PII in logs and reduce log volume.
+- **Single Session Middleware**: One `express-session` + `connect-pg-simple` config in `server/index.ts` (table `session`, 8h maxAge). No duplicate in `routes.ts`.
 
 ### Core Features
 - **Quote Generation**: Customers can search for devices, select multiple services, and receive itemized quotes.

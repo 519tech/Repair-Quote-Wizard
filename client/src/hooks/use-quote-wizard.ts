@@ -298,58 +298,72 @@ export function useQuoteWizard(settings: QuoteWizardSettings) {
   const handleDirectServicesView = async (services: DeviceServiceWithRelations[]) => {
     setQuotesLoading(true);
     try {
-      const quotes = await Promise.all(
-        services.map(async (ds) => {
-          try {
-            const res = await fetch(`/api/calculate-quote/${ds.id}`);
-            if (!res.ok) throw new Error('Quote calculation failed');
-            const quote = await res.json();
-            return {
-              deviceServiceId: ds.id,
-              serviceId: ds.service.id,
-              serviceName: ds.service.name,
-              serviceDescription: ds.service.description || undefined,
-              serviceImageUrl: ds.service.imageUrl || undefined,
-              deviceName: ds.device.name,
-              price: quote.totalPrice,
-              repairTime: ds.service.repairTime || undefined,
-              warranty: ds.service.warranty || undefined,
-              isAvailable: quote.isAvailable,
-              hasPart: quote.hasPart,
-              categoryId: ds.service.category?.id,
-              categoryName: ds.service.category?.name,
-              categoryDescription: ds.service.category?.description || undefined,
-              categoryImageUrl: ds.service.category?.imageUrl || undefined,
-              partSku: quote.partSku || undefined,
-              primaryPartSkus: quote.primaryPartSkus || [],
-              additionalPartSkus: quote.additionalPartSkus || [],
-              bypassMultiDiscount: quote.bypassMultiDiscount || false,
-            };
-          } catch {
-            return {
-              deviceServiceId: ds.id,
-              serviceId: ds.service.id,
-              serviceName: ds.service.name,
-              serviceDescription: ds.service.description || undefined,
-              serviceImageUrl: ds.service.imageUrl || undefined,
-              deviceName: ds.device.name,
-              price: "0.00",
-              repairTime: ds.service.repairTime || undefined,
-              warranty: ds.service.warranty || undefined,
-              isAvailable: false,
-              hasPart: false,
-              categoryId: ds.service.category?.id,
-              categoryName: ds.service.category?.name,
-              categoryDescription: ds.service.category?.description || undefined,
-              categoryImageUrl: ds.service.category?.imageUrl || undefined,
-              partSku: undefined,
-              primaryPartSkus: [],
-              additionalPartSkus: [],
-              bypassMultiDiscount: false,
-            };
-          }
-        })
-      );
+      const deviceServiceIds = services.map(ds => ds.id);
+      let batchResults: any[] = [];
+      try {
+        const res = await fetch('/api/calculate-quotes', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ deviceServiceIds }),
+        });
+        if (!res.ok) throw new Error('Batch quote calculation failed');
+        batchResults = await res.json();
+      } catch {
+        batchResults = [];
+      }
+
+      const resultMap = new Map<string, any>();
+      for (const r of batchResults) {
+        if (r?.deviceServiceId) resultMap.set(r.deviceServiceId, r);
+      }
+
+      const quotes = services.map((ds) => {
+        const quote = resultMap.get(ds.id);
+        if (quote) {
+          return {
+            deviceServiceId: ds.id,
+            serviceId: ds.service.id,
+            serviceName: ds.service.name,
+            serviceDescription: ds.service.description || undefined,
+            serviceImageUrl: ds.service.imageUrl || undefined,
+            deviceName: ds.device.name,
+            price: quote.totalPrice,
+            repairTime: ds.service.repairTime || undefined,
+            warranty: ds.service.warranty || undefined,
+            isAvailable: quote.isAvailable,
+            hasPart: quote.hasPart,
+            categoryId: ds.service.category?.id,
+            categoryName: ds.service.category?.name,
+            categoryDescription: ds.service.category?.description || undefined,
+            categoryImageUrl: ds.service.category?.imageUrl || undefined,
+            partSku: quote.partSku || undefined,
+            primaryPartSkus: quote.primaryPartSkus || [],
+            additionalPartSkus: quote.additionalPartSkus || [],
+            bypassMultiDiscount: quote.bypassMultiDiscount || false,
+          };
+        }
+        return {
+          deviceServiceId: ds.id,
+          serviceId: ds.service.id,
+          serviceName: ds.service.name,
+          serviceDescription: ds.service.description || undefined,
+          serviceImageUrl: ds.service.imageUrl || undefined,
+          deviceName: ds.device.name,
+          price: "0.00",
+          repairTime: ds.service.repairTime || undefined,
+          warranty: ds.service.warranty || undefined,
+          isAvailable: false,
+          hasPart: false,
+          categoryId: ds.service.category?.id,
+          categoryName: ds.service.category?.name,
+          categoryDescription: ds.service.category?.description || undefined,
+          categoryImageUrl: ds.service.category?.imageUrl || undefined,
+          partSku: undefined,
+          primaryPartSkus: [],
+          additionalPartSkus: [],
+          bypassMultiDiscount: false,
+        };
+      });
 
       const anyServiceAvailable = quotes.some(q => q.isAvailable);
       if (!anyServiceAvailable && quotes.length > 0) {

@@ -7,13 +7,18 @@ import { sendQuoteSms, sendCombinedQuoteSms, sendUnknownDeviceQuoteSms } from ".
 import { createLead } from "../repairdesk";
 import { isMobilesentrixConfigured, getProductBySku, MobilesentrixApiError, getCachedPriceWithDb, setCachedPrice } from "../mobilesentrix";
 import { logger } from "../logger";
+import { quoteLimiter, submissionLimiter } from "../rate-limit";
+import type { MessageTemplate } from "@shared/schema";
 
-async function roundPrice(price: number, bypassRounding: boolean = false): Promise<number> {
+async function loadTemplates(): Promise<MessageTemplate[]> {
+  return storage.getMessageTemplates();
+}
+
+function roundPriceWithTemplates(price: number, bypassRounding: boolean, templates: MessageTemplate[]): number {
   if (bypassRounding) {
     return price;
   }
 
-  const templates = await storage.getMessageTemplates();
   const modeSetting = templates.find(t => t.type === 'price_rounding_mode');
   const subtractSetting = templates.find(t => t.type === 'price_rounding_subtract');
 
@@ -35,8 +40,15 @@ async function roundPrice(price: number, bypassRounding: boolean = false): Promi
   return Math.max(0, rounded - subtractAmount);
 }
 
-async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string; fromCache?: boolean }> {
-  const templates = await storage.getMessageTemplates();
+async function roundPrice(price: number, bypassRounding: boolean = false): Promise<number> {
+  const templates = await loadTemplates();
+  return roundPriceWithTemplates(price, bypassRounding, templates);
+}
+
+async function getSkuPriceWithTemplates(
+  sku: string,
+  templates: MessageTemplate[],
+): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string; fromCache?: boolean }> {
   const pricingSourceSetting = templates.find(t => t.type === 'pricing_source');
   const pricingSource = pricingSourceSetting?.content || 'excel_upload';
 
@@ -111,8 +123,7 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
         logger.info('API error but found custom part', { sku, name: customPart.name, price: customPart.price });
         return { price: parseFloat(customPart.price), name: customPart.name, found: true, source: 'api' };
       }
-      const fallbackTemplates = await storage.getMessageTemplates();
-      const fallbackSetting = fallbackTemplates.find(t => t.type === 'api_excel_fallback');
+      const fallbackSetting = templates.find(t => t.type === 'api_excel_fallback');
       const excelFallbackEnabled = fallbackSetting ? fallbackSetting.content === 'true' : true;
       if (excelFallbackEnabled) {
         const supplierPart = await storage.getSupplierPartBySku(sku);
@@ -129,20 +140,38 @@ async function getSkuPrice(sku: string): Promise<{ price: number; name: string; 
   }
 }
 
-async function getSkuPricesBatch(skus: string[]): Promise<Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>> {
-  const results = new Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>();
+async function getSkuPrice(sku: string): Promise<{ price: number; name: string; found: boolean; source: 'api' | 'excel'; apiError?: string; fromCache?: boolean }> {
+  const templates = await loadTemplates();
+  return getSkuPriceWithTemplates(sku, templates);
+}
+
+type SkuPriceResult = { price: number; name: string; found: boolean; source: 'api' | 'excel' };
+
+async function getSkuPricesBatchWithTemplates(
+  skus: string[],
+  templates: MessageTemplate[],
+): Promise<Map<string, SkuPriceResult>> {
+  const results = new Map<string, SkuPriceResult>();
   const uniqueSkus = [...new Set(skus)];
-  const batchResults = await Promise.all(uniqueSkus.map(sku => getSkuPrice(sku).then(r => ({ sku, ...r }))));
+  const batchResults = await Promise.all(
+    uniqueSkus.map(sku => getSkuPriceWithTemplates(sku, templates).then(r => ({ sku, ...r })))
+  );
   for (const r of batchResults) {
     results.set(r.sku, { price: r.price, name: r.name, found: r.found, source: r.source });
   }
   return results;
 }
 
+async function getSkuPricesBatch(skus: string[]): Promise<Map<string, SkuPriceResult>> {
+  const templates = await loadTemplates();
+  return getSkuPricesBatchWithTemplates(skus, templates);
+}
+
 async function calculateDeviceServicePrice(
   deviceService: any,
   service: any,
-  priceMap?: Map<string, { price: number; name: string; found: boolean; source: 'api' | 'excel' }>,
+  priceMap?: Map<string, SkuPriceResult>,
+  templates?: MessageTemplate[],
 ): Promise<number> {
   const manualPriceOverride = deviceService.manualPriceOverride;
   if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
@@ -165,6 +194,9 @@ async function calculateDeviceServicePrice(
   const markedUpPartCost = partCost * partsMarkup;
   const additionalFee = deviceService.additionalFee || 0;
   const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+  if (templates) {
+    return roundPriceWithTemplates(rawTotal, service.bypassRounding === true, templates);
+  }
   return roundPrice(rawTotal, service.bypassRounding === true);
 }
 
@@ -176,147 +208,205 @@ export function registerQuoteRoutes(app: Express) {
     return safe;
   };
 
-  app.get("/api/calculate-quote/:deviceServiceId", async (req, res) => {
+  async function calculateSingleQuote(
+    deviceServiceId: string,
+    templates: MessageTemplate[],
+    priceMap?: Map<string, SkuPriceResult>,
+  ) {
+    const deviceService = await storage.getDeviceServiceWithRelations(deviceServiceId);
+    if (!deviceService) {
+      return null;
+    }
+
+    const service = deviceService.service;
+
+    const manualPriceOverride = (deviceService as any).manualPriceOverride;
+    if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
+      const overridePrice = parseFloat(manualPriceOverride);
+      if (!isNaN(overridePrice)) {
+        const overridePrimarySkus: string[] = [];
+        const overridePrimarySku = (deviceService as any).partSku;
+        if (overridePrimarySku) overridePrimarySkus.push(overridePrimarySku);
+        const overrideAltSkus = (deviceService as any).alternativePartSkus || [];
+        if (overrideAltSkus.length > 0) overridePrimarySkus.push(...overrideAltSkus);
+        const overrideAdditionalParts = await storage.getDeviceServiceParts(deviceService.id);
+        const overrideAdditionalSkus = overrideAdditionalParts.filter(ap => !ap.isPrimary && ap.part?.sku).map(ap => ap.part!.sku);
+
+        return sanitizeQuoteResponse({
+          deviceServiceId: deviceService.id,
+          deviceName: deviceService.device.name,
+          serviceName: service.name,
+          serviceDescription: service.description,
+          warranty: service.warranty,
+          repairTime: service.repairTime,
+          laborPrice: "0.00",
+          partsMarkup: "1.0",
+          secondaryPartPercentage: 100,
+          partCost: "0.00",
+          partSku: overridePrimarySku || null,
+          partName: null,
+          primaryPartSkus: overridePrimarySkus,
+          additionalPartSkus: overrideAdditionalSkus,
+          additionalPartsCount: overrideAdditionalSkus.length,
+          additionalPartsCost: "0.00",
+          totalPartCost: "0.00",
+          totalPrice: overridePrice.toFixed(2),
+          hasPart: true,
+          isLabourOnly: false,
+          isAvailable: true,
+          bypassMultiDiscount: service.bypassMultiDiscount || false,
+          isManualPriceOverride: true,
+        });
+      }
+    }
+
+    const laborPrice = parseFloat(service.laborPrice || "0");
+    const partsMarkup = parseFloat(service.partsMarkup || "1.0");
+    const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
+
+    const primaryPartSkusToFetch: string[] = [];
+    const primaryPartSku = (deviceService as any).partSku;
+    if (primaryPartSku) {
+      primaryPartSkusToFetch.push(primaryPartSku);
+    }
+    const alternativeSkus = (deviceService as any).alternativePartSkus || [];
+    if (alternativeSkus.length > 0) {
+      primaryPartSkusToFetch.push(...alternativeSkus);
+    }
+
+    const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
+    const secondarySkus = additionalParts.filter(ap => ap.part?.sku && !ap.isPrimary).map(ap => ap.part!.sku);
+    const allSkusToFetch = [...primaryPartSkusToFetch, ...secondarySkus];
+
+    const localPriceMap = priceMap ?? await getSkuPricesBatchWithTemplates(allSkusToFetch, templates);
+
+    const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
+    for (const sku of primaryPartSkusToFetch) {
+      const priceResult = localPriceMap.get(sku);
+      if (priceResult?.found) {
+        primaryPartOptions.push({ sku, price: priceResult.price, name: priceResult.name });
+      }
+    }
+
+    let cheapestPrimaryPart: typeof primaryPartOptions[0] | null = null;
+    if (primaryPartOptions.length > 0) {
+      cheapestPrimaryPart = primaryPartOptions.reduce((min, p) => p.price < min.price ? p : min, primaryPartOptions[0]);
+    }
+
+    const primaryPartCost = cheapestPrimaryPart?.price || 0;
+
+    let additionalPartsCost = 0;
+    for (const ap of additionalParts) {
+      if (ap.part?.sku && !ap.isPrimary) {
+        const priceResult = localPriceMap.get(ap.part.sku);
+        if (priceResult?.found) {
+          additionalPartsCost += priceResult.price * secondaryPartPercentage;
+        }
+      }
+    }
+
+    const totalPartCost = primaryPartCost + additionalPartsCost;
+    const markedUpPartCost = totalPartCost * partsMarkup;
+    const additionalFee = (deviceService as any).additionalFee || 0;
+    const rawTotal = laborPrice + markedUpPartCost + additionalFee;
+    const totalPrice = roundPriceWithTemplates(rawTotal, service.bypassRounding === true, templates);
+
+    const hasPart = primaryPartOptions.length > 0 || additionalParts.some(ap => !!ap.part);
+    const isLabourOnly = service.labourOnly === true;
+    const isAvailable = hasPart || isLabourOnly;
+
+    const primaryPartSkus: string[] = primaryPartOptions.map(p => p.sku);
+    const secondaryPartSkus: string[] = [];
+    for (const ap of additionalParts) {
+      if (ap.part?.sku && !ap.isPrimary) {
+        secondaryPartSkus.push(ap.part.sku);
+      }
+    }
+
+    return sanitizeQuoteResponse({
+      deviceServiceId: deviceService.id,
+      deviceName: deviceService.device.name,
+      serviceName: service.name,
+      serviceDescription: service.description,
+      warranty: service.warranty,
+      repairTime: service.repairTime,
+      laborPrice: service.laborPrice,
+      partsMarkup: service.partsMarkup,
+      secondaryPartPercentage: service.secondaryPartPercentage,
+      partCost: (typeof cheapestPrimaryPart?.price === 'number' ? cheapestPrimaryPart.price.toFixed(2) : "0.00"),
+      partSku: cheapestPrimaryPart?.sku || null,
+      partName: cheapestPrimaryPart?.name || null,
+      primaryPartSkus,
+      additionalPartSkus: secondaryPartSkus,
+      additionalPartsCount: additionalParts.filter(ap => !ap.isPrimary).length,
+      additionalPartsCost: additionalPartsCost.toFixed(2),
+      totalPartCost: totalPartCost.toFixed(2),
+      totalPrice: totalPrice.toFixed(2),
+      hasPart,
+      isLabourOnly,
+      isAvailable,
+      bypassMultiDiscount: service.bypassMultiDiscount || false,
+    });
+  }
+
+  app.get("/api/calculate-quote/:deviceServiceId", quoteLimiter, async (req, res) => {
     try {
-      const deviceService = await storage.getDeviceServiceWithRelations(req.params.deviceServiceId);
-      if (!deviceService) {
+      const templates = await loadTemplates();
+      const result = await calculateSingleQuote(req.params.deviceServiceId, templates);
+      if (!result) {
         return res.status(404).json({ error: "Device service not found" });
       }
+      res.json(result);
+    } catch (error: any) {
+      logger.error('Calculate quote error', { error: String(error.message || error) });
+      res.status(500).json({ error: "Failed to calculate quote" });
+    }
+  });
 
-      const service = deviceService.service;
+  const batchCalculateSchema = z.object({
+    deviceServiceIds: z.array(z.string()).min(1).max(50),
+  });
 
-      const manualPriceOverride = (deviceService as any).manualPriceOverride;
-      if (manualPriceOverride !== null && manualPriceOverride !== undefined && manualPriceOverride !== "") {
-        const overridePrice = parseFloat(manualPriceOverride);
-        if (!isNaN(overridePrice)) {
-          const overridePrimarySkus: string[] = [];
-          const overridePrimarySku = (deviceService as any).partSku;
-          if (overridePrimarySku) overridePrimarySkus.push(overridePrimarySku);
-          const overrideAltSkus = (deviceService as any).alternativePartSkus || [];
-          if (overrideAltSkus.length > 0) overridePrimarySkus.push(...overrideAltSkus);
-          const overrideAdditionalParts = await storage.getDeviceServiceParts(deviceService.id);
-          const overrideAdditionalSkus = overrideAdditionalParts.filter(ap => !ap.isPrimary && ap.part?.sku).map(ap => ap.part!.sku);
+  app.post("/api/calculate-quotes", quoteLimiter, async (req, res) => {
+    let input;
+    try {
+      input = batchCalculateSchema.parse(req.body);
+    } catch (error: any) {
+      return res.status(400).json({ error: "Invalid request" });
+    }
 
-          return res.json(sanitizeQuoteResponse({
-            deviceServiceId: deviceService.id,
-            deviceName: deviceService.device.name,
-            serviceName: service.name,
-            serviceDescription: service.description,
-            warranty: service.warranty,
-            repairTime: service.repairTime,
-            laborPrice: "0.00",
-            partsMarkup: "1.0",
-            secondaryPartPercentage: 100,
-            partCost: "0.00",
-            partSku: overridePrimarySku || null,
-            partName: null,
-            primaryPartSkus: overridePrimarySkus,
-            additionalPartSkus: overrideAdditionalSkus,
-            additionalPartsCount: overrideAdditionalSkus.length,
-            additionalPartsCost: "0.00",
-            totalPartCost: "0.00",
-            totalPrice: overridePrice.toFixed(2),
-            hasPart: true,
-            isLabourOnly: false,
-            isAvailable: true,
-            bypassMultiDiscount: service.bypassMultiDiscount || false,
-            isManualPriceOverride: true,
-          }));
-        }
-      }
+    try {
+      const templates = await loadTemplates();
 
-      const laborPrice = parseFloat(service.laborPrice || "0");
-      const partsMarkup = parseFloat(service.partsMarkup || "1.0");
-      const secondaryPartPercentage = (service.secondaryPartPercentage || 100) / 100;
+      const deviceServices = await Promise.all(
+        input.deviceServiceIds.map(id => storage.getDeviceServiceWithRelations(id))
+      );
 
-      const primaryPartSkusToFetch: string[] = [];
-
-      const primaryPartSku = (deviceService as any).partSku;
-      if (primaryPartSku) {
-        primaryPartSkusToFetch.push(primaryPartSku);
-      }
-
-      const alternativeSkus = (deviceService as any).alternativePartSkus || [];
-      if (alternativeSkus.length > 0) {
-        primaryPartSkusToFetch.push(...alternativeSkus);
-      }
-
-      const additionalParts = await storage.getDeviceServiceParts(deviceService.id);
-      const secondarySkus = additionalParts.filter(ap => ap.part?.sku && !ap.isPrimary).map(ap => ap.part!.sku);
-      const allSkusToFetch = [...primaryPartSkusToFetch, ...secondarySkus];
-      const priceMap = await getSkuPricesBatch(allSkusToFetch);
-
-      const primaryPartOptions: { sku: string; price: number; name: string }[] = [];
-      for (const sku of primaryPartSkusToFetch) {
-        const priceResult = priceMap.get(sku);
-        if (priceResult?.found) {
-          primaryPartOptions.push({ sku, price: priceResult.price, name: priceResult.name });
-        }
-      }
-
-      let cheapestPrimaryPart: typeof primaryPartOptions[0] | null = null;
-      if (primaryPartOptions.length > 0) {
-        cheapestPrimaryPart = primaryPartOptions.reduce((min, p) => p.price < min.price ? p : min, primaryPartOptions[0]);
-      }
-
-      const primaryPartCost = cheapestPrimaryPart?.price || 0;
-
-      let additionalPartsCost = 0;
-      for (const ap of additionalParts) {
-        if (ap.part?.sku && !ap.isPrimary) {
-          const priceResult = priceMap.get(ap.part.sku);
-          if (priceResult?.found) {
-            additionalPartsCost += priceResult.price * secondaryPartPercentage;
+      const allSkus: string[] = [];
+      for (const ds of deviceServices) {
+        if (!ds) continue;
+        const partSku = (ds as any).partSku;
+        if (partSku) allSkus.push(partSku);
+        const altSkus = (ds as any).alternativePartSkus || [];
+        allSkus.push(...altSkus);
+        const parts = await storage.getDeviceServiceParts(ds.id);
+        for (const ap of parts) {
+          if (ap.part?.sku && !ap.isPrimary) {
+            allSkus.push(ap.part.sku);
           }
         }
       }
 
-      const totalPartCost = primaryPartCost + additionalPartsCost;
-      const markedUpPartCost = totalPartCost * partsMarkup;
-      const additionalFee = (deviceService as any).additionalFee || 0;
-      const rawTotal = laborPrice + markedUpPartCost + additionalFee;
-      const totalPrice = await roundPrice(rawTotal, service.bypassRounding === true);
+      const priceMap = allSkus.length > 0 ? await getSkuPricesBatchWithTemplates(allSkus, templates) : new Map<string, SkuPriceResult>();
 
-      const hasPart = primaryPartOptions.length > 0 || additionalParts.some(ap => !!ap.part);
-      const isLabourOnly = service.labourOnly === true;
-      const isAvailable = hasPart || isLabourOnly;
+      const results = await Promise.all(
+        input.deviceServiceIds.map(id => calculateSingleQuote(id, templates, priceMap))
+      );
 
-      const primaryPartSkus: string[] = primaryPartOptions.map(p => p.sku);
-
-      const secondaryPartSkus: string[] = [];
-      for (const ap of additionalParts) {
-        if (ap.part?.sku && !ap.isPrimary) {
-          secondaryPartSkus.push(ap.part.sku);
-        }
-      }
-
-      res.json(sanitizeQuoteResponse({
-        deviceServiceId: deviceService.id,
-        deviceName: deviceService.device.name,
-        serviceName: service.name,
-        serviceDescription: service.description,
-        warranty: service.warranty,
-        repairTime: service.repairTime,
-        laborPrice: service.laborPrice,
-        partsMarkup: service.partsMarkup,
-        secondaryPartPercentage: service.secondaryPartPercentage,
-        partCost: (typeof cheapestPrimaryPart?.price === 'number' ? cheapestPrimaryPart.price.toFixed(2) : "0.00"),
-        partSku: cheapestPrimaryPart?.sku || null,
-        partName: cheapestPrimaryPart?.name || null,
-        primaryPartSkus,
-        additionalPartSkus: secondaryPartSkus,
-        additionalPartsCount: additionalParts.filter(ap => !ap.isPrimary).length,
-        additionalPartsCost: additionalPartsCost.toFixed(2),
-        totalPartCost: totalPartCost.toFixed(2),
-        totalPrice: totalPrice.toFixed(2),
-        hasPart,
-        isLabourOnly,
-        isAvailable,
-        bypassMultiDiscount: service.bypassMultiDiscount || false,
-      }));
+      res.json(results.filter(r => r !== null));
     } catch (error: any) {
-      logger.error('Calculate quote error', { error: String(error.message || error) });
-      res.status(500).json({ error: "Failed to calculate quote", details: error.message });
+      logger.error('Batch calculate quotes error', { error: String(error.message || error) });
+      res.status(500).json({ error: "Failed to calculate quotes" });
     }
   });
 
@@ -339,7 +429,7 @@ export function registerQuoteRoutes(app: Express) {
     notes: z.string().optional(),
   });
 
-  app.post("/api/quote-requests", async (req, res) => {
+  app.post("/api/quote-requests", submissionLimiter, async (req, res) => {
     try {
       const input = quoteRequestWithValidationSchema.parse(req.body);
 
@@ -415,7 +505,7 @@ export function registerQuoteRoutes(app: Express) {
     multiServiceDiscount: z.number().optional(),
   });
 
-  app.post("/api/quote-requests/combined", async (req, res) => {
+  app.post("/api/quote-requests/combined", submissionLimiter, async (req, res) => {
     try {
       const input = combinedQuoteRequestSchema.parse(req.body);
 
@@ -583,7 +673,7 @@ ${input.notes ? `Customer Notes:\n${input.notes}` : ''}`.trim();
     issueDescription: z.string().min(1),
   });
 
-  app.post("/api/unknown-device-quotes", async (req, res) => {
+  app.post("/api/unknown-device-quotes", submissionLimiter, async (req, res) => {
     try {
       const input = unknownDeviceQuoteSchema.parse(req.body);
 
