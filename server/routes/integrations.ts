@@ -1,12 +1,69 @@
 import type { Express } from "express";
+import { promises as fs } from "fs";
+import os from "os";
+import path from "path";
 import { storage } from "../storage";
 import { requireAdmin } from "../middleware";
 import { isRepairDeskConnected, checkInventoryBySku } from "../repairdesk";
-import { searchProducts, getProductBySku, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, testConnection, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus } from "../mobilesentrix";
+import { searchProducts, getProductBySku, isMobilesentrixConfigured, getMobilesentrixStatus, MobilesentrixApiError, setDatabaseTokens, testConnection, getCacheStatus, clearPartsCache, fetchAndCacheMultipleSkus, fetchAllProductsForLocalSkuExport } from "../mobilesentrix";
 import { logger } from "../logger";
 
 let skuValidationInProgress = false;
 let skuValidationProgress = { checked: 0, total: 0, missing: [] as any[], errors: [] as string[] };
+let localSkuReloadInProgress = false;
+let localSkuReloadProgress = {
+  status: "Idle",
+  processed: 0,
+  rawFetched: 0,
+  pagesFetched: 0,
+  startedAt: null as string | null,
+  finishedAt: null as string | null,
+  error: null as string | null,
+};
+let latestLocalSkuFile: { path: string; filename: string; rowCount: number; generatedAt: string } | null = null;
+
+function getLocalSkuExportDir(): string {
+  return path.join(os.tmpdir(), "repair-quote-wizard", "mobilesentrix-exports");
+}
+
+function formatTimestampForFilename(date = new Date()): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}`;
+}
+
+function csvEscape(value: string | number | null): string {
+  if (value === null || value === undefined) return "";
+  const str = String(value);
+  if (str.includes('"') || str.includes(",") || str.includes("\n")) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
+function buildLocalSkuCsv(rows: Array<{ sku: string; name: string; originalPrice: number; discountedPrice: number | null; discountPercentage: number | null; description: string }>): string {
+  const headers = [
+    "Product SKU",
+    "Product Name",
+    "Original Price",
+    "Discounted Price",
+    "Discount Percentage",
+    "Description",
+  ];
+  const csvLines = [headers.join(",")];
+  for (const row of rows) {
+    csvLines.push(
+      [
+        csvEscape(row.sku),
+        csvEscape(row.name),
+        csvEscape(row.originalPrice.toFixed(2)),
+        csvEscape(row.discountedPrice === null ? "" : row.discountedPrice.toFixed(2)),
+        csvEscape(row.discountPercentage === null ? "" : row.discountPercentage.toFixed(2)),
+        csvEscape(row.description),
+      ].join(","),
+    );
+  }
+  return csvLines.join("\n");
+}
 
 export function registerIntegrationRoutes(app: Express) {
   app.get("/api/mobilesentrix/status", requireAdmin, async (req, res) => {
@@ -295,6 +352,109 @@ export function registerIntegrationRoutes(app: Express) {
       skuValidationProgress.errors.push(error.message);
       logger.error("SKU validation error", { error: String(error) });
     }
+  });
+
+  app.post("/api/mobilesentrix/local-skus/reload", requireAdmin, async (req, res) => {
+    if (localSkuReloadInProgress) {
+      return res.status(409).json({ error: "Local SKU reload is already in progress" });
+    }
+
+    if (!isMobilesentrixConfigured()) {
+      return res.status(400).json({ error: "Mobilesentrix API is not configured" });
+    }
+
+    localSkuReloadInProgress = true;
+    localSkuReloadProgress = {
+      status: "Starting reload...",
+      processed: 0,
+      rawFetched: 0,
+      pagesFetched: 0,
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      error: null,
+    };
+
+    res.json({ started: true });
+
+    void (async () => {
+      try {
+        const { rows, pagesFetched, rawProductsFetched } = await fetchAllProductsForLocalSkuExport({
+          pageSize: 200,
+          delayBetweenPagesMs: 200,
+          onPageProcessed: ({ page, dedupedCount }) => {
+            localSkuReloadProgress.status = `Fetching page ${page}...`;
+            localSkuReloadProgress.pagesFetched = page;
+            localSkuReloadProgress.processed = dedupedCount;
+          },
+        });
+
+        localSkuReloadProgress.status = "Generating CSV...";
+        localSkuReloadProgress.processed = rows.length;
+        localSkuReloadProgress.pagesFetched = pagesFetched;
+        localSkuReloadProgress.rawFetched = rawProductsFetched;
+
+        const exportDir = getLocalSkuExportDir();
+        await fs.mkdir(exportDir, { recursive: true });
+        const filename = `ms-local-skus-${formatTimestampForFilename()}.csv`;
+        const finalPath = path.join(exportDir, filename);
+        const tempPath = `${finalPath}.tmp`;
+
+        const csvContent = buildLocalSkuCsv(rows);
+        await fs.writeFile(tempPath, csvContent, "utf8");
+        await fs.rename(tempPath, finalPath);
+
+        const previousFile = latestLocalSkuFile;
+        latestLocalSkuFile = {
+          path: finalPath,
+          filename,
+          rowCount: rows.length,
+          generatedAt: new Date().toISOString(),
+        };
+
+        if (previousFile?.path && previousFile.path !== finalPath) {
+          await fs.unlink(previousFile.path).catch(() => undefined);
+        }
+
+        localSkuReloadProgress.status = "Complete";
+        localSkuReloadProgress.finishedAt = new Date().toISOString();
+      } catch (error: any) {
+        const message = error?.message || "Failed to reload local SKUs";
+        localSkuReloadProgress.status = "Failed";
+        localSkuReloadProgress.error = message;
+        localSkuReloadProgress.finishedAt = new Date().toISOString();
+        logger.error("Local SKU reload failed", { error: String(error) });
+      } finally {
+        localSkuReloadInProgress = false;
+      }
+    })();
+  });
+
+  app.get("/api/mobilesentrix/local-skus/progress", requireAdmin, async (req, res) => {
+    res.json({
+      inProgress: localSkuReloadInProgress,
+      ...localSkuReloadProgress,
+      hasFile: !!latestLocalSkuFile,
+      filename: latestLocalSkuFile?.filename || null,
+      rowCount: latestLocalSkuFile?.rowCount || 0,
+      generatedAt: latestLocalSkuFile?.generatedAt || null,
+    });
+  });
+
+  app.get("/api/mobilesentrix/local-skus/download", requireAdmin, async (req, res) => {
+    if (!latestLocalSkuFile) {
+      return res.status(404).json({ error: "No local SKU CSV available yet. Run reload first." });
+    }
+
+    try {
+      await fs.access(latestLocalSkuFile.path);
+    } catch {
+      latestLocalSkuFile = null;
+      return res.status(404).json({ error: "Export file was not found. Please reload again." });
+    }
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${latestLocalSkuFile.filename}"`);
+    res.sendFile(latestLocalSkuFile.path);
   });
 
   app.post("/api/prefetch-category-parts", async (req, res) => {

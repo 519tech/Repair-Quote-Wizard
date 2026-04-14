@@ -20,7 +20,8 @@ interface MobilesentrixProduct {
   new_sku?: string | null;
   name: string;
   price: string;
-  customer_price?: number;
+  customer_price?: number | string;
+  special_price?: number | string;
   is_in_stock?: number | boolean;
   in_stock_qty?: number;
   image_url?: string;
@@ -41,6 +42,15 @@ interface MobilesentrixPriceResult {
   inStock: boolean;
   found: boolean;
   error?: string;
+}
+
+export interface MobilesentrixLocalSkuRow {
+  sku: string;
+  name: string;
+  originalPrice: number;
+  discountedPrice: number | null;
+  discountPercentage: number | null;
+  description: string;
 }
 
 export class MobilesentrixApiError extends Error {
@@ -354,6 +364,107 @@ async function makeApiRequest(endpoint: string, method: string = 'GET'): Promise
   }
 
   return response.json();
+}
+
+function parseNumeric(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function normalizeDescription(value: unknown): string {
+  if (typeof value !== 'string') return '';
+  return value.replace(/\s+/g, ' ').trim();
+}
+
+function normalizePrice(value: unknown): number {
+  const parsed = parseNumeric(value);
+  return parsed === null ? 0 : Number(parsed.toFixed(2));
+}
+
+function extractProducts(data: unknown): MobilesentrixProduct[] {
+  if (!data || typeof data !== 'object') return [];
+  const products: MobilesentrixProduct[] = [];
+  for (const key of Object.keys(data as Record<string, unknown>)) {
+    const product = (data as Record<string, unknown>)[key] as MobilesentrixProduct | undefined;
+    if (product && product.sku && product.name) {
+      products.push(product);
+    }
+  }
+  return products;
+}
+
+export async function fetchAllProductsForLocalSkuExport(options?: {
+  pageSize?: number;
+  delayBetweenPagesMs?: number;
+  maxPages?: number;
+  onPageProcessed?: (progress: { page: number; fetchedCount: number; dedupedCount: number }) => void;
+}): Promise<{ rows: MobilesentrixLocalSkuRow[]; pagesFetched: number; rawProductsFetched: number }> {
+  const pageSize = options?.pageSize ?? 200;
+  const delayBetweenPagesMs = options?.delayBetweenPagesMs ?? 150;
+  const maxPages = options?.maxPages ?? 500;
+  const bySku = new Map<string, MobilesentrixLocalSkuRow>();
+
+  let page = 1;
+  let rawProductsFetched = 0;
+  let pagesCompleted = 0;
+
+  while (page <= maxPages) {
+    const endpoint = `/api/rest/products?limit=${pageSize}&page=${page}`;
+    const responseData = await makeApiRequest(endpoint);
+    const products = extractProducts(responseData);
+
+    if (products.length === 0) {
+      break;
+    }
+
+    rawProductsFetched += products.length;
+
+    for (const product of products) {
+      const originalPrice = parseNumeric(product.customer_price) ?? parseNumeric(product.price) ?? 0;
+      const discountedPrice = parseNumeric(product.special_price);
+      const discountPercentage =
+        discountedPrice !== null && originalPrice > 0 && discountedPrice < originalPrice
+          ? Number((((originalPrice - discountedPrice) / originalPrice) * 100).toFixed(2))
+          : null;
+
+      bySku.set(product.sku.trim(), {
+        sku: product.sku.trim(),
+        name: String(product.name).trim(),
+        originalPrice: normalizePrice(originalPrice),
+        discountedPrice: discountedPrice === null ? null : normalizePrice(discountedPrice),
+        discountPercentage,
+        description: normalizeDescription(product.description),
+      });
+    }
+
+    options?.onPageProcessed?.({
+      page,
+      fetchedCount: products.length,
+      dedupedCount: bySku.size,
+    });
+
+    pagesCompleted = page;
+
+    if (products.length < pageSize) {
+      break;
+    }
+
+    page += 1;
+    await new Promise(resolve => setTimeout(resolve, delayBetweenPagesMs));
+  }
+
+  const rows = Array.from(bySku.values()).sort((a, b) => a.sku.localeCompare(b.sku));
+  return {
+    rows,
+    pagesFetched: pagesCompleted,
+    rawProductsFetched,
+  };
 }
 
 // Test the API connection by making a simple request

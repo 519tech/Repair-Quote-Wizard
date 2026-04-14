@@ -145,6 +145,21 @@ interface SkuValidationResult {
   }>;
 }
 
+interface LocalSkuReloadProgress {
+  inProgress: boolean;
+  status: string;
+  processed: number;
+  rawFetched: number;
+  pagesFetched: number;
+  startedAt: string | null;
+  finishedAt: string | null;
+  error: string | null;
+  hasFile: boolean;
+  filename: string | null;
+  rowCount: number;
+  generatedAt: string | null;
+}
+
 function SkuValidationCard() {
   const [isValidating, setIsValidating] = useState(false);
   const [progress, setProgress] = useState<{ checked: number; total: number; missing: SkuValidationResult[]; errors: string[] } | null>(null);
@@ -313,6 +328,164 @@ function SkuValidationCard() {
             <p className="text-sm text-muted-foreground">No SKUs found in service links to validate.</p>
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function MobilesentrixLocalSkuReloadCard() {
+  const [progress, setProgress] = useState<LocalSkuReloadProgress | null>(null);
+  const [isStarting, setIsStarting] = useState(false);
+  const pollRef = useRef<NodeJS.Timeout | null>(null);
+
+  const stopPolling = useCallback(() => {
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
+  }, []);
+
+  const fetchProgress = useCallback(async () => {
+    const response = await fetch("/api/mobilesentrix/local-skus/progress", { credentials: "include" });
+    if (!response.ok) {
+      throw new Error("Failed to load reload status");
+    }
+    const data = await response.json();
+    setProgress(data);
+    if (!data.inProgress) {
+      stopPolling();
+    }
+  }, [stopPolling]);
+
+  const startPolling = useCallback(() => {
+    stopPolling();
+    pollRef.current = setInterval(() => {
+      void fetchProgress().catch(() => undefined);
+    }, 2000);
+  }, [fetchProgress, stopPolling]);
+
+  useEffect(() => {
+    void fetchProgress().then(() => undefined).catch(() => undefined);
+    return () => stopPolling();
+  }, [fetchProgress, stopPolling]);
+
+  useEffect(() => {
+    if (progress?.inProgress) {
+      startPolling();
+    } else {
+      stopPolling();
+    }
+    return () => stopPolling();
+  }, [progress?.inProgress, startPolling, stopPolling]);
+
+  const startReload = async () => {
+    setIsStarting(true);
+    try {
+      const response = await fetch("/api/mobilesentrix/local-skus/reload", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (response.status === 409) {
+        await fetchProgress();
+        startPolling();
+        return;
+      }
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({ error: `Request failed (${response.status})` }));
+        setProgress((prev) => ({
+          inProgress: false,
+          status: "Failed",
+          processed: prev?.processed || 0,
+          rawFetched: prev?.rawFetched || 0,
+          pagesFetched: prev?.pagesFetched || 0,
+          startedAt: prev?.startedAt || null,
+          finishedAt: new Date().toISOString(),
+          error: data.error || "Failed to start reload",
+          hasFile: prev?.hasFile || false,
+          filename: prev?.filename || null,
+          rowCount: prev?.rowCount || 0,
+          generatedAt: prev?.generatedAt || null,
+        }));
+        return;
+      }
+      await fetchProgress();
+      startPolling();
+    } catch (error: any) {
+      setProgress((prev) => ({
+        inProgress: false,
+        status: "Failed",
+        processed: prev?.processed || 0,
+        rawFetched: prev?.rawFetched || 0,
+        pagesFetched: prev?.pagesFetched || 0,
+        startedAt: prev?.startedAt || null,
+        finishedAt: new Date().toISOString(),
+        error: error?.message || "Failed to start reload",
+        hasFile: prev?.hasFile || false,
+        filename: prev?.filename || null,
+        rowCount: prev?.rowCount || 0,
+        generatedAt: prev?.generatedAt || null,
+      }));
+    } finally {
+      setIsStarting(false);
+    }
+  };
+
+  const isBusy = isStarting || !!progress?.inProgress;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <RefreshCw className="h-5 w-5" />
+          MS Local SKU CSV
+        </CardTitle>
+        <CardDescription>
+          Download Mobilesentrix SKUs in Supplier upload format for manual import in Parts.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button onClick={startReload} disabled={isBusy} data-testid="button-reload-ms-local-skus">
+            {isBusy ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Reloading...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Reload MS Local Skus
+              </>
+            )}
+          </Button>
+          {progress?.hasFile && (
+            <Button asChild variant="outline" data-testid="button-download-ms-local-skus">
+              <a href="/api/mobilesentrix/local-skus/download">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Download CSV
+              </a>
+            </Button>
+          )}
+        </div>
+
+        <div className="p-3 rounded-lg border bg-muted/50 space-y-1">
+          <p className="text-sm font-medium">{progress?.status || "Idle"}</p>
+          <p className="text-xs text-muted-foreground">
+            Unique SKUs: {progress?.processed?.toLocaleString() || 0}
+            {" · "}
+            Raw products fetched: {progress?.rawFetched?.toLocaleString() || 0}
+            {" · "}
+            Pages fetched: {progress?.pagesFetched || 0}
+          </p>
+          {progress?.generatedAt && (
+            <p className="text-xs text-muted-foreground">
+              Last generated: {new Date(progress.generatedAt).toLocaleString()} ({progress.rowCount.toLocaleString()} rows)
+            </p>
+          )}
+          {progress?.error && (
+            <p className="text-xs text-destructive">{progress.error}</p>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -1504,6 +1677,9 @@ $\{servicePrice} plus taxes
 
                 {/* SKU Lookup */}
                 <MobilesentrixSkuLookup />
+
+                {/* Local SKU CSV Export */}
+                <MobilesentrixLocalSkuReloadCard />
                 
                 {/* Reauthorize Button */}
                 {mobilesentrixAuthUrl?.authUrl && (
