@@ -379,7 +379,6 @@ export function registerIntegrationRoutes(app: Express) {
     void (async () => {
       try {
         const { rows, pagesFetched, rawProductsFetched } = await fetchAllProductsForLocalSkuExport({
-          pageSize: 200,
           delayBetweenPagesMs: 200,
           onPageProcessed: ({ page, dedupedCount }) => {
             localSkuReloadProgress.status = `Fetching page ${page}...`;

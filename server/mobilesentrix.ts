@@ -399,24 +399,62 @@ function extractProducts(data: unknown): MobilesentrixProduct[] {
   return products;
 }
 
+function isPagingLimitError(error: unknown): boolean {
+  if (!(error instanceof MobilesentrixApiError)) return false;
+  if (error.statusCode !== 400) return false;
+  return /paging limit/i.test(error.message) || /allowed number/i.test(error.message);
+}
+
 export async function fetchAllProductsForLocalSkuExport(options?: {
   pageSize?: number;
   delayBetweenPagesMs?: number;
   maxPages?: number;
   onPageProcessed?: (progress: { page: number; fetchedCount: number; dedupedCount: number }) => void;
 }): Promise<{ rows: MobilesentrixLocalSkuRow[]; pagesFetched: number; rawProductsFetched: number }> {
-  const pageSize = options?.pageSize ?? 200;
+  const requestedPageSize = Math.max(1, options?.pageSize ?? 100);
   const delayBetweenPagesMs = options?.delayBetweenPagesMs ?? 150;
   const maxPages = options?.maxPages ?? 500;
   const bySku = new Map<string, MobilesentrixLocalSkuRow>();
+  const fallbackPageSizes = Array.from(new Set([requestedPageSize, 100, 50, 20, 10].filter(size => size > 0)));
 
   let page = 1;
   let rawProductsFetched = 0;
   let pagesCompleted = 0;
+  let activePageSize = requestedPageSize;
 
   while (page <= maxPages) {
-    const endpoint = `/api/rest/products?limit=${pageSize}&page=${page}`;
-    const responseData = await makeApiRequest(endpoint);
+    let responseData: unknown;
+    try {
+      const endpoint = `/api/rest/products?limit=${activePageSize}&page=${page}`;
+      responseData = await makeApiRequest(endpoint);
+    } catch (error) {
+      // Mobilesentrix may reject high limits; probe lower safe limits on first page.
+      if (page === 1 && isPagingLimitError(error)) {
+        let recovered = false;
+        for (const candidate of fallbackPageSizes) {
+          if (candidate === activePageSize) continue;
+          try {
+            const endpoint = `/api/rest/products?limit=${candidate}&page=${page}`;
+            responseData = await makeApiRequest(endpoint);
+            activePageSize = candidate;
+            recovered = true;
+            logger.info("Adjusted Mobilesentrix export page size", { pageSize: candidate });
+            break;
+          } catch (candidateError) {
+            if (!isPagingLimitError(candidateError)) {
+              throw candidateError;
+            }
+          }
+        }
+
+        if (!recovered) {
+          throw error;
+        }
+      } else {
+        throw error;
+      }
+    }
+
     const products = extractProducts(responseData);
 
     if (products.length === 0) {
@@ -451,7 +489,7 @@ export async function fetchAllProductsForLocalSkuExport(options?: {
 
     pagesCompleted = page;
 
-    if (products.length < pageSize) {
+    if (products.length < activePageSize) {
       break;
     }
 
